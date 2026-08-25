@@ -545,12 +545,30 @@ export class HiveManager {
     writeFileSync(join(root, 'COMMANDS.md'), COMMANDS_MD, 'utf8');
 
     // Keep the churny/ephemeral live files out of the hive git repo.
+    //   bin/            — regenerated every bootstrap with THIS machine's
+    //                     process.execPath + platform (hive-node.cmd, runtime/node,
+    //                     the .cjs shims). Device-sync would otherwise ship a
+    //                     Windows exe path to a Mac/Linux clone and break its hooks.
+    //   roster.json.tmp — the atomic-rename staging file for the (now in-repo) roster.
+    //   .sync/owner.json — the cross-device advisory lock; owned by the lock
+    //                     protocol (latest-heartbeat-wins), never git-merged.
     const gitignore = join(root, '.gitignore');
-    const want = ['fleet.json', 'hooks.sock', 'cost-ledger.jsonl', '.DS_Store'];
+    const want = ['fleet.json', 'hooks.sock', 'cost-ledger.jsonl', '.DS_Store', 'bin/', 'roster.json.tmp', '.sync/owner.json'];
     let lines: string[] = [];
     if (existsSync(gitignore)) { try { lines = readFileSync(gitignore, 'utf8').split('\n'); } catch { lines = []; } }
     const missing = want.filter((w) => !lines.includes(w));
     if (missing.length) writeFileSync(gitignore, [...lines.filter(Boolean), ...missing].join('\n') + '\n', 'utf8');
+
+    // Merge policy for device-sync (one-device-at-a-time). log.jsonl is an
+    // append-only event log, so a union merge interleaves both sides losslessly
+    // (readers already sort by the per-line timestamp). The mailbox dirs
+    // (agents/*/inbox|outbox) are zero-conflict by construction — each message is
+    // a uniquely-timestamped file, so two devices touch different files — and the
+    // structured files (registry.json, tasks.json, board.md, memory.md) are left
+    // to git's default conflict markers on the rare divergence, which the sync
+    // layer surfaces to the user rather than auto-merging into nonsense.
+    const attrs = join(root, '.gitattributes');
+    if (!existsSync(attrs)) writeFileSync(attrs, 'log.jsonl merge=union\n', 'utf8');
 
     // The hook shim: a dumb pipe between a `claude` hook and our UDS. Refreshed
     // on every bootstrap so it tracks code changes.
@@ -2353,12 +2371,36 @@ export class HiveManager {
     console.warn('[hive] untracked previously-committed Codex homes from the hive repo');
   }
 
+  /** Has the one-time bin/ untrack pass run in this process yet? */
+  private untrackedBinShims = false;
+
+  /**
+   * Stop versioning the bundled-node/hook shims under `bin/`.
+   *
+   * These files (hive-node.cmd, runtime/node, cth-hook.cjs, hive-proxy.cjs) bake
+   * in THIS machine's `process.execPath` and platform and are rewritten on every
+   * bootstrap, so tracking them both churns the repo and — the reason this
+   * matters now — would ship a Windows exe path to a synced clone on another OS,
+   * breaking its hooks. The ignore line in ensureHive keeps new copies out; this
+   * drops any already in the index (git keeps recording a tracked file regardless
+   * of .gitignore). The shims stay on disk and are regenerated per bootstrap.
+   */
+  private untrackBinShims(root: string): void {
+    if (this.untrackedBinShims) return;
+    this.untrackedBinShims = true;
+    const tracked = this.git(['ls-files', '--', 'bin'], root);
+    if (!tracked.ok || !tracked.out.trim()) return;
+    this.git(['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', 'bin'], root);
+    console.warn('[hive] untracked the bundled bin/ shims from the hive repo');
+  }
+
   /** Commit all hive changes. No-op if there is nothing staged. */
   commit(message: string): void {
     const root = this.root();
     if (!root || !existsSync(join(root, '.git'))) return;
     this.untrackCostLedger(root);
     this.untrackCodexHomes(root);
+    this.untrackBinShims(root);
     for (let attempt = 0; attempt < 5; attempt++) {
       this.clearStaleLock(root);
       const add = this.git(['add', '-A'], root);
