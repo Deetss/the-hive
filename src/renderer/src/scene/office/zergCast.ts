@@ -109,25 +109,29 @@ function bufToTexture(buf: Uint8ClampedArray): Texture {
  * + side rows; back view is the up row. The three walk frames are stand / step-L
  * / step-R.
  */
-/** Build the frame grid from an authored sprite PNG. It's a single front pose;
- *  a 1px vertical bob on the walk frames gives it life without hand-animating. */
+/** Build the frame grid from a single authored sprite PNG. There's one pose, so
+ *  motion is procedural: the three animated columns are a bob+sway cycle
+ *  (base -> up + lean-right -> higher + lean-left), which the walk/type/read
+ *  states play as [0,1,2,1]. Every frame shares one padded canvas so the feet
+ *  anchor stays put; idle stays on frame 0 (static, per the engine). */
 async function loadAssetFrames(url: string): Promise<Texture[][]> {
   const img = new Image();
   img.src = url;
   await img.decode();
-  const mk = (dy: number): Texture => {
+  const PADX = 3, PADT = 3; // room for the sway/bob so nothing clips
+  const mk = (dx: number, dy: number): Texture => {
     const c = document.createElement('canvas');
-    c.width = img.width; c.height = img.height;
+    c.width = img.width + PADX * 2; c.height = img.height + PADT;
     const ctx = c.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, 0, dy);
+    ctx.drawImage(img, PADX + dx, PADT + dy);
     const tex = Texture.from(c);
     tex.source.scaleMode = 'nearest';
     return tex;
   };
-  const base = mk(0), bob = mk(-1);
-  const row = [base, bob, base, base, base, base, base]; // walk1..3, type, type, read, read
-  return [row, row, row]; // front pose serves every direction
+  const f0 = mk(0, 0), f1 = mk(1, -1), f2 = mk(-1, -2);
+  const row = [f0, f1, f2, f0, f0, f0, f0]; // cols 0,1,2 are the animated cycle
+  return [row, row, row]; // the front pose serves every direction
 }
 
 export async function getZergCastFrames(name: ZergCharacterName): Promise<Texture[][]> {
