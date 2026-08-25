@@ -7,7 +7,7 @@ import {
 } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { join, resolve, sep, basename, dirname } from 'node:path';
-import { homedir, release } from 'node:os';
+import { homedir } from 'node:os';
 import { request as httpsRequest } from 'node:https';
 import { PtyManager, type SpawnOptions } from './pty';
 import { resolveCommand as resolveCliCommand } from './shellEnv';
@@ -5080,16 +5080,24 @@ function onSystemResume(reason: string): void {
   }, 15_000);
 }
 
-// A stalled GPU process can leave a window that paints but never receives
-// pointer input (you see the onboarding screen but clicks do nothing). It shows
-// up under WSLg and on some Linux compositor/driver combos. Disabling hardware
-// acceleration routes rendering through the CPU and restores input. Auto-applied
-// on WSL; forceable anywhere with THEHIVE_DISABLE_GPU=1 for the same symptom on
-// native Linux. disableHardwareAcceleration MUST run before app ready.
-const isWsl =
-  process.platform === 'linux' &&
-  (/microsoft|wsl/i.test(release()) || !!process.env.WSL_DISTRO_NAME);
-if (isWsl || process.env.THEHIVE_DISABLE_GPU === '1') {
+// On a Wayland desktop (COSMIC, GNOME, KDE, and WSLg) Electron defaults to
+// XWayland, which on several compositors gives a window that paints but
+// mishandles pointer input and GPU vsync — dead clicks, and crashes once input
+// does land. The fix is the native Wayland Ozone backend: 'auto' selects it when
+// a Wayland socket is present and falls back to X11 otherwise, so it is safe on
+// pure-X11 sessions too. This keeps the real GPU on (disabling it forces
+// SwiftShader, which is what actually crashed on click). Must run before ready.
+// Escape hatches: THEHIVE_OZONE=x11 to force XWayland; THEHIVE_DISABLE_GPU=1 to
+// fall back to CPU rendering if a specific GPU driver misbehaves.
+if (process.platform === 'linux' && !app.commandLine.hasSwitch('ozone-platform-hint')) {
+  // 'auto' is meant to pick Wayland when available, but on COSMIC it falls back
+  // to XWayland (the broken path — verified: 'auto' logs the vsync failure,
+  // explicit 'wayland' does not). So force 'wayland' whenever a Wayland session
+  // is present, and let 'auto' handle pure-X11 sessions. THEHIVE_OZONE overrides.
+  const hint = process.env.THEHIVE_OZONE || (process.env.WAYLAND_DISPLAY ? 'wayland' : 'auto');
+  app.commandLine.appendSwitch('ozone-platform-hint', hint);
+}
+if (process.env.THEHIVE_DISABLE_GPU === '1') {
   app.disableHardwareAcceleration();
 }
 
