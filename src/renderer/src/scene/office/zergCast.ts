@@ -12,6 +12,14 @@ import {
   type ZergRecipe,
 } from './zergPortraitArt';
 
+// Authored sprite assets (FLUX-generated from the official refs, background keyed
+// out, downscaled). A unit with an asset uses it instead of the procedural
+// drawing; the rest fall back to procedural until their asset lands.
+import abathurUrl from '@/assets/zerg/abathur.png?url';
+const ASSET_URLS: Partial<Record<ZergCharacterName, string>> = {
+  abathur: abathurUrl,
+};
+
 export type ZergCharacterName =
   | 'abathur' | 'queen' | 'drone' | 'zergling' | 'hydralisk' | 'roach'
   | 'overlord' | 'mutalisk' | 'ultralisk' | 'baneling' | 'infestor'
@@ -101,9 +109,36 @@ function bufToTexture(buf: Uint8ClampedArray): Texture {
  * + side rows; back view is the up row. The three walk frames are stand / step-L
  * / step-R.
  */
+/** Build the frame grid from an authored sprite PNG. It's a single front pose;
+ *  a 1px vertical bob on the walk frames gives it life without hand-animating. */
+async function loadAssetFrames(url: string): Promise<Texture[][]> {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const mk = (dy: number): Texture => {
+    const c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, dy);
+    const tex = Texture.from(c);
+    tex.source.scaleMode = 'nearest';
+    return tex;
+  };
+  const base = mk(0), bob = mk(-1);
+  const row = [base, bob, base, base, base, base, base]; // walk1..3, type, type, read, read
+  return [row, row, row]; // front pose serves every direction
+}
+
 export async function getZergCastFrames(name: ZergCharacterName): Promise<Texture[][]> {
   const cached = frameCache.get(name);
   if (cached) return cached;
+  const assetUrl = ASSET_URLS[name];
+  if (assetUrl) {
+    const frames = await loadAssetFrames(assetUrl);
+    frameCache.set(name, frames);
+    return frames;
+  }
   const recipe = RECIPES[name] ?? RECIPES.abathur;
   const { front, back } = zergSceneFrameBufs(name, recipe);
   const toRow = (bufs: Uint8ClampedArray[]): Texture[] => {
