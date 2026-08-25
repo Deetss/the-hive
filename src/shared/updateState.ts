@@ -33,16 +33,16 @@ export type UpdateStatus =
 
 export type UpdateAction = 'none' | 'check' | 'download' | 'restart' | 'open-release' | 'manual';
 
-export const REPO = 'chaitanyagiri/munder-difflin';
+export const REPO = 'Deetss/the-hive';
 
 /** The installer for THIS machine in the release tagged v{version}, by the
  *  names electron-builder.yml produces. Used when a status carries no
  *  `downloadUrl` of its own (the native updater path never does). */
 export function installerUrl(version: string, platform: string, arch: string): string {
   const v = version.replace(/^v/, '');
-  const file = platform === 'darwin' ? `Munder-Difflin-${v}-mac-${arch}.dmg`
-    : platform === 'win32' ? `Munder-Difflin-${v}-win-x64-setup.exe`
-    : `Munder-Difflin-${v}-linux-x86_64.AppImage`;
+  const file = platform === 'darwin' ? `The-Hive-${v}-mac-${arch}.dmg`
+    : platform === 'win32' ? `The-Hive-${v}-win-x64-setup.exe`
+    : `The-Hive-${v}-linux-x86_64.AppImage`;
   return `https://github.com/${REPO}/releases/download/v${v}/${file}`;
 }
 
@@ -233,7 +233,7 @@ export function describeUpdateSettings(
     case 'downloaded':
       return {
         headline: `v${status.version} is ready to install`,
-        detail: `Restart Munder Difflin to finish updating from v${v}.`,
+        detail: `Restart The Hive to finish updating from v${v}.`,
         button: 'Restart to update', action: 'restart', busy: false, tone: 'ready'
       };
     case 'available-manual':
@@ -280,7 +280,7 @@ export function manualInstallSteps(platform: string): { os: string; steps: strin
     return {
       os: 'macOS',
       steps: [
-        'Open the .dmg and drag Munder Difflin onto Applications. Choose Replace when asked.',
+        'Open the .dmg and drag The Hive onto Applications. Choose Replace when asked.',
         'Quit this app, open the new one from Applications, and pick the same project.'
       ]
     };
@@ -290,7 +290,7 @@ export function manualInstallSteps(platform: string): { os: string; steps: strin
       os: 'Windows',
       steps: [
         'Quit this app, then run the downloaded setup .exe. It replaces the installed version.',
-        'Open Munder Difflin again and pick the same project.'
+        'Open The Hive again and pick the same project.'
       ]
     };
   }

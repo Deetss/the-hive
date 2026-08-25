@@ -60,8 +60,12 @@ Fifteen units mirror the fifteen office cast slots. Abathur fills the god seat.
 - **Phase 0 (foundation, done):** Fork set up locally on branch `zerg-reskin`, upstream retained.
   Register a `zerg` theme and a Hive entry in the theme picker. Placeholder art reuses the office
   map + cast (exactly how Brooklyn 99 shipped), so the Hive floor is selectable and runnable.
-- **Phase 1 (app rebrand):** Munder Difflin to The Hive across the app name, window title, update
-  filenames, and user-facing copy. Mechanical, gated by `npm run typecheck` plus a grep sweep.
+- **Phase 1 (app rebrand, done):** Munder Difflin to The Hive across the app name (`productName`,
+  package `name`), window title, updater filenames + repo (now `Deetss/the-hive`), the `thehive://`
+  deep-link scheme, the `the-hive/hire@1` spec tag, functional namespaces (hook group, MCP prefix,
+  IPC pipe), and user-facing copy. The upstream is still named "Munder Difflin" where the code
+  attributes it. Gated by typecheck + the focused test suite. Deferred: strip upstream marketing
+  (the `docs/` site + blog, the Pro/founders UI in `SettingsHeroCard`, the `munderdiffl.in` links).
 - **Phase 2 (Abathur rename):** the GOD orchestrator Michael to Abathur. Careful: the name is
   woven through model-facing prompts (`hive.ts`, `agentProvider.ts`) and component names
   (`MichaelBooting.tsx`, `RealtimeMichaelToggle.tsx`). Note the office cast member "Michael"
@@ -93,7 +97,6 @@ as `the-hive`). This fork has no published releases, so it builds locally:
 scripts/install-ubuntu.sh
 ```
 
-The Linux build is branded "The Hive" (executable `the-hive`) via Linux-scoped
-electron-builder keys. The global `productName` is still "Munder Difflin" until
-Phase 1, because that also drives the updater filenames and the userData path.
-Under WSL2 the GUI needs WSLg (default on current Windows 11).
+The Linux build is branded "The Hive" (executable `the-hive`); the global
+`productName` is now "The Hive" as well (Phase 1). Under WSL2 the GUI needs
+WSLg (default on current Windows 11).

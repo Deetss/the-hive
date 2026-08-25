@@ -28,7 +28,7 @@ import { Icon } from './Icon';
 import { DEFAULT_HERO, type HeroPayload } from '@shared/heroPayload';
 import { manualDownloadUrl, pendingVersion, reduceStatus, type UpdateStatus } from '@shared/updateState';
 
-const GITHUB_REPO_URL = 'https://github.com/chaitanyagiri/munder-difflin';
+const GITHUB_REPO_URL = 'https://github.com/Deetss/the-hive';
 const FOUNDERS_WALL_URL = 'https://munderdiffl.in/wall.html';
 const DISCORD_URL = 'https://discord.gg/SEDzP5ZPk5';
 
@@ -140,7 +140,7 @@ export function SettingsHeroCard() {
           }}>Announcement</span>
           <div style={{
             marginTop: 8, fontFamily: MONO, fontSize: 14, fontWeight: 700, color: INK
-          }}>v0.5.0 launches with Munder Difflin Pro.</div>
+          }}>v0.5.0 launches with The Hive Pro.</div>
           <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.5, color: 'var(--cth-ink-700)', maxWidth: '64ch' }}>
             <b style={{ color: INK }}>Community stays free, stays open, and keeps getting updates.</b>{' '}
             Pro ships with new features and integrations, with more posted throughout the year,
@@ -168,7 +168,7 @@ export function SettingsHeroCard() {
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600 }}>On the Founders&rsquo; Wall?</div>
             <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.85, marginTop: 2 }}>
-              A month of Munder Difflin Pro free, then 50% off the annual plan. For the first
+              A month of The Hive Pro free, then 50% off the annual plan. For the first
               100 people on the wall.
             </div>
           </div>
