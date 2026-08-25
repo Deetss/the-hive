@@ -11,6 +11,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pats=(
   "$root/node_modules/.bin/[e]lectron-vite"
   "$root/node_modules/[e]lectron/dist/electron"
+  "[w]eston --socket=hive-weston"
 )
 
 found=0
