@@ -29,7 +29,7 @@
  *   3. Never let an empty renderer erase a full roster. See `write`.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 /** What the renderer mirrors to disk. The inner agent shape is deliberately
  *  opaque here — the renderer's store owns it, and repeating it would mean
@@ -51,12 +51,39 @@ export interface RosterWriteResult {
   error?: string;
 }
 
+/**
+ * The roster lives INSIDE the hive git repo (`<home>/hive/roster.json`) so it
+ * travels with the rest of the hive state under device-sync. It used to sit at
+ * the home root (`<home>/roster.json`); `migrateRosterLocation` moves a legacy
+ * file into place once. Backups stay OUTSIDE the repo (append-only, machine-local
+ * — never synced).
+ */
 export function rosterPath(home: string): string {
+  return join(home, 'hive', 'roster.json');
+}
+
+/** The pre-sync location, kept only so a one-time migration can find and move it. */
+export function legacyRosterPath(home: string): string {
   return join(home, 'roster.json');
 }
 
 export function rosterBackupDir(home: string): string {
   return join(home, 'roster-backups');
+}
+
+/** One-time move of a legacy `<home>/roster.json` into `<home>/hive/roster.json`.
+ *  Idempotent and best-effort: skips when the new file already exists or the
+ *  legacy one is absent, and never throws (a failed migration just leaves the
+ *  legacy file, which read/write still tolerate through this same call). */
+export function migrateRosterLocation(home: string): void {
+  try {
+    const dest = rosterPath(home);
+    const legacy = legacyRosterPath(home);
+    if (existsSync(dest) || !existsSync(legacy)) return;
+    mkdirSync(join(home, 'hive'), { recursive: true });
+    renameSync(legacy, dest);
+    console.warn('[roster] migrated roster.json into the hive repo');
+  } catch { /* leave the legacy file in place; callers still read/write via rosterPath */ }
 }
 
 function isSnapshot(v: unknown): v is RosterSnapshot {
@@ -86,10 +113,17 @@ export class RosterStore {
    *  the first — a backup folder that quietly loses backups is worse than none. */
   private backupSeq = 0;
 
+  /** Set once the legacy-location migration has been attempted this run. */
+  private migrated = false;
+
   constructor(private readonly getHome: () => string | null) {}
 
   private home(): string | null {
-    try { return this.getHome(); } catch { return null; }
+    try {
+      const h = this.getHome();
+      if (h && !this.migrated) { this.migrated = true; migrateRosterLocation(h); }
+      return h;
+    } catch { return null; }
   }
 
   /** The stored roster, or null when there isn't one (or it can't be parsed).
@@ -129,7 +163,7 @@ export class RosterStore {
     if (!isSnapshot(snap)) return { ok: false, error: 'invalid snapshot' };
     const p = rosterPath(home);
     try {
-      mkdirSync(home, { recursive: true });
+      mkdirSync(dirname(p), { recursive: true });
       const existing = this.read();
 
       if (!this.wrote && existing && entryCount(existing) > 0 && entryCount(snap) === 0) {

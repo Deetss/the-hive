@@ -6,7 +6,7 @@
  * HIVE.md for the full design. Responsibilities:
  *   - per-agent workspace (identity.md, memory.md, inbox/, outbox/, cursor.json)
  *   - hive identity (registry.json: id/role/cwd/session — what agents read),
- *     separate from the UI floor roster (`<harnessHome>/roster.json`)
+ *     alongside the UI floor roster (`<harnessHome>/hive/roster.json`)
  *   - shared blackboard (board.md), task ledger, and an append-only event log (log.jsonl)
  *   - a router that drains each agent's outbox into recipients' inboxes
  *

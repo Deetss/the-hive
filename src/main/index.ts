@@ -3137,11 +3137,11 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
 
   if (mode === 'move' && oldHome) {
     try {
-      // roster.json + its backups ride along with hive/palace: the roster is the
-      // renderer's half of the same state, and leaving it behind would move the
-      // agents' sessions and memory to the new home while their names, notes and
-      // worktree paths stayed at the old one.
-      for (const sub of ['hive', 'palace', 'roster.json', 'roster-backups']) {
+      // The roster now lives INSIDE hive/ (device-sync), so copying 'hive' already
+      // carries it; only its append-only backups need to ride along separately.
+      // (A legacy pre-migration roster.json at the old root, if any, is picked up
+      // by migrateRosterLocation on the next read against newHome.)
+      for (const sub of ['hive', 'palace', 'roster-backups']) {
         const src = join(oldHome, sub);
         if (!existsSync(src)) continue;
         // cpSync copies the whole tree incl. .git and is cross-device safe (unlike
