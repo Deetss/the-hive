@@ -155,8 +155,8 @@ async function loadSlitherFrames(url: string, frameCount = 8): Promise<Texture[]
     const ctx = c.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
     for (let y = 0; y < H; y++) {
-      const envelope = Math.sin(Math.PI * (y / (H - 1))); // 0 at head + base, 1 mid-body
-      const dx = Math.round(6 * envelope * Math.sin((2 * Math.PI * y) / 20 - phase));
+      const envelope = 1 - y / (H - 1); // tail (bottom) anchored, head/body sway most
+      const dx = Math.round(6 * envelope * Math.sin((2 * Math.PI * y) / 26 - phase));
       ctx.drawImage(img, 0, y, W, 1, PAD + dx, y, W, 1);
     }
     const tex = Texture.from(c);
