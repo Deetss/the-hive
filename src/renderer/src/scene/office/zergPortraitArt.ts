@@ -72,6 +72,9 @@ export interface ZergRecipe {
   eyes: number;
   /** Extra dorsal/crest spikes. */
   spiky?: boolean;
+  /** Relative body size on the floor, 0.5 (tiny, e.g. zergling) to 1.0 (huge,
+   *  e.g. ultralisk). Bottom-aligned to the ground so bulk differs per lore. */
+  size?: number;
 }
 
 // ─── head (portrait bust) ──────────────────────────────────────────────────────
@@ -138,88 +141,117 @@ function drawCarapaceShoulders(buf: Buf, r: ZergRecipe): void {
 }
 
 // ─── scene sprite (18×32 walker) ───────────────────────────────────────────────
-/** An elongated, snouted head anchored at center `cx`, top row `topY`: brow
- *  tapering to a fanged snout, crest horns, glowing eyes, mandible tusks. */
-function drawZergHead(buf: Buf, r: ZergRecipe, cx: number, topY: number, back: boolean): void {
+const GROUND = 31; // feet rest on this row; every creature is bottom-aligned here
+const walk = (phase: number, i: number) => (i % 2 === 0 && phase === 1) || (i % 2 === 1 && phase === 2);
+
+/** A scalable snouted head: half-width `hw` (2..4) tapering to a fanged snout,
+ *  with crest horns, glowing eyes, and mandible tusks. Bigger units get bigger
+ *  heads. Returns the row just below the head (where the neck/body begins). */
+function drawZergHead(buf: Buf, r: ZergRecipe, cx: number, topY: number, hw: number, back: boolean): number {
   const [hi, base, sh] = shades(r.carapace);
   const [, aBase] = shades(r.accent);
-  const rows: [number, number][] = [[cx - 3, cx + 3], [cx - 3, cx + 3], [cx - 2, cx + 2], [cx - 2, cx + 2], [cx - 1, cx + 1]];
-  rows.forEach(([x0, x1], i) => { rect(buf, x0, topY + i, x1, topY + i, base); set(buf, x0, topY + i, hi); set(buf, x1, topY + i, sh); });
-  // crest horns sweeping up
-  for (const dx of (r.spiky ? [-3, 0, 3] : [-2, 2])) { set(buf, cx + dx, topY - 1, aBase); set(buf, cx + dx, topY - 2, aBase); if (r.spiky) set(buf, cx + dx, topY - 3, sh); }
-  if (back) { for (let i = 0; i < 4; i++) set(buf, cx, topY + i, sh); return; }
-  for (const [ex, ey] of eyeColumns(r.eyes, cx - 3, cx + 3)) glowEye(buf, ex, topY + 1 + (ey === 0 ? 0 : 1), r.eye);
-  set(buf, cx, topY + 4, [20, 16, 24]);                                   // fanged maw
-  set(buf, cx - 1, topY + 5, aBase); set(buf, cx + 1, topY + 5, aBase);   // tusks
+  const H = hw * 2 + 1;
+  for (let i = 0; i <= H; i++) {
+    const w = Math.max(0, Math.round(hw - (i / H) * (hw - 0.4) * 1.5));
+    const y = topY + i;
+    rect(buf, cx - w, y, cx + w, y, base);
+    set(buf, cx - w, y, hi); set(buf, cx + w, y, sh);
+  }
+  for (const dx of (r.spiky ? [-hw, -1, 1, hw] : [-hw + 1, hw - 1])) {
+    set(buf, cx + dx, topY - 1, aBase); set(buf, cx + dx, topY - 2, aBase);
+  }
+  if (!back) {
+    for (const [ex, ey] of eyeColumns(r.eyes, cx - hw, cx + hw)) glowEye(buf, ex, topY + 1 + (ey === 0 ? 0 : 1), r.eye);
+    const my = topY + H - 1;
+    set(buf, cx - 1, my, [18, 14, 22]); set(buf, cx, my, [18, 14, 22]); set(buf, cx + 1, my, [18, 14, 22]);
+    set(buf, cx - 2, my - 1, aBase); set(buf, cx + 2, my - 1, aBase);
+  } else {
+    for (let i = 0; i < H; i++) set(buf, cx, topY + i, sh);
+  }
+  return topY + H;
 }
 
-const walk = (phase: number, i: number) => (i % 2 === 0 && phase === 1) || (i % 2 === 1 && phase === 2);
-function drawLeg(buf: Buf, x0: number, x1: number, up: boolean, base: RGB, sh: RGB, claw: RGB): void {
-  const top = up ? 27 : 28;
-  rect(buf, x0, top, x1, 30, base);
-  for (let y = top; y <= 30; y++) set(buf, x1, y, sh);
-  rect(buf, x0, 31, x0 + 1, 31, claw);
-}
-
+/** Bottom-aligned scene sprite. `r.size` (0.5 tiny to 1.0 huge) scales the whole
+ *  creature so bulk differs per lore; the archetype `frame` sets the silhouette. */
 function drawSceneBody(buf: Buf, r: ZergRecipe, phase: number, back: boolean): void {
   const [hi, base, sh] = shades(r.carapace);
   const [aHi, aBase, aSh] = shades(r.accent);
-  const dorsal = (x0: number, y0: number, y1: number) => { for (let y = y0; y <= y1; y += 2) set(buf, x0, y - 1, r.spiky ? aBase : aSh); };
+  const cx = 9;
+  const size = Math.max(0.5, Math.min(1, r.size ?? 0.8));
+  const bh = Math.round(size * 27);
+  const top = GROUND - bh;
+  const hw = Math.max(2, Math.round(1.5 + size * 2.6)); // head half-width 2..4
+
+  const body = (x0: number, y0: number, x1: number, y1: number) => {
+    rect(buf, x0, y0, x1, y1, base);
+    for (let y = y0; y <= y1; y++) { set(buf, x0, y, hi); set(buf, x1, y, sh); }
+  };
+  const dorsal = (y0: number, y1: number) => { for (let y = y0; y <= y1; y += 2) set(buf, cx, y - 1, r.spiky ? aBase : aSh); };
+  const leg = (x0: number, x1: number, up: boolean) => {
+    const t = up ? GROUND - 3 : GROUND - 2;
+    rect(buf, x0, t, x1, GROUND, base);
+    for (let y = t; y <= GROUND; y++) set(buf, x1, y, sh);
+    set(buf, x0, GROUND, aBase);
+  };
+  const legs = (xs: [number, number][]) => xs.forEach(([a, b], i) => leg(a, b, walk(phase, i)));
 
   if (r.frame === 'small') {
-    // hunched quadruped: compact body + four splayed legs
-    rect(buf, 4, 17, 13, 25, base);
-    for (let y = 17; y <= 25; y++) { set(buf, 4, y, hi); set(buf, 13, y, sh); }
-    rect(buf, 5, 24, 12, 25, aSh); // low belly plate (two-tone)
-    dorsal(9, 18, 24);
-    [[1, 3], [5, 7], [10, 12], [14, 16]].forEach(([a, b], i) => drawLeg(buf, a, b, walk(phase, i), base, sh, aBase));
-    drawZergHead(buf, r, 9, 9, back);
+    // hunched quadruped: big head, compact body, four short legs
+    const neck = drawZergHead(buf, r, cx, top, hw, back);
+    const bw = Math.max(3, Math.round(size * 6));
+    body(cx - bw, neck - 1, cx + bw, GROUND - 3);
+    rect(buf, cx - bw + 1, GROUND - 4, cx + bw - 1, GROUND - 3, aSh);
+    dorsal(neck, GROUND - 4);
+    legs([[cx - bw, cx - bw + 2], [cx - 2, cx], [cx + 1, cx + 3], [cx + bw - 2, cx + bw]]);
     return;
   }
   if (r.frame === 'tall') {
-    // upright torso on a coiled base, scythe forelimbs
-    rect(buf, 6, 12, 11, 23, base);
-    for (let y = 12; y <= 23; y++) { set(buf, 6, y, hi); set(buf, 11, y, sh); }
-    for (let x = 7; x <= 10; x++) set(buf, x, 16, aSh); // chest plate seam
+    // upright torso on a coiled base with scythe forelimbs
+    const neck = drawZergHead(buf, r, cx - 1, top, hw, back);
+    const bw = Math.max(2, Math.round(size * 3));
+    const coilTop = GROUND - Math.round(bh * 0.32);
+    body(cx - bw, neck - 1, cx + bw, coilTop);
+    for (let x = cx - bw + 1; x <= cx + bw - 1; x++) set(buf, x, neck + 2, aSh);
     // coiled base
-    rect(buf, 3, 24, 14, 29, base); rect(buf, 4, 30, 13, 30, sh);
-    for (let x = 4; x <= 13; x += 2) set(buf, x, 26, sh);
-    // scythe arms (sweep out + down), lift with walk
+    body(3, coilTop, 14, GROUND - 1); rect(buf, 4, GROUND, 13, GROUND, sh);
+    for (let x = 4; x <= 13; x += 2) set(buf, x, coilTop + 2, sh);
+    // scythe arms
     const dy = phase === 1 ? -1 : 0;
-    for (let i = 0; i < 5; i++) { set(buf, 5 - i, 14 + i + dy, aBase); set(buf, 12 + i, 14 + i - dy, aBase); }
-    set(buf, 0, 19 + dy, aHi); set(buf, 17, 19 - dy, aHi); // blade tips
-    dorsal(8, 13, 23);
-    drawZergHead(buf, r, 8, 3, back);
+    for (let i = 0; i < 5; i++) { set(buf, cx - bw - i, neck + 1 + i + dy, aBase); set(buf, cx + bw + i, neck + 1 + i - dy, aBase); }
+    set(buf, Math.max(0, cx - bw - 5), neck + 6 + dy, aHi); set(buf, Math.min(17, cx + bw + 5), neck + 6 - dy, aHi);
+    dorsal(neck, coilTop);
     return;
   }
   if (r.frame === 'wing') {
-    // floating bulbous body, big membranous wings, dangling tentacles
-    rect(buf, 6, 12, 12, 22, base);
-    for (let y = 12; y <= 22; y++) { set(buf, 6, y, hi); set(buf, 12, y, sh); }
-    rect(buf, 7, 15, 11, 20, aSh); // sac (two-tone belly)
-    // wings: triangles sweeping out from the shoulders, flap with phase
-    const wy = 9 + (phase === 0 ? 0 : 1);
-    for (let i = 0; i <= 5; i++) {
-      rect(buf, 5 - i, wy + i, 5, wy + i, aBase); set(buf, 5 - i, wy + i, aHi);
-      rect(buf, 13, wy + i, 13 + i, wy + i, aBase); set(buf, 13 + i, wy + i, aHi);
+    // floats above the ground: bulbous sac body, membranous wings, tentacles
+    const floatBottom = GROUND - 5;
+    const neck = drawZergHead(buf, r, cx, top, hw, back);
+    const bw = Math.max(3, Math.round(size * 4));
+    body(cx - bw, neck - 1, cx + bw, floatBottom);
+    rect(buf, cx - bw + 1, neck + 1, cx + bw - 1, floatBottom - 1, aSh); // sac
+    // wings
+    const wy = neck + (phase === 0 ? 0 : 1);
+    for (let i = 0; i <= bw + 2; i++) {
+      set(buf, cx - bw - i, wy + i, aBase); set(buf, cx - bw - i, wy + i, i === bw + 2 ? aHi : aBase);
+      set(buf, cx + bw + i, wy + i, i === bw + 2 ? aHi : aBase);
+      if (i > 0) { set(buf, cx - bw - i, wy + i - 1, aSh); set(buf, cx + bw + i, wy + i - 1, aSh); }
     }
     // dangling tentacles
-    for (const tx of [7, 9, 11]) { for (let y = 23; y <= 29; y++) set(buf, tx + (y % 2), y, y > 26 ? aSh : sh); }
-    dorsal(9, 12, 20);
-    drawZergHead(buf, r, 9, 11, back);
+    for (const tx of [cx - 2, cx, cx + 2]) for (let y = floatBottom; y <= GROUND - 1; y++) set(buf, tx + (y % 2), y, y > floatBottom + 2 ? aSh : sh);
+    dorsal(neck, floatBottom);
     return;
   }
   // 'wide': broad low carapace, many legs, heavy dorsal spikes
-  rect(buf, 2, 15, 15, 26, base);
-  for (let y = 15; y <= 26; y++) { set(buf, 2, y, hi); set(buf, 15, y, sh); }
-  rect(buf, 3, 24, 14, 26, aSh); // underplate
-  for (let y = 16; y <= 25; y += 2) for (let x = 4; x <= 13; x++) set(buf, x, y, sh); // segment ridges
-  for (const sx of [4, 8, 13]) { set(buf, sx, 14, aBase); set(buf, sx, 13, r.spiky ? aBase : aSh); if (r.spiky) set(buf, sx, 12, aSh); }
-  [[1, 3], [5, 7], [8, 10], [12, 14]].forEach(([a, b], i) => drawLeg(buf, a, b, walk(phase, i), base, sh, aBase));
-  drawZergHead(buf, r, 9, 8, back);
+  const neck = drawZergHead(buf, r, cx, top, hw, back);
+  const bw = Math.max(5, Math.round(size * 7));
+  body(cx - bw, neck - 1, cx + bw, GROUND - 3);
+  rect(buf, cx - bw + 1, GROUND - 4, cx + bw - 1, GROUND - 3, aSh);
+  for (let y = neck + 1; y <= GROUND - 5; y += 2) for (let x = cx - bw + 1; x <= cx + bw - 1; x++) set(buf, x, y, sh);
+  for (const sx of [cx - bw + 1, cx, cx + bw - 1]) { set(buf, sx, neck - 1, aBase); if (r.spiky) { set(buf, sx, neck - 2, aBase); set(buf, sx, neck - 3, aSh); } }
+  legs([[cx - bw, cx - bw + 2], [cx - 3, cx - 1], [cx + 1, cx + 3], [cx + bw - 2, cx + bw]]);
 }
 
-// Head is drawn inside drawSceneBody (its anchor depends on the frame).
+// Head is drawn inside drawSceneBody (its anchor depends on the frame + size).
 function drawSceneHead(_buf: Buf, _r: ZergRecipe, _back: boolean): void { /* no-op */ }
 
 // ─── compose ───────────────────────────────────────────────────────────────────
