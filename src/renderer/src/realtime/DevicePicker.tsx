@@ -1,8 +1,8 @@
 /**
- * Realtime Michael — microphone & speaker device picker (card rt-8, Phase 1).
+ * Realtime Abathur — microphone & speaker device picker (card rt-8, Phase 1).
  *
  * Lets the user choose WHICH microphone the voice loop captures and WHICH speaker
- * it plays Michael's voice through. Selections are held in the realtime session
+ * it plays Abathur's voice through. Selections are held in the realtime session
  * store via `setDeviceId()` / `setOutputDeviceId()` (see session.ts): the mic is
  * applied on the next connect() (getUserMedia `{ deviceId: { exact } }`), the
  * speaker is applied immediately to the live `<audio>` sink via `setSinkId()` (and
@@ -17,7 +17,7 @@
  * Branch feat/realtime-michael. See board.md "🎙 REALTIME MICHAEL".
  */
 import { useCallback, useEffect, useState } from 'react';
-import { useRealtimeMichael } from './session';
+import { useRealtimeAbathur } from './session';
 
 interface AudioDevice {
   deviceId: string;
@@ -58,7 +58,7 @@ const selectStyle: React.CSSProperties = {
 };
 
 export function RealtimeDevicePicker(): React.ReactElement {
-  const { deviceId, setDeviceId, outputDeviceId, setOutputDeviceId } = useRealtimeMichael();
+  const { deviceId, setDeviceId, outputDeviceId, setOutputDeviceId } = useRealtimeAbathur();
   const [mics, setMics] = useState<AudioDevice[]>([]);
   const [speakers, setSpeakers] = useState<AudioDevice[]>([]);
   /** True once at least one device exposes a real label ⇒ mic permission granted. */
@@ -123,7 +123,7 @@ export function RealtimeDevicePicker(): React.ReactElement {
       {!labelled && (
         <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
           Device names appear after you first start a voice session and grant mic access.
-          The microphone choice applies the next time Michael connects; the speaker switches live.
+          The microphone choice applies the next time Abathur connects; the speaker switches live.
         </span>
       )}
     </div>

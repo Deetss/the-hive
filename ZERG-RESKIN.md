@@ -22,8 +22,8 @@ is authored in code, no external spritesheets required for the units themselves.
 | Munder Difflin | The Hive |
 | --- | --- |
 | Munder Difflin (the app) | The Hive |
-| Michael (the GOD orchestrator) | The Overmind |
-| Michael's prep assistant | Cerebrate (enriches tasks before the Overmind runs them) |
+| Michael (the GOD orchestrator) | Abathur (the evolution master, orchestrates the swarm) |
+| Michael's prep assistant | Cerebrate (enriches tasks before Abathur runs them) |
 | Worker agents / office cast | Broods (individual Zerg units) |
 | The office floor (Tiled map) | The Hive cluster, grown on creep |
 | Desks / PCs (workstations) | Hatchery chambers where broods work |
@@ -35,11 +35,11 @@ is authored in code, no external spritesheets required for the units themselves.
 
 ## The brood roster
 
-Fifteen units mirror the fifteen office cast slots. The Overmind fills the god seat.
+Fifteen units mirror the fifteen office cast slots. Abathur fills the god seat.
 
 | Unit | Dev role flavor | Accent |
 | --- | --- | --- |
-| Overmind | Orchestrator (god seat) | deep violet |
+| Abathur | Orchestrator (god seat), the evolution master | deep violet |
 | Queen | Larva injection, brood management | magenta |
 | Drone | The worker/builder | tan |
 | Zergling | Fast, eager junior | crimson |
@@ -62,9 +62,11 @@ Fifteen units mirror the fifteen office cast slots. The Overmind fills the god s
   map + cast (exactly how Brooklyn 99 shipped), so the Hive floor is selectable and runnable.
 - **Phase 1 (app rebrand):** Munder Difflin to The Hive across the app name, window title, update
   filenames, and user-facing copy. Mechanical, gated by `npm run typecheck` plus a grep sweep.
-- **Phase 2 (Overmind rename):** Michael to the Overmind. Careful: the name is woven through
-  model-facing prompts (`hive.ts`, `agentProvider.ts`) and component names (`MichaelBooting.tsx`,
-  `RealtimeMichaelToggle.tsx`). Its own phase so the prompt rewrites get review.
+- **Phase 2 (Abathur rename):** the GOD orchestrator Michael to Abathur. Careful: the name is
+  woven through model-facing prompts (`hive.ts`, `agentProvider.ts`) and component names
+  (`MichaelBooting.tsx`, `RealtimeMichaelToggle.tsx`). Note the office cast member "Michael"
+  (Michael Scott) is a DIFFERENT Michael and must stay put; only the orchestrator identity
+  becomes Abathur. Its own phase so the prompt rewrites get review.
 - **Phase 3 (procedural Zerg cast):** Author the brood roster in a `zergCast.ts` plus new draw
   primitives in `portraitArt.ts` (carapace, spikes, glowing eyes, no human face). Replaces the
   office cast for the zerg theme. Gated by a running dev build.

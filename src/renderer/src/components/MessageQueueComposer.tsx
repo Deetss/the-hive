@@ -66,7 +66,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
 
   const idle = agent.status === 'idle';
 
-  // Only the god/Michael agent gets the delegation toggle. Default OFF.
+  // Only the god/Abathur agent gets the delegation toggle. Default OFF.
 
   // Files/images staged for the next message. Component-local: switching agents
   // remounts this component, so attachments are cleared on tab switch (drafts
@@ -567,7 +567,7 @@ function FreeFlowButton({ agentId, hasGroqKey }: { agentId: string; hasGroqKey: 
     : transcribing ? 'Transcribing…'
     : 'Free Flow — dictate into the queue. Click, or hold Option (⌥).';
 
-  /** Same placement rule as RealtimeMichaelToggle's hint: prefer above (the
+  /** Same placement rule as RealtimeAbathurToggle's hint: prefer above (the
    *  composer sits low in the panel), flip below only when there is no room, and
    *  clamp both axes so it can never hang off an edge. */
   const toggleHint = (e: ReactMouseEvent): void => {

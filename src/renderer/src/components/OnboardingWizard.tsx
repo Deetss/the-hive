@@ -41,7 +41,7 @@ const FEATURES: Feature[] = [
     icon: 'gear',
     label: 'MICHAEL IS YOUR CLONE',
     desc: 'Your clone runs the floor — triages requests, routes tasks, and escalates only what needs you.',
-    descPlain: 'Your clone, Michael, takes your requests, hands work to the right agent, and only interrupts you when it matters.',
+    descPlain: 'Your clone, Abathur, takes your requests, hands work to the right agent, and only interrupts you when it matters.',
     tint: 'var(--cth-sky-light)', edge: 'var(--cth-sky)'
   },
   {
@@ -106,7 +106,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [busy, setBusy] = useState(false);
 
   // Which engine CLIs are actually on this machine. The picker used to record the
-  // choice blind; the first check happened when Michael spawned, and for a
+  // choice blind; the first check happened when Abathur spawned, and for a
   // provider with no installer that meant a first run where nothing ever booted.
   // `undefined` = probe not back yet (or failed): rows show no badge and nothing
   // is blocked, because a broken probe must not lock a new user out.
@@ -397,11 +397,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               <>
                 <p style={{ margin: 0, lineHeight: '22px' }}>
                   {plain ? (
-                    <><strong>Michael is your clone</strong> — he reads your requests, breaks
+                    <><strong>Abathur is your clone</strong> — he reads your requests, breaks
                     them into tasks, and hands them to the right agent. He's the boss of the
                     floor; you're still the boss of him. Choose which AI engine powers him.</>
                   ) : (
-                    <><strong>Michael is your clone</strong> — the boss of the floor you just
+                    <><strong>Abathur is your clone</strong> — the boss of the floor you just
                     met. He triages your requests, assigns tasks, and manages the team, while
                     escalating anything that genuinely needs you. Pick the engine and model that
                     power him; give him a longer-context, higher-capability model.</>
@@ -426,8 +426,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                       <>Each option is a <strong>CLI engine</strong> (Claude Code, Codex,
                       Antigravity/Gemini, or a local proxy like Qwen). Engines marked
                       INSTALLED are already on this machine; INSTALLS ON FIRST RUN means the app
-                      sets it up when Michael first starts.
-                      <strong> Your clone</strong> (Michael) is the engine that orchestrates the whole
+                      sets it up when Abathur first starts.
+                      <strong> Your clone</strong> (Abathur) is the engine that orchestrates the whole
                       hive. Recommended: Claude Code · Opus 4.8 · 1M. Other providers can be wired
                       per agent later.</>
                     )}
@@ -532,7 +532,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     ))}
                   </select>
                   <div style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>
-                    This only sets Michael's engine. You can run other providers per agent later.
+                    This only sets Abathur's engine. You can run other providers per agent later.
                   </div>
                 </div>
               </>
@@ -766,7 +766,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                       }
                       // Same idea for the engine: refuse here, with the reason on
                       // screen, instead of letting a pick that cannot boot through
-                      // to a Michael that never starts.
+                      // to a Abathur that never starts.
                       if (step === 'orchestrator' && engineBlocked) {
                         setError(`${providerPreset(godProvider).label} is not installed. Install it and press "check again", or pick another engine.`);
                         return;

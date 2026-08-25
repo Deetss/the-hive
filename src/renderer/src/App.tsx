@@ -9,7 +9,7 @@ import { MemoryPanel } from '@/components/MemoryPanel';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { AgentStrip } from '@/components/AgentStrip';
 import { AddAgentModal } from '@/components/AddAgentModal';
-import { MichaelBooting } from '@/components/MichaelBooting';
+import { AbathurBooting } from '@/components/AbathurBooting';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { HivePicker } from '@/components/HivePicker';
 import { QuitWarningModal, type ClosingTimeState } from '@/components/QuitWarningModal';
@@ -112,7 +112,7 @@ export function App() {
       useStore.getState().setOrgTrigger(withTriggers.orgTrigger ?? DEFAULT_ORG_TRIGGER);
     });
     // Mirror BYOK OpenAI key presence (boolean only; the key never leaves main) so the
-    // Realtime Michael voice toggle can gate on it. Lives in the secret broker, not
+    // Realtime Abathur voice toggle can gate on it. Lives in the secret broker, not
     // config — so fetch it rather than derive from c.
     window.cth.realtimeHasOpenAiKey().then(has => {
       if (!cancelled) useStore.getState().setHasOpenAiKey(has);
@@ -174,7 +174,7 @@ export function App() {
 
   // The hive: god-agent bootstrap, hook-driven avatars, idle-agent waking. Held
   // off until the user opens a hive in the launch picker (passing null no-ops the
-  // hook) so Michael doesn't boot against the current home while the user may be
+  // hook) so Abathur doesn't boot against the current home while the user may be
   // about to switch to a different one.
   useHive(hiveOpened ? config : null);
 
@@ -189,7 +189,7 @@ export function App() {
   // hive (it would fire fake envelope handoffs and step seeded agents). Run it
   // only as an explicit showcase (VITE_CTH_DEMO=1 in dev) or on a genuinely
   // empty floor, and stop it the instant the first real PTY agent appears
-  // (Michael always spawns, so in normal operation it effectively never runs).
+  // (Abathur always spawns, so in normal operation it effectively never runs).
   useEffect(() => {
     if (!config?.onboardingComplete) return;
     const DEMO = import.meta.env.DEV && import.meta.env.VITE_CTH_DEMO === '1';
@@ -259,7 +259,7 @@ export function App() {
       width: '100vw', height: '100vh',
       overflow: 'hidden'
     }}>
-      {/* rt-12: global fixed-overlay toast for voice-Michael completions ("Oscar
+      {/* rt-12: global fixed-overlay toast for voice-Abathur completions ("Oscar
           finished X"). Self-positions bottom-right; renders null until one arrives. */}
       <CompletionToast />
       {/* v0.3.4: background-update toast ("restart to update"); renders null until
@@ -386,7 +386,7 @@ export function App() {
         <div style={{ flex: 1, minHeight: 0, minWidth: 0, position: 'relative' }}>
           <OfficeFloor />
           <MemoryPanel />
-          {agentCount === 0 && godStatus === 'booting' && <MichaelBooting />}
+          {agentCount === 0 && godStatus === 'booting' && <AbathurBooting />}
           {agentCount === 0 && godStatus !== 'booting' && (
             <div style={{
               position: 'absolute', inset: 0,
@@ -434,7 +434,7 @@ export function App() {
                 color: 'var(--cth-ink-500)'
               }}>WAKING THE FLOOR</div>
               <p style={{ margin: 0, fontSize: 13, textAlign: 'center', color: 'var(--cth-ink-700)' }}>
-                Michael is clocking in.<br />
+                Abathur is clocking in.<br />
                 The terminal will land here once he's seated.
               </p>
             </PixelPanel>

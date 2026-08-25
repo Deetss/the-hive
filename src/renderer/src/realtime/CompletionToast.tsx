@@ -1,10 +1,10 @@
 /**
- * Realtime Michael — completion toast (card rt-12, Phase 2, the visual half of
+ * Realtime Abathur — completion toast (card rt-12, Phase 2, the visual half of
  * "respond when done").
  *
- * When voice-Michael dispatches work fire-and-notify, main detects completion (see
+ * When voice-Abathur dispatches work fire-and-notify, main detects completion (see
  * src/main/realtimeCompletionWatcher.ts) and — while a session is live — pushes the
- * event to the renderer over the `realtime:completion` channel. Michael SPEAKS it; this
+ * event to the renderer over the `realtime:completion` channel. Abathur SPEAKS it; this
  * component shows a brief matching TOAST so the human has a glanceable record (handy when
  * audio is missed or several finish at once).
  *
@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 
 /** Mirrors the `window.cth.onRealtimeCompletion` payload (preload). `summary` is the
- *  human-speakable line Michael relays; the rest is context for this toast. */
+ *  human-speakable line Abathur relays; the rest is context for this toast. */
 export interface RealtimeCompletionToastData {
   correlationId: string;
   kind: string;
@@ -122,7 +122,7 @@ export function CompletionToast(): JSX.Element | null {
               textTransform: 'uppercase'
             }}
           >
-            <Icon name="bell" /> Michael · completed
+            <Icon name="bell" /> Abathur · completed
             <button
               type="button"
               onClick={() => dismiss(t.key)}

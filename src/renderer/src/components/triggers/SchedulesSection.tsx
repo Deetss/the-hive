@@ -100,7 +100,7 @@ export function SchedulesSection({ onSummary }: { onSummary?: (s: string) => voi
   const whenIsUsable = !mWeekly || weeklyIsUsable(mWeekly);
 
   const targetName = (to: string) =>
-    to === 'broadcast' ? 'everyone' : to === 'god' ? 'Michael' : agents.find((a) => a.id === to)?.name ?? to;
+    to === 'broadcast' ? 'everyone' : to === 'god' ? 'Abathur' : agents.find((a) => a.id === to)?.name ?? to;
 
   return (
     <>
@@ -135,7 +135,7 @@ export function SchedulesSection({ onSummary }: { onSummary?: (s: string) => voi
           <Field label="GOES TO">
             <Select value={mTo} onChange={setMTo} style={{ width: '100%' }}>
               <option value="broadcast">everyone</option>
-              <option value="god">Michael</option>
+              <option value="god">Abathur</option>
               {agents.filter((a) => !a.isGod).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </Select>
           </Field>
@@ -273,7 +273,7 @@ function MissionRow({ mission, targetName, agents, onPatch, onDelete }: {
           <Field label="GOES TO">
             <Select value={to} onChange={setTo} style={{ width: '100%' }}>
               <option value="broadcast">everyone</option>
-              <option value="god">Michael</option>
+              <option value="god">Abathur</option>
               {agents.filter((a) => !a.isGod).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </Select>
           </Field>

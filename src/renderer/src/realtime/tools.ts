@@ -1,5 +1,5 @@
 /**
- * Realtime Michael — read-tools (rt-4, Realtime Michael Phase 1).
+ * Realtime Abathur — read-tools (rt-4, Realtime Abathur Phase 1).
  *
  * The real function-tools that replace rt-2's placeholder no-op. Each one is a
  * thin, READ-ONLY wrapper over a window.cth bridge that already powers the office
@@ -615,7 +615,7 @@ export function realtimeReadTools(): ReturnType<typeof tool>[] {
 }
 
 /**
- * A short, preloaded orientation Michael can open the session with — the hive
+ * A short, preloaded orientation Abathur can open the session with — the hive
  * size, who god is, and how many tasks are in flight — so the first answer is
  * grounded without a tool round-trip. Best-effort: returns '' if reads fail, so
  * the caller can safely concatenate it onto the agent instructions.

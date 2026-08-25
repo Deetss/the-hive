@@ -62,13 +62,13 @@ export interface HarnessConfig {
   recentHives?: string[];
   registeredRepos: string[];
   autoMode: boolean;
-  /** May the orchestrator ("Michael") spin up agents on its own? Default FALSE,
+  /** May the orchestrator ("Abathur") spin up agents on its own? Default FALSE,
    *  so an absent value reads as off. Mirrors src/main/config.ts. */
   orchestratorMaySpawn?: boolean;
   defaultCommand: string;
   /** Default model for newly spawned agents (e.g. 'claude-sonnet-4-6[1m]'); unset = CLI default. */
   defaultModel?: string;
-  /** Which provider+model powers the GOD orchestrator ("Michael"). Default
+  /** Which provider+model powers the GOD orchestrator ("Abathur"). Default
    *  'claude' / 'claude-opus-4-8'. Mirrors src/main/config.ts. */
   godProvider?: AgentProvider;
   godModel?: string;
@@ -104,7 +104,7 @@ export interface HarnessConfig {
   groqApiKey?: string;
   freeflowModel?: string;
   /** Realtime voice idle auto-disconnect (ms); default 180000 (3 min), 0 = never.
-   *  Tuned in Settings → Realtime Michael; the cost cap stays the runaway guard. */
+   *  Tuned in Settings → Realtime Abathur; the cost cap stays the runaway guard. */
   realtimeIdleDisconnectMs?: number;
   costCapUsd?: number;
   /** Hard total-token ceiling across active agents (the user-facing budget). */
@@ -149,7 +149,7 @@ export interface HarnessConfig {
   triggersMigratedV1?: boolean;
 }
 
-/** The Sonnet model with the 1M-token context window — used for Michael's prep
+/** The Sonnet model with the 1M-token context window — used for Abathur's prep
  *  assistant (cheap, large-context context gathering). Mirrors ASSISTANT_MODEL
  *  in src/main/assistant.ts; keep the two in sync. */
 export const ASSISTANT_MODEL = 'claude-sonnet-4-6[1m]';
@@ -297,7 +297,7 @@ export const COPILOT_MODELS: ModelOption[] = [
 
 /** Models offered when an agent runs on Cursor Agent CLI (`cursor-agent`). Ids match
  *  `cursor-agent models` / `--model` (Cursor account catalog). Luna is the cheap,
- *  high-context default for Michael; other entries are curated quick-picks —
+ *  high-context default for Abathur; other entries are curated quick-picks —
  *  the command field stays editable for any live slug. */
 export const CURSOR_MODELS: ModelOption[] = [
   { id: undefined, label: 'CLI default (auto)' },

@@ -35,7 +35,7 @@ import {
 } from '@/store/config';
 import { canReceiveInbox } from '@shared/agentProvider';
 
-/** Michael's control surface. Shown instead of the plain terminal/files panel
+/** Abathur's control surface. Shown instead of the plain terminal/files panel
  *  when the god agent is selected: terminal + queue, the floor roster (with
  *  per-agent model + dispatch + assistant access), a memory view, and a live
  *  activity feed / board / usage meter. */
@@ -177,7 +177,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
             <span style={{
               fontSize: 12, color: 'var(--cth-ink-500)',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-            }}>Michael runs the floor</span>
+            }}>Abathur runs the floor</span>
           </div>
         </div>
         {/* v0.3.4: floor-wide auto-delivery lives HERE (one switch for every
@@ -310,7 +310,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
               <MessageQueueComposer agent={agent} />
             </>
           ) : (
-            <Centered>Michael has no live terminal.</Centered>
+            <Centered>Abathur has no live terminal.</Centered>
           )
         )}
         {tab === 'floor' && <FloorTab seed={dispatchSeed} />}
@@ -355,11 +355,11 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
   const [engineProvider, setEngineProvider] = useState<AgentProvider>('claude');
   const [engineModel, setEngineModel] = useState<string | undefined>(undefined);
   const [restartErrors, setRestartErrors] = useState<Record<string, string>>({});
-  // The harness's own default model (Settings → default model). Michael and every
+  // The harness's own default model (Settings → default model). Abathur and every
   // new agent spawn on this, so the picker marks it — otherwise the only entry
   // reading "default" was the CLI's, which is a different thing entirely.
   const [defaultModel, setDefaultModel] = useState<string | undefined>(undefined);
-  const [dispatchTo, setDispatchTo] = useState<string>(''); // '' = Michael decides
+  const [dispatchTo, setDispatchTo] = useState<string>(''); // '' = Abathur decides
   const [dispatchText, setDispatchText] = useState('');
   const [dispatchMsg, setDispatchMsg] = useState<string | null>(null);
   // ── ISSUES section state ──
@@ -556,7 +556,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
     );
     setDispatchText('');
     setDispatchMsg(res.ok
-      ? `sent to Michael${suggested ? ` (suggesting ${suggested.name})` : ''}`
+      ? `sent to Abathur${suggested ? ` (suggesting ${suggested.name})` : ''}`
       : `failed: ${res.error ?? '?'}`);
     setTimeout(() => setDispatchMsg(null), 4000);
   };
@@ -585,7 +585,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
   const assignIssue = (issue: GHIssue) => {
     const body = (issue.body ?? '').slice(0, 200);
     setDispatchText(`GitHub Issue #${issue.number}: ${issue.title}\n\n${body}\n\nURL: ${issue.url}`);
-    setDispatchTo(''); // Michael decomposes and assigns — no more broadcast blasts
+    setDispatchTo(''); // Abathur decomposes and assigns — no more broadcast blasts
   };
 
   // Set/clear one agent's token limit atomically in main. Renderer config objects
@@ -633,7 +633,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
             SUGGESTED OWNER
           </span>
           <Select value={dispatchTo} onChange={setDispatchTo}>
-            <option value="">Michael decides</option>
+            <option value="">Abathur decides</option>
             {agents.filter((a) => !a.isGod).map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
@@ -643,7 +643,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
           value={dispatchText}
           onChange={(e) => setDispatchText(e.target.value)}
           rows={2}
-          placeholder="Describe the task… (Michael decomposes, writes the card, and assigns)"
+          placeholder="Describe the task… (Abathur decomposes, writes the card, and assigns)"
           style={textareaStyle}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
@@ -874,7 +874,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
                   onClick={async () => {
                     const currentProvider = inferAgentProvider(a.command, a.provider);
                     if (engineProvider !== currentProvider) {
-                      if (!window.confirm("This restarts Michael; a conversation on a different engine can't be resumed.")) return;
+                      if (!window.confirm("This restarts Abathur; a conversation on a different engine can't be resumed.")) return;
                     }
                     await window.cth.updateConfig({ godProvider: engineProvider, godModel: engineModel });
                     await restartWithModel(a, engineModel, { provider: engineProvider, resume: false });
@@ -890,7 +890,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
                   disabled={restarting === a.id}
                   onClick={() => restartWithModel(a, a.model, { resume: true })}
                 >
-                  <span title="Kill and respawn Michael, resuming the current conversation — fixes a corrupted/garbled terminal without losing context">
+                  <span title="Kill and respawn Abathur, resuming the current conversation — fixes a corrupted/garbled terminal without losing context">
                     restart &amp; continue
                   </span>
                 </PixelButton>

@@ -139,7 +139,7 @@ token you were handed still reads that task once it is routed. The secret
 authorizes new work, the token only reads one task's status. Keep both private.
 
 Each webhook checks bodies against its own JSON schema — edit that in the
-Triggers tab of Michael's Command Center.`;
+Triggers tab of Abathur's Command Center.`;
 
 /** Clear every renderer-side persisted key so a relaunch starts truly empty. */
 function clearLocalState(): void {
@@ -404,8 +404,8 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
   // --- Free Flow (voice dictation → message queue) ---
   const setFreeflowEnabledStore = useStore((s) => s.setFreeflowEnabled);
   const setHasGroqKeyStore = useStore((s) => s.setHasGroqKey);
-  // Talk (Realtime Michael) is gated on the OpenAI key — read the live presence
-  // boolean so the Realtime Michael section can show its enabled/disabled status.
+  // Talk (Realtime Abathur) is gated on the OpenAI key — read the live presence
+  // boolean so the Realtime Abathur section can show its enabled/disabled status.
   const hasOpenAiKey = useStore((s) => s.hasOpenAiKey);
   // Voice-tab entry for the SAME broker slot Agents & Models writes (apikey:openai).
   // Mirroring presence into the store on save is what makes the Talk button light up
@@ -811,7 +811,7 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                   <Icon name="bell" />
                 </div>
                 <div style={{ flex: 1, fontSize: 15, lineHeight: '22px', color: 'var(--cth-ink-700)' }}>
-                  This permanently erases all of Michael's memories and the entire hive,
+                  This permanently erases all of Abathur's memories and the entire hive,
                   and cannot be undone. Any running sessions will be terminated and the app
                   will relaunch into onboarding. Are you sure?
                 </div>
@@ -1069,7 +1069,7 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
-                            Every newly spawned Claude agent (Michael included) starts on this model unless picked per-agent.
+                            Every newly spawned Claude agent (Abathur included) starts on this model unless picked per-agent.
                             Marked “· default” in the model pickers.
                           </span>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1154,12 +1154,12 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                             </span>
                             <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
                               {orchSpawnOn
-                                ? 'Michael can hire on his own. Every agent he starts spends tokens you did not approve.'
-                                : 'Only you. Michael can still ask, and his request waits in the queue instead of failing.'}
+                                ? 'Abathur can hire on his own. Every agent he starts spends tokens you did not approve.'
+                                : 'Only you. Abathur can still ask, and his request waits in the queue instead of failing.'}
                             </span>
                           </div>
                           <PixelButton variant={orchSpawnOn ? 'primary' : 'secondary'} size="sm" onClick={toggleOrchSpawn}>
-                            {orchSpawnOn ? 'me and Michael' : 'only me'}
+                            {orchSpawnOn ? 'me and Abathur' : 'only me'}
                           </PixelButton>
                         </div>
                       </div>
@@ -1357,7 +1357,7 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                               >i</button>
                             </span>
                             <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
-                              Pipe a Slack channel's messages straight into Michael's queue.
+                              Pipe a Slack channel's messages straight into Abathur's queue.
                             </span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1701,7 +1701,7 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                         <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
                           Callers POST to a webhook's URL with its secret in the{' '}
                           <code>x-md-webhook-secret</code> header. Each one checks bodies against its own JSON
-                          schema — edit that in the Triggers tab of Michael's Command Center, where the history
+                          schema — edit that in the Triggers tab of Abathur's Command Center, where the history
                           of everything that arrived lives too.
                         </span>
 
@@ -1800,7 +1800,7 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                     </>
                   )}
 
-                  {/* VOICE — Free Flow dictation + Realtime Michael (v0.3.4: its own tab) */}
+                  {/* VOICE — Free Flow dictation + Realtime Abathur (v0.3.4: its own tab) */}
                   {activeSection === 'Voice' && (
                     <>
                       {/* Free Flow (voice dictation) */}
@@ -1884,20 +1884,20 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
 
                       <div style={{ height: 2, background: 'var(--cth-ink-300)' }} />
 
-                      {/* Realtime Michael — voice device selection (rt-8) */}
+                      {/* Realtime Abathur — voice device selection (rt-8) */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{
                           fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
                         }}>
-                          Realtime Michael
+                          Realtime Abathur
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
-                            Voice chat with Michael
+                            Voice chat with Abathur
                           </span>
                           <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
-                            Talk to the orchestrator in real time. Toggle it on from Michael's tab; choose which
+                            Talk to the orchestrator in real time. Toggle it on from Abathur's tab; choose which
                             microphone and speaker the voice loop uses here.
                           </span>
                         </div>
@@ -1922,7 +1922,7 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                             OpenAI API key · voice
                           </span>
                           <span style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-700)' }}>
-                            Talking to Michael runs on OpenAI&rsquo;s Realtime API — speech in, speech out, over a
+                            Talking to Abathur runs on OpenAI&rsquo;s Realtime API — speech in, speech out, over a
                             live connection to <strong style={{ fontFamily: 'var(--cth-font-mono)' }}>{REALTIME_MODEL}</strong>.
                             That is a different service from the Claude subscription your agents run on, so it needs
                             its own <strong>OpenAI API key</strong>.
@@ -1962,7 +1962,7 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                               boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
                             }} />
                             {openAiVoiceNote || (hasOpenAiKey
-                              ? 'Key saved — Talk is ready. Start it from Michael’s card.'
+                              ? 'Key saved — Talk is ready. Start it from Abathur’s card.'
                               : 'No key yet — Talk stays disabled until one is saved.')}
                           </span>
                         </div>
@@ -2007,7 +2007,7 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                         color: '#6E1423'
                       }}>DANGER ZONE</div>
                       <p style={{ margin: 0, fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-700)' }}>
-                        Reset wipes Michael's memories, the entire hive (every agent, message,
+                        Reset wipes Abathur's memories, the entire hive (every agent, message,
                         task, and the board), the semantic-memory palace, and all settings -
                         then takes you back to onboarding.
                       </p>
