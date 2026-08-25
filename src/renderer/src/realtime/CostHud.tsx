@@ -15,7 +15,7 @@
  *    auto-stop / mic-off-when-idle action lives in the session (it owns the mic);
  *    this HUD surfaces the signal + the cap the session reads.
  *
- * Branch feat/realtime-michael. See board.md "🎙 REALTIME MICHAEL".
+ * Branch feat/realtime-michael. See board.md "🎙 REALTIME ABATHUR".
  */
 import { useEffect, useState } from 'react';
 import { formatUsd } from '@shared/realtimePricing';

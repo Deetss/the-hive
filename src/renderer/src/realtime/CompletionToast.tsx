@@ -14,7 +14,7 @@
  * Mount it ONCE anywhere in the renderer tree (Kevin wires the one-line mount near the
  * voice UI); positioning is a fixed bottom-right overlay so it's layout-independent.
  *
- * Branch feat/realtime-michael. See board.md "🎙 REALTIME MICHAEL".
+ * Branch feat/realtime-michael. See board.md "🎙 REALTIME ABATHUR".
  */
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';

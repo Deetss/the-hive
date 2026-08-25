@@ -19,7 +19,7 @@
  *   (a) the dispatched task's card flips to `done` in tasks.json, OR
  *   (b) an inbox done-msg arrives from the assignee (a reply to the dispatch, after it).
  *
- * Branch feat/realtime-michael. See board.md "🎙 REALTIME MICHAEL".
+ * Branch feat/realtime-michael. See board.md "🎙 REALTIME ABATHUR".
  */
 
 /** A unit of work voice-Abathur dispatched and is now awaiting completion of. */

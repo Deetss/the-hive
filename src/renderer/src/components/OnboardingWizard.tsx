@@ -39,7 +39,7 @@ const FEATURES: Feature[] = [
   },
   {
     icon: 'gear',
-    label: 'MICHAEL IS YOUR CLONE',
+    label: 'ABATHUR IS YOUR CLONE',
     desc: 'Your clone runs the floor — triages requests, routes tasks, and escalates only what needs you.',
     descPlain: 'Your clone, Abathur, takes your requests, hands work to the right agent, and only interrupts you when it matters.',
     tint: 'var(--cth-sky-light)', edge: 'var(--cth-sky)'
@@ -236,7 +236,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         <PixelPanel
           variant="dialog"
           title={
-            step === 'persona' ? 'WELCOME TO MUNDER DIFFLIN'
+            step === 'persona' ? 'WELCOME TO THE HIVE'
             : step === 'welcome' ? 'MEET YOUR OFFICE'
             : step === 'home' ? (plain ? 'STEP 1 OF 4 · A HOME FOR THE APP' : 'STEP 1 OF 4 · HARNESS HOME')
             : step === 'orchestrator' ? (plain ? "STEP 2 OF 4 · YOUR CLONE" : "STEP 2 OF 4 · YOUR CLONE'S ENGINE")

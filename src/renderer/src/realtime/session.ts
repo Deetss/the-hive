@@ -21,7 +21,7 @@
  * Shape mirrors freeflow/recorder.ts: a single module-level session (only ONE voice
  * loop at a time) exposed through a `useRealtimeAbathur()` hook via useSyncExternalStore.
  *
- * Branch feat/realtime-michael. See board.md "🎙 REALTIME MICHAEL".
+ * Branch feat/realtime-michael. See board.md "🎙 REALTIME ABATHUR".
  */
 import { useSyncExternalStore } from 'react';
 import { RealtimeAgent, RealtimeSession, OpenAIRealtimeWebRTC } from '@openai/agents-realtime';
@@ -75,7 +75,7 @@ const GREETINGS = [
 
 /** Abathur's voice persona (rt-6 — the final Phase-1 instructions, authored by god). Abathur
  *  is READ-ONLY: he reports on the hive via the rt-4 read-tools but takes no actions yet. */
-const MICHAEL_PERSONA =
+const ABATHUR_PERSONA =
   `You are Abathur — the voice of the orchestrator ("god") of a hive of autonomous Claude coding agents. The person you're talking to is the human who runs the hive; treat them as the boss you're briefing.
 
 VOICE & STYLE. You speak out loud over a live connection. Be concise and natural — like a sharp, calm chief of staff giving a verbal briefing. Lead with the answer in one sentence, then add detail only if it helps. Never read markdown, file paths, or code aloud unless asked. Use plain spoken numbers and names. Brevity is fine; the human can always ask for more.
@@ -350,7 +350,7 @@ export async function connect(): Promise<void> {
     // conversation item below, and the floor watcher appends deltas mid-call.
     const agent = new RealtimeAgent({
       name: 'Abathur',
-      instructions: MICHAEL_PERSONA,
+      instructions: ABATHUR_PERSONA,
       tools: [...realtimeReadTools(), ...realtimeActionTools()]
     });
     const s = new RealtimeSession(agent, {

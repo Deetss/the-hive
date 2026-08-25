@@ -19,7 +19,7 @@ import { AgentHoldButton } from './AgentHoldButton';
  * obvious, and a row of three clear verbs needs no title above it.
  *
  * The 1:1 hold sits here too. It is a different KIND of control — the other two
- * restrain the AGENT, 1:1 restrains MICHAEL, and the agent keeps running and
+ * restrain the AGENT, 1:1 restrains ABATHUR, and the agent keeps running and
  * answering you — so that distinction now lives in its tooltip rather than in
  * the layout.
  */

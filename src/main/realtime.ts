@@ -12,7 +12,7 @@
  *
  * Phase 1 is read-only — this module ONLY mints (no action tools; that's rt-5).
  *
- * Branch feat/realtime-michael. See board.md "🎙 REALTIME MICHAEL".
+ * Branch feat/realtime-michael. See board.md "🎙 REALTIME ABATHUR".
  */
 import { ipcMain } from 'electron';
 import { getSecret, hasSecret } from './integrations';

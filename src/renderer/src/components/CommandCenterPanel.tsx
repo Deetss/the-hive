@@ -627,7 +627,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
 
   return (
     <Scroll>
-      <Section title="DISPATCH — VIA MICHAEL">
+      <Section title="DISPATCH — VIA ABATHUR">
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
           <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
             SUGGESTED OWNER

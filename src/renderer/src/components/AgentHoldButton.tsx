@@ -14,7 +14,7 @@ import { useStore } from '@/store/store';
  * It is a different KIND of control from the two it sits with, and the tooltip
  * carries that since the grouping no longer does: those two restrain the AGENT
  * (take its tools, or stop it after this step), while this one restrains
- * MICHAEL. The agent keeps running and keeps answering you. "Stop after this
+ * ABATHUR. The agent keeps running and keeps answering you. "Stop after this
  * step" is in fact the worst thing to reach for in a 1:1, because it stops the
  * agent you wanted to talk to.
  *

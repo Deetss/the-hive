@@ -14,7 +14,7 @@
  * Free Flow is live — see src/main/index.ts). Before that we show generic
  * "Microphone N" / "Speaker N" names and a hint, so the picker is usable cold.
  *
- * Branch feat/realtime-michael. See board.md "🎙 REALTIME MICHAEL".
+ * Branch feat/realtime-michael. See board.md "🎙 REALTIME ABATHUR".
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useRealtimeAbathur } from './session';
