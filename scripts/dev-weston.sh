@@ -34,7 +34,11 @@ for _ in $(seq 1 40); do [ -S "$rundir/$sock" ] && break; sleep 0.25; done
 [ -S "$rundir/$sock" ] || { echo "weston did not start — see $log"; exit 1; }
 
 # Launch the app as a client of weston (its socket), forced onto Wayland, detached.
-setsid bash -c "cd '$root' && exec env WAYLAND_DISPLAY='$sock' THEHIVE_OZONE=wayland npm run dev" \
+# Call electron-vite directly, NOT `npm run dev`: the predev hook runs dev-stop,
+# which kills processes matching `hive-weston` — i.e. it would kill the weston we
+# just started. We already cleared any prior tree above, so predev is redundant
+# here anyway.
+setsid bash -c "cd '$root' && exec env WAYLAND_DISPLAY='$sock' THEHIVE_OZONE=wayland '$root/node_modules/.bin/electron-vite' dev" \
   </dev/null >>"$log" 2>&1 &
 
 echo "A weston window opened on your desktop — The Hive is running inside it."
