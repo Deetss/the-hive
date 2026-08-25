@@ -20,6 +20,13 @@ const ASSET_URLS: Partial<Record<ZergCharacterName, string>> = {
   abathur: abathurUrl,
 };
 
+// Serpentine units animate as a continuous traveling-wave slither instead of the
+// walk cycle. They must have an authored asset (the wave is applied to it).
+const SLITHER: ReadonlySet<ZergCharacterName> = new Set<ZergCharacterName>(['abathur']);
+export function zergIsSlither(name: string): boolean {
+  return SLITHER.has(name as ZergCharacterName);
+}
+
 export type ZergCharacterName =
   | 'abathur' | 'queen' | 'drone' | 'zergling' | 'hydralisk' | 'roach'
   | 'overlord' | 'mutalisk' | 'ultralisk' | 'baneling' | 'infestor'
@@ -134,10 +141,42 @@ async function loadAssetFrames(url: string): Promise<Texture[][]> {
   return [row, row, row]; // the front pose serves every direction
 }
 
+/** A continuous slither: N frames of a traveling sine wave shifted per scanline.
+ *  The amplitude envelope (sin over the body height) anchors the head and the
+ *  base and peaks through the mid-body, so it writhes instead of sliding whole. */
+async function loadSlitherFrames(url: string, frameCount = 8): Promise<Texture[][]> {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const W = img.width, H = img.height, PAD = 7;
+  const mkFrame = (phase: number): Texture => {
+    const c = document.createElement('canvas');
+    c.width = W + PAD * 2; c.height = H;
+    const ctx = c.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    for (let y = 0; y < H; y++) {
+      const envelope = Math.sin(Math.PI * (y / (H - 1))); // 0 at head + base, 1 mid-body
+      const dx = Math.round(6 * envelope * Math.sin((2 * Math.PI * y) / 20 - phase));
+      ctx.drawImage(img, 0, y, W, 1, PAD + dx, y, W, 1);
+    }
+    const tex = Texture.from(c);
+    tex.source.scaleMode = 'nearest';
+    return tex;
+  };
+  const seq: Texture[] = [];
+  for (let f = 0; f < frameCount; f++) seq.push(mkFrame((2 * Math.PI * f) / frameCount));
+  return [seq, seq, seq]; // continuous mode loops row 0
+}
+
 export async function getZergCastFrames(name: ZergCharacterName): Promise<Texture[][]> {
   const cached = frameCache.get(name);
   if (cached) return cached;
   const assetUrl = ASSET_URLS[name];
+  if (assetUrl && SLITHER.has(name)) {
+    const frames = await loadSlitherFrames(assetUrl);
+    frameCache.set(name, frames);
+    return frames;
+  }
   if (assetUrl) {
     const frames = await loadAssetFrames(assetUrl);
     frameCache.set(name, frames);

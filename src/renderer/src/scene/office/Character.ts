@@ -65,6 +65,8 @@ interface CharacterOptions {
   glowColor: number;
   /** Direction faced while seated. Default 'down' so the face is toward the user. */
   seatDirection?: Direction;
+  /** Loop the whole frame sequence continuously (e.g. a slithering Abathur). */
+  continuous?: boolean;
   onClick?: (agentId: string) => void;
 }
 
@@ -130,7 +132,7 @@ export class Character {
   constructor(options: CharacterOptions) {
     this.agentId = options.agentId;
     this.mapRenderer = options.mapRenderer;
-    this.sprite = new CharacterSprite(options.frames);
+    this.sprite = new CharacterSprite(options.frames, options.continuous);
     this.deskTile = options.seatTile;
     this.seatDirection = options.seatDirection ?? 'down';
     this.onClick = options.onClick;

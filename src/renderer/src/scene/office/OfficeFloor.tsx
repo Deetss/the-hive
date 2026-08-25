@@ -1411,6 +1411,7 @@ export function OfficeFloor() {
           seatDirection: facingForSeat(seatTile),
           spawnTile: entrance, // walk in from the office door
           glowColor: hexNum(colors.accent[agent.accent]) ?? hexToNumber(member.shirt),
+          continuous: theme.cast.continuous?.(charName) ?? false,
           onClick: (id) => useStore.getState().select(id),
         });
         character.show(charLayer);

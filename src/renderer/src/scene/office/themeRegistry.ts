@@ -31,6 +31,7 @@ import brooklyn99MapRaw from '@/assets/maps/brooklyn99.tmj?raw';
 import {
   ZERG_CAST_BY_NAME,
   getZergCastFrames,
+  zergIsSlither,
   DEFAULT_ZERG_CHARACTER,
   type ZergCharacterName,
 } from './zergCast';
@@ -122,6 +123,9 @@ export interface ThemeCast {
   byName: Record<string, CastMember>;
   getFrames: (name: string) => Promise<Texture[][]>;
   defaultCharacter: string;
+  /** Optional: units that loop their whole frame sequence continuously (e.g. a
+   *  slithering Abathur) rather than the walk/idle cycle. */
+  continuous?: (name: string) => boolean;
 }
 
 /** The full contract a theme must supply. See report §A (theme contract). */
@@ -309,6 +313,7 @@ export const ZERG_THEME: ThemeConfig = {
     byName: ZERG_CAST_BY_NAME as unknown as Record<string, CastMember>,
     getFrames: (name: string) => getZergCastFrames(name as ZergCharacterName),
     defaultCharacter: DEFAULT_ZERG_CHARACTER,
+    continuous: (name: string) => zergIsSlither(name),
   },
 };
 

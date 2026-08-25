@@ -34,15 +34,19 @@ export class CharacterSprite {
   private frameW: number;
   private frameH: number;
   private cropMask: Graphics | null = null;
+  /** Continuous units (e.g. a slithering Abathur) loop their whole frame
+   *  sequence regardless of walk/idle state, for a smooth non-cyclic animation. */
+  private continuous: boolean;
 
-  constructor(frames: Texture[][]) {
+  constructor(frames: Texture[][], continuous = false) {
     this.frames = frames;
+    this.continuous = continuous;
     this.container = new Container();
 
-    const initialFrames = this.getFrames('down', 'idle');
+    const initialFrames = continuous ? frames[0] : this.getFrames('down', 'idle');
     this.sprite = new AnimatedSprite(initialFrames);
     this.sprite.anchor.set(0.5, 1);
-    this.sprite.animationSpeed = this.frameSpeed;
+    this.sprite.animationSpeed = continuous ? 0.28 : this.frameSpeed;
     this.sprite.play();
     // Anchor is (0.5, 1): in container space the sprite spans x∈[-w/2, w/2],
     // y∈[-h, 0] (feet at the origin). Used by the seated leg-crop mask.
@@ -93,6 +97,12 @@ export class CharacterSprite {
 
     this.currentAnim = anim;
     this.currentDirection = direction;
+
+    // Continuous units keep looping their full sequence; only face the direction.
+    if (this.continuous) {
+      this.sprite.scale.x = direction === 'left' ? -1 : 1;
+      return;
+    }
 
     this.sprite.textures = this.getFrames(direction, anim);
     this.sprite.scale.x = direction === 'left' ? -1 : 1;
