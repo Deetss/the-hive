@@ -598,6 +598,29 @@ export function readConfig(): HarnessConfig {
   }
 }
 
+/**
+ * The effective hive home for PATH DERIVATION (hive root, roster, palace, sock,
+ * agent dirs). An `HARNESS_HOME` env var wins over the persisted `config.json`
+ * value; otherwise the config value is used.
+ *
+ * WHY a separate resolver instead of overriding `readConfig()`: `writeConfig`
+ * round-trips through `readConfig`, so applying the override there would persist
+ * the dev value into config.json on the next write. This resolver is read-only
+ * and never touches the file, so a dev/second instance launched with
+ *   HARNESS_HOME=C:/Users/dylan/HarnessAgents-dev
+ * runs against an ISOLATED hive and can never collide with the live one — the
+ * corruption (hooks.sock / broker port / spawn-requests / cost-ledger) the audit
+ * warned about becomes structurally impossible. Pair it with Electron's own
+ * `--user-data-dir=<dir>` (honored natively by `app.getPath('userData')`) to
+ * isolate config.json + harness.db too. The persisted-home writers (onboarding,
+ * changeHome) deliberately keep using the config value, not this override.
+ */
+export function resolveHarnessHome(): string | null {
+  const env = process.env.HARNESS_HOME;
+  if (typeof env === 'string' && env.trim()) return expandTilde(env.trim());
+  return readConfig().harnessHome;
+}
+
 /** (#140, the upgrade path) A config.json persisted BEFORE `writeConfig`
  *  learned to expand `~` still holds literal `~/…` strings in `harnessHome` /
  *  `recentHives`, and nothing rewrites the file until the next write — so the
