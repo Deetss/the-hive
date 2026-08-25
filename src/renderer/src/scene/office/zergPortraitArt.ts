@@ -36,6 +36,14 @@ function alphaAt(buf: Buf, x: number, y: number): number {
 function rect(buf: Buf, x0: number, y0: number, x1: number, y1: number, c: RGB): void {
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(buf, x, y, c);
 }
+/** A glowing eye: a hot (brightened toward white) core with a faint colored halo
+ *  on its four neighbors, so eyes read strongly even at 18px. */
+function glowEye(buf: Buf, x: number, y: number, c: RGB): void {
+  const halo: RGB = c;
+  for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) set(buf, x + dx, y + dy, halo, 80);
+  set(buf, x, y, [Math.min(255, c[0] + 70), Math.min(255, c[1] + 70), Math.min(255, c[2] + 50)]);
+}
+
 /** A soft outline around every opaque pixel that borders transparency. */
 function outlinePass(buf: Buf): void {
   const edges: [number, number][] = [];
@@ -101,11 +109,7 @@ function drawCarapaceHead(buf: Buf, r: ZergRecipe): void {
   // glowing eyes: rows 11 (and 12 for higher counts), spread across the face
   const eyeRow = 11;
   const cols = eyeColumns(r.eyes, x0, x1);
-  for (const [ex, ey] of cols) {
-    set(buf, ex, ey === 0 ? eyeRow : eyeRow + 1, r.eye);
-    // a faint glow halo
-    set(buf, ex, (ey === 0 ? eyeRow : eyeRow + 1) - 1, r.eye, 90);
-  }
+  for (const [ex, ey] of cols) glowEye(buf, ex, ey === 0 ? eyeRow : eyeRow + 1, r.eye);
 
   // mandibles / tusks at the mouth
   set(buf, x0 + 2, 15, aBase); set(buf, x1 - 2, 15, aBase);
@@ -197,7 +201,7 @@ function drawSceneHead(buf: Buf, r: ZergRecipe, back: boolean): void {
     return;
   }
   // eyes + mandibles (front)
-  for (const [ex, ey] of eyeColumns(r.eyes, 5, 12)) set(buf, ex, ey === 0 ? 9 : 10, r.eye);
+  for (const [ex, ey] of eyeColumns(r.eyes, 5, 12)) glowEye(buf, ex, ey === 0 ? 9 : 10, r.eye);
   set(buf, 6, 13, aBase); set(buf, 11, 13, aBase);
 }
 
