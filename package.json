@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "predev": "bash scripts/dev-stop.sh",
+    "dev:app": "bash scripts/dev-app.sh",
     "stop": "bash scripts/dev-stop.sh",
     "build": "electron-vite build && npm run copy:main-assets",
     "copy:main-assets": "node tools/copy-main-assets.cjs",
