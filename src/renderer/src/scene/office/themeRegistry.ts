@@ -37,7 +37,8 @@ export type ThemeId =
   | 'brooklyn99'
   | 'siliconvalley'
   | 'got'
-  | 'hogwarts';
+  | 'hogwarts'
+  | 'zerg';
 
 export interface Tile { x: number; y: number; }
 export type Facing = 'up' | 'down' | 'left' | 'right';
@@ -285,11 +286,25 @@ export const BROOKLYN99_THEME: ThemeConfig = {
   cast: OFFICE_THEME.cast,
 };
 
+/** The Hive — the Zerg reskin (see ZERG-RESKIN.md). Phase 0 placeholder: reuses
+ *  the office map, tilesets, layout, and cast verbatim, changing only the id and
+ *  the palette (a creep-dark violet clear color). The authored hive map, Zerg
+ *  tileset, and brood cast land in later phases through these same seams. */
+export const ZERG_THEME: ThemeConfig = {
+  ...OFFICE_THEME,
+  id: 'zerg',
+  palette: {
+    background: 0x140a1e, // creep-dark violet
+    noteColors: OFFICE_THEME.palette.noteColors,
+  },
+};
+
 /** All registered themes. Phase 0 ships only the office; show themes register
  *  here as their content lands (Phase 2). */
 export const THEMES: Partial<Record<ThemeId, ThemeConfig>> = {
   office: OFFICE_THEME,
   brooklyn99: BROOKLYN99_THEME,
+  zerg: ZERG_THEME,
 };
 
 /** Look up a theme by id, falling back to the office theme if unknown/missing
