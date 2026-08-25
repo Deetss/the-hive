@@ -8,6 +8,7 @@ import { useHive } from '@/hooks/useHive';
 import { MemoryPanel } from '@/components/MemoryPanel';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { AgentStrip } from '@/components/AgentStrip';
+import { StatusBar } from '@/components/StatusBar';
 import { AddAgentModal } from '@/components/AddAgentModal';
 import { AbathurBooting } from '@/components/AbathurBooting';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
@@ -463,6 +464,8 @@ export function App() {
       </div>
 
       <AgentStrip config={config} />
+
+      <StatusBar />
 
       {addAgentOpen && (
         <AddAgentModal
