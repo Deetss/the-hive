@@ -28,6 +28,12 @@ import interiorsUrl from '@/assets/tilesets/interiors.png?url';
 // .tmj is Tiled JSON; imported as raw text and parsed by the loader.
 import officeMapRaw from '@/assets/maps/office.tmj?raw';
 import brooklyn99MapRaw from '@/assets/maps/brooklyn99.tmj?raw';
+import {
+  ZERG_CAST_BY_NAME,
+  getZergCastFrames,
+  DEFAULT_ZERG_CHARACTER,
+  type ZergCharacterName,
+} from './zergCast';
 
 /** Theme identifiers. Only `office` exists in Phase 0; the five TV-show themes
  *  (friends, brooklyn99, siliconvalley, got, hogwarts) land in later phases. */
@@ -286,16 +292,23 @@ export const BROOKLYN99_THEME: ThemeConfig = {
   cast: OFFICE_THEME.cast,
 };
 
-/** The Hive — the Zerg reskin (see ZERG-RESKIN.md). Phase 0 placeholder: reuses
- *  the office map, tilesets, layout, and cast verbatim, changing only the id and
- *  the palette (a creep-dark violet clear color). The authored hive map, Zerg
- *  tileset, and brood cast land in later phases through these same seams. */
+/** The Hive — the Zerg reskin (see ZERG-RESKIN.md). Phase 3: the brood cast is
+ *  now the procedural Zerg roster (zergCast.ts) with Abathur as the god/default,
+ *  and the palette is creep-dark violet. The map, tilesets, and layout still
+ *  reuse the office (Phase 4 authors a hive map + Zerg tileset). Because the
+ *  cast's `getFrames` is the scene's only character indirection, the floor now
+ *  renders broods; any agent whose character isn't a brood falls back to Abathur. */
 export const ZERG_THEME: ThemeConfig = {
   ...OFFICE_THEME,
   id: 'zerg',
   palette: {
     background: 0x140a1e, // creep-dark violet
     noteColors: OFFICE_THEME.palette.noteColors,
+  },
+  cast: {
+    byName: ZERG_CAST_BY_NAME as unknown as Record<string, CastMember>,
+    getFrames: (name: string) => getZergCastFrames(name as ZergCharacterName),
+    defaultCharacter: DEFAULT_ZERG_CHARACTER,
   },
 };
 

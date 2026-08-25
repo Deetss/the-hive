@@ -1372,8 +1372,24 @@ export function OfficeFloor() {
       const taskBoardPoll = setInterval(() => { void pollTaskBoard(); }, 5000);
       (app as any).__taskBoardPoll = taskBoardPoll;
 
+      // When an agent's character isn't in the active theme's cast (e.g. an
+      // office name like 'jim' on the Hive theme), map it into this theme: the
+      // god takes the default (Abathur), and each worker hashes to a stable,
+      // distinct brood so the floor shows variety instead of every unit alike.
+      const themeCastNames = Object.keys(theme.cast.byName);
+      const pickThemeCharacter = (agent: Agent): string => {
+        if (agent.isGod) return theme.cast.defaultCharacter;
+        const pool = themeCastNames.filter((n) => n !== theme.cast.defaultCharacter);
+        const names = pool.length ? pool : themeCastNames;
+        let h = 0;
+        for (let i = 0; i < agent.id.length; i++) h = (h * 31 + agent.id.charCodeAt(i)) | 0;
+        return names[Math.abs(h) % names.length];
+      };
+
       const addCharacter = async (agent: Agent) => {
-        const charName = theme.cast.byName[agent.character] ? agent.character : theme.cast.defaultCharacter;
+        const charName = theme.cast.byName[agent.character]
+          ? agent.character
+          : pickThemeCharacter(agent);
         const member = theme.cast.byName[charName];
         const seatIndex = claimSeat(agent);
         const seatTile: Tile = (seatIndex != null ? seatTiles[seatIndex] : undefined)
