@@ -7,7 +7,7 @@ import {
 } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { join, resolve, sep, basename, dirname } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, release } from 'node:os';
 import { request as httpsRequest } from 'node:https';
 import { PtyManager, type SpawnOptions } from './pty';
 import { resolveCommand as resolveCliCommand } from './shellEnv';
@@ -5071,6 +5071,19 @@ function onSystemResume(reason: string): void {
     resumeHealthTimer = null;
     healthCheckPtys(reason, awayMs);
   }, 15_000);
+}
+
+// A stalled GPU process can leave a window that paints but never receives
+// pointer input (you see the onboarding screen but clicks do nothing). It shows
+// up under WSLg and on some Linux compositor/driver combos. Disabling hardware
+// acceleration routes rendering through the CPU and restores input. Auto-applied
+// on WSL; forceable anywhere with THEHIVE_DISABLE_GPU=1 for the same symptom on
+// native Linux. disableHardwareAcceleration MUST run before app ready.
+const isWsl =
+  process.platform === 'linux' &&
+  (/microsoft|wsl/i.test(release()) || !!process.env.WSL_DISTRO_NAME);
+if (isWsl || process.env.THEHIVE_DISABLE_GPU === '1') {
+  app.disableHardwareAcceleration();
 }
 
 app.whenReady().then(() => {
