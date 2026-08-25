@@ -135,10 +135,29 @@ portable:
   artifactName: Munder-Difflin-${version}-win-x64-portable.exe
 
 # ---- Linux ----
+# Ubuntu-friendly: ship a .deb (menu entry + icon via `apt install ./file.deb`)
+# alongside the portable AppImage. The Linux build is branded "The Hive" through
+# executableName + the desktop entry, so the package installs as `the-hive`
+# without disturbing the global productName (Phase 1 rebrand owns that, since it
+# also drives the updater filenames and the userData path).
 linux:
   category: Development
   icon: build/icon.png
+  executableName: the-hive
+  maintainer: Dylan Dietz <dylan@bloomfieldhomes.net>
+  synopsis: A swarm of CLI coding agents, orchestrated by Abathur
+  description: >-
+    The Hive runs a self-organizing team of CLI coding agents on your machine,
+    visualized as a Zerg swarm on a pixel floor and orchestrated by Abathur.
+    A Zerg-themed fork of Munder Difflin.
+  desktop:
+    Name: The Hive
+    Comment: A swarm of CLI coding agents, orchestrated by Abathur
+    StartupWMClass: the-hive
+    Categories: Development;IDE;
   target:
+    - target: deb
+      arch: [x64]
     - target: AppImage
       arch: [x64]
-  artifactName: Munder-Difflin-${version}-linux-x86_64.AppImage
+  artifactName: The-Hive-${version}-linux-${arch}.${ext}

@@ -73,7 +73,8 @@ Fifteen units mirror the fifteen office cast slots. Abathur fills the god seat.
 - **Phase 4 (Hive art):** Hand-authored Tiled hive map (creep floor, hatchery chambers, spawning
   pool) and a Zerg tileset. The long pole: needs sourced or drawn pixel assets. This is the
   "full art" target.
-- **Phase 5 (improve):** Engine and UX improvements beyond the reskin. Wishlist TBD.
+- **Phase 5 (improve):** Engine, UX, and distribution improvements beyond the reskin.
+  Done so far: easy Ubuntu install (a .deb target plus `scripts/install-ubuntu.sh`). Rest TBD.
 
 ## Running it
 
@@ -82,3 +83,17 @@ npm install        # native rebuild (electron-rebuild, node-pty) runs in postins
 npm run dev         # launch the Electron app
 npm run typecheck   # gate for code phases
 ```
+
+## Install on Ubuntu
+
+One command builds from source and installs a .deb (menu entry + icon, launches
+as `the-hive`). This fork has no published releases, so it builds locally:
+
+```
+scripts/install-ubuntu.sh
+```
+
+The Linux build is branded "The Hive" (executable `the-hive`) via Linux-scoped
+electron-builder keys. The global `productName` is still "Munder Difflin" until
+Phase 1, because that also drives the updater filenames and the userData path.
+Under WSL2 the GUI needs WSLg (default on current Windows 11).
