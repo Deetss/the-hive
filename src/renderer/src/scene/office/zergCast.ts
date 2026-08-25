@@ -25,23 +25,26 @@ export interface ZergCastMember {
   blurb: string;
 }
 
-/** Per-unit art recipe. */
+/** Per-unit art recipe. Palette follows the official Blizzard concept art
+ *  (refs/zerg/official-*.png): muted dusty purples + burnt browns/oranges + bone,
+ *  with bioluminescent ORANGE eyes on most units and GREEN on the psionic /
+ *  evolution / acid units (Abathur, Queen, Baneling, Infestor, Viper). */
 const RECIPES: Record<ZergCharacterName, ZergRecipe> = {
-  abathur:   { frame: 'wide', carapace: [154, 168, 96],  accent: [122, 86, 140], eye: [240, 180, 70],  eyes: 5, spiky: true },
-  queen:     { frame: 'tall', carapace: [150, 64, 120],  accent: [200, 120, 170], eye: [255, 150, 200], eyes: 3, spiky: true },
-  drone:     { frame: 'small', carapace: [180, 150, 110], accent: [140, 110, 70], eye: [240, 190, 90],  eyes: 2 },
-  zergling:  { frame: 'small', carapace: [170, 54, 54],  accent: [230, 120, 90], eye: [255, 180, 80],  eyes: 2, spiky: true },
-  hydralisk: { frame: 'tall', carapace: [90, 140, 80],   accent: [200, 200, 120], eye: [230, 220, 120], eyes: 2, spiky: true },
-  roach:     { frame: 'wide', carapace: [130, 96, 64],   accent: [180, 150, 90], eye: [240, 190, 90],  eyes: 2 },
-  overlord:  { frame: 'wing', carapace: [110, 86, 150],  accent: [160, 140, 200], eye: [200, 180, 240], eyes: 3 },
-  mutalisk:  { frame: 'wing', carapace: [70, 140, 140],  accent: [150, 220, 210], eye: [180, 240, 230], eyes: 2 },
-  ultralisk: { frame: 'wide', carapace: [96, 104, 120],  accent: [210, 200, 170], eye: [240, 190, 90],  eyes: 2, spiky: true },
-  baneling:  { frame: 'small', carapace: [170, 190, 70], accent: [120, 150, 50], eye: [220, 240, 120], eyes: 4 },
-  infestor:  { frame: 'wide', carapace: [110, 140, 90],  accent: [160, 200, 120], eye: [200, 240, 140], eyes: 6 },
-  corruptor: { frame: 'wing', carapace: [120, 80, 150],  accent: [180, 120, 210], eye: [220, 160, 240], eyes: 3 },
-  broodlord: { frame: 'wing', carapace: [180, 168, 140], accent: [130, 110, 80], eye: [240, 190, 90],  eyes: 2, spiky: true },
-  viper:     { frame: 'wing', carapace: [120, 120, 70],  accent: [180, 180, 110], eye: [220, 220, 130], eyes: 3 },
-  lurker:    { frame: 'wide', carapace: [110, 50, 50],   accent: [180, 90, 80],  eye: [255, 150, 90],  eyes: 4, spiky: true },
+  abathur:   { frame: 'wide',  carapace: [122, 124, 102], accent: [200, 190, 160], eye: [150, 230, 100], eyes: 5, spiky: true },
+  queen:     { frame: 'tall',  carapace: [112, 72, 122],  accent: [180, 140, 92],  eye: [140, 220, 90],  eyes: 3, spiky: true },
+  drone:     { frame: 'small', carapace: [178, 110, 60],  accent: [120, 80, 112],  eye: [255, 150, 60],  eyes: 2 },
+  zergling:  { frame: 'small', carapace: [132, 96, 112],  accent: [210, 196, 168], eye: [255, 140, 50],  eyes: 2, spiky: true },
+  hydralisk: { frame: 'tall',  carapace: [160, 96, 60],   accent: [210, 195, 165], eye: [255, 150, 60],  eyes: 2, spiky: true },
+  roach:     { frame: 'wide',  carapace: [120, 84, 58],   accent: [110, 74, 104],  eye: [255, 150, 60],  eyes: 2 },
+  overlord:  { frame: 'wing',  carapace: [88, 60, 88],    accent: [140, 96, 140],  eye: [255, 150, 50],  eyes: 3 },
+  mutalisk:  { frame: 'wing',  carapace: [128, 84, 96],   accent: [200, 180, 150], eye: [255, 150, 60],  eyes: 2 },
+  ultralisk: { frame: 'wide',  carapace: [110, 96, 84],   accent: [210, 196, 168], eye: [255, 150, 60],  eyes: 2, spiky: true },
+  baneling:  { frame: 'small', carapace: [150, 168, 80],  accent: [90, 120, 50],   eye: [200, 240, 120], eyes: 3 },
+  infestor:  { frame: 'wide',  carapace: [110, 130, 88],  accent: [110, 80, 110],  eye: [180, 240, 120], eyes: 5 },
+  corruptor: { frame: 'wing',  carapace: [96, 64, 110],   accent: [150, 100, 150], eye: [255, 150, 60],  eyes: 3 },
+  broodlord: { frame: 'wing',  carapace: [150, 120, 84],  accent: [90, 70, 60],    eye: [255, 150, 60],  eyes: 2, spiky: true },
+  viper:     { frame: 'wing',  carapace: [118, 124, 78],  accent: [190, 180, 140], eye: [180, 230, 110], eyes: 3 },
+  lurker:    { frame: 'wide',  carapace: [96, 64, 72],    accent: [200, 150, 120], eye: [255, 140, 50],  eyes: 4, spiky: true },
 };
 
 const rgbToHex = ([r, g, b]: [number, number, number]) =>
