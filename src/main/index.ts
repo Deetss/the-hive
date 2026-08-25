@@ -2300,6 +2300,13 @@ function createWindow(opts: { floor?: boolean } = {}): BrowserWindow {
 
   win.once('ready-to-show', () => win.show());
 
+  // Diagnostics: if the renderer or a helper process dies (e.g. a WebGL/GPU
+  // crash on interaction), print WHY before window-all-closed quits the app.
+  win.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[renderer-gone]', details.reason, 'exitCode=', details.exitCode);
+  });
+  win.webContents.on('unresponsive', () => console.error('[renderer] unresponsive'));
+
   // Never opens a window; hands the URL to the OS browser instead.
   //
   // Scheme-checked, because this is now reachable from AUTHOR-CONTROLLED markup:
@@ -5159,6 +5166,13 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+// Diagnostics: a GPU/utility helper dying (common on broken graphics stacks)
+// takes the window with it, which then trips window-all-closed → quit. Log the
+// culprit so a "quits the moment I click" report has a concrete reason.
+app.on('child-process-gone', (_e, d) => {
+  console.error('[child-process-gone]', d.type, d.reason, 'exitCode=', d.exitCode, d.name ?? '');
 });
 
 // before-quit covers Cmd-Q / dock-quit; the per-window close handler covers
