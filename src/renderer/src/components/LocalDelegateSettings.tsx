@@ -82,9 +82,16 @@ export function LocalDelegateSettings() {
     const base = d ? { ...d } : EMPTY_FORM;
     setForm(base);
     setKeyDraft('');
-    setKeyStatus(base.secretRef ? 'set' : 'none');
+    setKeyStatus('none');
     setTestResult(null);
     setShowForm(true);
+    // Use lda:hasApiKey to confirm actual key presence (secretRef pointer alone
+    // doesn't guarantee the safeStorage entry exists after a reinstall/migration).
+    if (d?.id && d.secretRef) {
+      window.cth.ldaHasApiKey(d.id).then((r) => {
+        setKeyStatus(r.hasKey ? 'set' : 'none');
+      }).catch(() => { /* noop — start as none */ });
+    }
   };
 
   const closeForm = () => {
