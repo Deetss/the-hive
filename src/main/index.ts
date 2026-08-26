@@ -15,7 +15,7 @@ import { initAutoUpdater, abortPendingRestart } from './updater';
 import { RealtimeFloorWatcher } from './realtimeFloorWatcher';
 import {
   readConfig, writeConfig, setAgentTokenCap, resetConfig, ensureHarnessHome, ensureClaudePermissionsAccepted,
-  resolveHarnessHome,
+  resolveHarnessHome, getRuntimeProfile,
   modelForRole, OPS_STANDUP_MISSION, HEARTBEAT_MISSION, COMPACT_MAINTENANCE_MISSION, type HarnessConfig, type ScheduledMission
 } from './config';
 import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde } from './fs';
@@ -2523,6 +2523,17 @@ ipcMain.handle('pty:spawn', async (evt, opts: AgentSpawnOptions) => {
   return spawnAgentCore(opts, owner);
 });
 
+/** Runtime-profiles v1 — resolve an agent's profile to the per-account
+ *  CLAUDE_CONFIG_DIR to spawn it under. Returns undefined (operator default login)
+ *  unless the resolved provider is Claude AND the profile pins a `claudeConfigDir`.
+ *  `~` is expanded so the spawn env carries an absolute login path. */
+function resolveProfileClaudeConfigDir(profileId: string | undefined, provider: AgentProvider): string | undefined {
+  if (!profileId || !isClaudeProvider(provider)) return undefined;
+  const profile = getRuntimeProfile(profileId);
+  if (!profile?.claudeConfigDir) return undefined;
+  return expandTilde(profile.claudeConfigDir);
+}
+
 /** Core agent-spawn logic — provider inference, the missing-CLI installer
  *  short-circuit, git-worktree isolation, hive provisioning, model/resume flags,
  *  and the final PTY spawn. Extracted VERBATIM from the `pty:spawn` IPC handler so
@@ -2677,7 +2688,11 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
           theme: readConfig().terminalTheme ?? 'light',
           // W3 — default-MCP consent state + the bundled skills source dir.
           mcpDefaults: readConfig().mcpDefaults,
-          skillsDir: skillsResourceDir()
+          skillsDir: skillsResourceDir(),
+          // Runtime-profiles v1 — resolve this agent's profile MAIN-side and hand
+          // ensureAgent the profile's per-account Claude login dir (Claude only;
+          // undefined for other engines / no profile → unchanged behavior).
+          claudeConfigDir: resolveProfileClaudeConfigDir(opts.hive?.profileId, provider)
         }
       );
       opts.args = [...(opts.args ?? []), ...inj.args];
@@ -4479,6 +4494,7 @@ interface SpawnRequest {
   command?: string;                                   // engine CLI; default = config.defaultCommand
   provider?: AgentProvider;                           // optional explicit provider
   model?: string;                                     // optional --model override (Claude)
+  profile?: string;                                   // optional runtime-profile id (engine+account+model bundle)
   cwd?: string;                                        // repo the worker (and its worktree) runs in
   name?: string;                                       // display name
   slack?: { channel: string; thread_ts: string };     // reply target + where failures surface
@@ -4600,14 +4616,22 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   // model-flag dedupe). Pure and unit-tested — see workerLaunch.ts for why this
   // translation earned a test.
   const cfgSpawn = readConfig();
+  // Runtime-profiles v1 — an optional `profile` on the request names a saved
+  // engine+account+model bundle. Its engine/model/command fill in ONLY where the
+  // request stays silent (an explicit request field always wins), and its
+  // per-account Claude login dir is applied later in spawnAgentCore via profileId.
+  const profile = getRuntimeProfile(raw.profile);
+  const effectiveProvider = (typeof raw.provider === 'string' && raw.provider.trim()) ? raw.provider : profile?.provider;
   const launch = buildWorkerLaunch({
-    requestCommand: raw.command,
-    requestProvider: raw.provider,
-    requestModel: raw.model,
+    requestCommand: (typeof raw.command === 'string' && raw.command.trim()) ? raw.command : profile?.command,
+    requestProvider: effectiveProvider,
+    requestModel: (typeof raw.model === 'string' && raw.model.trim()) ? raw.model : profile?.model,
     defaultCommand: cfgSpawn.defaultCommand,
     autoMode: !!cfgSpawn.autoMode
   });
   const bin = launch.bin;
+  // A profile may carry extra argv flags with no command of its own; append them.
+  if (profile?.extraArgs?.length) launch.args = [...launch.args, ...profile.extraArgs];
   // Missing-CLI → FAIL FAST. A headless worker has no human to watch an installer,
   // so we never run the cc49e1e install banner here — we reject and tell god.
   if (!ptyManager.isCommandAvailable(bin)) { fail(`engine CLI "${bin}" is not installed`); return; }
@@ -4620,7 +4644,8 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   const meta: AgentMeta = {
     id: workerId,
     name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : `Worker ${reqId.slice(0, 12)}`,
-    provider: raw.provider,
+    provider: effectiveProvider,
+    profileId: profile?.id,
     role: 'worker',
     cwd
   };
@@ -4638,7 +4663,7 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   const spawnOpts: AgentSpawnOptions = {
     id: workerId, cwd, command: bin, cols: 120, rows: 32,
     args: launch.args,
-    hive: meta, isolate, provider: raw.provider, env: brokerEnv
+    hive: meta, isolate, provider: effectiveProvider, env: brokerEnv
   };
 
   let res: { ok: boolean; error?: string; worktreePath?: string };

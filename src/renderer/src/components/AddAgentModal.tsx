@@ -198,18 +198,36 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   );
   const [description, setDescription] = useState(pendingHire?.description ?? 'a fresh harness');
   const [hireMeta, setHireMeta] = useState<HireManifest | null>(pendingHire);
+  // Runtime-profiles v1 — which saved engine+account+model bundle launched this
+  // agent. Recorded on the spawn so the registry knows the agent's account. A
+  // manual provider/model change detaches the profile (it no longer matches).
+  const [profileId, setProfileId] = useState<string | undefined>(undefined);
 
   // Picking a model rebuilds the command; the command field stays editable for
   // power users (it's the source of truth for the actual spawn).
   const pickModel = (id?: string) => {
+    setProfileId(undefined);
     setModel(id);
     setCommand(buildSpawnCommand(config, id, provider));
+  };
+  // Apply a saved runtime profile: adopt its engine, model and command in one go,
+  // and remember its id so the spawn records which account/engine launched here.
+  const applyProfile = (id: string) => {
+    if (!id) { setProfileId(undefined); return; }
+    const p = (config.runtimeProfiles ?? []).find((x) => x.id === id);
+    if (!p) { setProfileId(undefined); return; }
+    setProfileId(p.id);
+    setProvider(p.provider);
+    const nextModel = p.model ?? (isClaudeProvider(p.provider) ? config.defaultModel : config.providerDefaultModels?.[p.provider]);
+    setModel(nextModel);
+    setCommand(p.command?.trim() || buildSpawnCommand(config, nextModel, p.provider));
   };
   // Switching provider resets the model to that CLI's default and rebuilds the
   // command from the provider's preset binary (so Antigravity spawns `agy` and
   // Codex spawns `codex`, not the configured `claude`). For 'custom' we keep the
   // user's typed command rather than blanking it.
   const pickProvider = (id: AgentProvider) => {
+    setProfileId(undefined);
     setProvider(id);
     // Seed the model: Claude from the global defaultModel; other engines from the
     // per-engine default set in Settings → AI Engines (providerDefaultModels), else
@@ -416,6 +434,10 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
         id,
         name: name.trim(),
         provider,
+        // Runtime-profiles v1 — record which saved profile launched this agent so
+        // the registry/floor knows its account; main resolves the per-account
+        // CLAUDE_CONFIG_DIR from it at spawn.
+        profileId,
         cwd,
         role: description.trim() || undefined,
         // A hire manifest may carry validated capability tags (routing hints).
@@ -867,6 +889,25 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
 
                 {section === 'engine' && (
                   <>
+                    {(config.runtimeProfiles?.length ?? 0) > 0 && (
+                      <Row label="Runtime profile">
+                        <select
+                          value={profileId ?? ''}
+                          onChange={(e) => applyProfile(e.target.value)}
+                          title="A saved engine + account + model bundle. Picking one fills in the fields below; a Claude profile launches under its own account login."
+                          style={{
+                            padding: '4px 8px 2px', background: 'var(--cth-cream-100)', border: 'none',
+                            boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)',
+                            fontSize: 12, color: 'var(--cth-ink-900)', outline: 'none', cursor: 'pointer', maxWidth: 280
+                          }}
+                        >
+                          <option value="">None (pick engine manually)</option>
+                          {(config.runtimeProfiles ?? []).map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </Row>
+                    )}
                     <Row label="Provider">
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {AGENT_PROVIDER_PRESETS.map((p) => {

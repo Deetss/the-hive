@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { AgentProvider } from '../shared/agentProvider';
+import type { RuntimeProfile } from '../shared/runtimeProfile';
 import type { HireManifest } from '../shared/hire';
 export type { HireManifest } from '../shared/hire';
 import type { IntegrationRecord, IntegrationTemplate } from '../shared/integrations';
@@ -46,6 +47,9 @@ export interface HiveAgentMeta {
   name: string;
   /** Which CLI this agent runs on (claude/codex/grok/antigravity/custom); defaults claude. */
   provider?: AgentProvider;
+  /** Runtime profile that launched this agent (engine + account + model); recorded
+   *  on the registry so the floor knows which account an agent belongs to. */
+  profileId?: string;
   role?: string;
   capabilities?: string[];
   cwd: string;
@@ -327,6 +331,8 @@ export interface HarnessConfig {
   providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
+  /** Agent runtime profiles — reusable engine+account+model bundles (v1). */
+  runtimeProfiles?: RuntimeProfile[];
 }
 
 export interface MemoryStatus {

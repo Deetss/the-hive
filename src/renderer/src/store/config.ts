@@ -12,6 +12,7 @@ import type {
   OrgTriggerConfig,
   WebhookTrigger
 } from '@shared/triggers';
+import type { RuntimeProfile } from '@shared/runtimeProfile';
 
 export {
   AGENT_PROVIDER_PRESETS,
@@ -20,6 +21,7 @@ export {
   isClaudeProvider,
   type AgentProvider
 };
+export type { RuntimeProfile };
 
 /** A recurring auto-dispatched mission (mirrors src/main/config.ts). */
 export interface ScheduledMission {
@@ -127,6 +129,8 @@ export interface HarnessConfig {
   providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
+  /** Agent runtime profiles — reusable engine+account+model bundles (v1). */
+  runtimeProfiles?: RuntimeProfile[];
   /** Legacy single-webhook fields (mirrors src/main/config.ts, where they are
    *  deprecated in favour of `webhookTriggers` but still read until the server is
    *  rewired). Declared here so the surfaces that show them can stop widening this
