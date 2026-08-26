@@ -32,11 +32,40 @@ export interface SyncStatus {
   lastError: string | null;
 }
 
+/**
+ * Transports git may use for a user-supplied remote, applied as a
+ * GIT_ALLOW_PROTOCOL env restriction so it covers `clone` AND every later
+ * fetch/pull/push of a STORED remote — not just the instant a URL is entered.
+ * Critically EXCLUDES the local helpers `ext::`/`fd::`: git-remote-ext runs an
+ * arbitrary shell command, so a hostile remote reaching `git fetch` would be RCE.
+ */
+export const GIT_ALLOWED_PROTOCOLS = 'https:git:ssh:file';
+
+/**
+ * Reject a remote URL that could smuggle a git argument or a command-executing
+ * transport. Belt-and-suspenders with GIT_ALLOW_PROTOCOL — this blocks the URL at
+ * entry, the env blocks it at every later use.
+ *   - leading `-`  → git reads it as a FLAG (argument injection, e.g. `--upload-pack=`).
+ *   - `scheme::…`  → transport-helper syntax (`ext::`, `fd::`) = command execution.
+ * Allows only https/http/ssh/git/file URLs, scp-like `user@host:path`, and local
+ * absolute paths.
+ */
+export function isSafeGitUrl(url: string): boolean {
+  const u = (url ?? '').trim();
+  if (!u) return false;
+  if (u.startsWith('-')) return false;
+  if (/^[a-z][a-z0-9+.-]*::/i.test(u)) return false;
+  if (/^(https?|ssh|git|file):\/\//i.test(u)) return true;
+  if (/^[^/@\s]+@[^/:\s]+:.+$/.test(u)) return true; // git@github.com:owner/repo.git
+  if (/^([a-zA-Z]:[\\/]|\/)/.test(u)) return true; // C:\… or /abs/path
+  return false;
+}
+
 function git(root: string, args: string[]): { ok: boolean; out: string; err: string } {
   const res = spawnSync(
     'git',
     ['-c', 'commit.gpgsign=false', '-c', 'user.name=Hive', '-c', 'user.email=hive@local', ...args],
-    { cwd: root, encoding: 'utf8', timeout: 30_000 }
+    { cwd: root, encoding: 'utf8', timeout: 30_000, env: { ...process.env, GIT_ALLOW_PROTOCOL: GIT_ALLOWED_PROTOCOLS } }
   );
   return { ok: res.status === 0, out: res.stdout ?? '', err: res.stderr ?? '' };
 }
@@ -66,6 +95,10 @@ export function setRemote(root: string, url: string): { ok: boolean; error?: str
     git(root, ['remote', 'remove', 'origin']); // clearing the remote disables sync
     return { ok: true };
   }
+  // A stored remote is used by every later fetch/pull/push, so validate at entry:
+  // an `ext::`/`fd::` transport or a `-`-prefixed URL here would be RCE/argument
+  // injection the moment sync runs. (GIT_ALLOW_PROTOCOL in git() is the second layer.)
+  if (!isSafeGitUrl(clean)) return { ok: false, error: 'unsupported or unsafe remote URL' };
   const has = currentRemote(root);
   const set = has
     ? git(root, ['remote', 'set-url', 'origin', clean])

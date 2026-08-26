@@ -24,6 +24,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { GIT_ALLOWED_PROTOCOLS, isSafeGitUrl } from './sync';
 
 export interface HiveProfile {
   id: string;
@@ -110,10 +111,18 @@ export function launchSpec(profile: HiveProfile, packaged: boolean, appPath: str
 export function joinHive(remoteUrl: string, name: string, harnessHome: string): { ok: boolean; profile?: HiveProfile; error?: string } {
   const url = (remoteUrl ?? '').trim();
   if (!url) return { ok: false, error: 'no remote url' };
+  // SECURITY: `url` is user-supplied. `git clone` treats an `ext::`/`fd::` URL as a
+  // command-executing transport (RCE) and a `-`-prefixed URL as a flag (argument
+  // injection). Reject those at entry, pass `--` so the URL can never be read as an
+  // option, and restrict GIT_ALLOW_PROTOCOL so even a slipped-through value can't
+  // reach a dangerous transport.
+  if (!isSafeGitUrl(url)) return { ok: false, error: 'unsupported or unsafe remote URL' };
   const hiveDir = join(harnessHome, 'hive');
   if (existsSync(join(hiveDir, '.git'))) return { ok: false, error: `a hive already exists at ${hiveDir}` };
   try { mkdirSync(harnessHome, { recursive: true }); } catch (e) { return { ok: false, error: `mkdir failed: ${String(e)}` }; }
-  const res = spawnSync('git', ['clone', '--quiet', url, hiveDir], { encoding: 'utf8', timeout: 120_000 });
+  const res = spawnSync('git', ['clone', '--quiet', '--', url, hiveDir], {
+    encoding: 'utf8', timeout: 120_000, env: { ...process.env, GIT_ALLOW_PROTOCOL: GIT_ALLOWED_PROTOCOLS }
+  });
   if (res.status !== 0) return { ok: false, error: `git clone failed: ${(res.stderr ?? '').trim() || 'unknown error'}` };
   const profile = createProfile(name, harnessHome, { remote: url });
   return { ok: true, profile };
