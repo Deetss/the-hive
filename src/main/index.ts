@@ -1236,7 +1236,8 @@ function writeFleetSnapshot(): void {
           lastTool: spans.length ? spans[spans.length - 1].tool : null,
           lastActiveSecAgo: u ? Math.round((now - u.ts) / 1000) : null,
           inboxBacklog: hive.inboxBacklog(id),
-          onHold: !!a.onHold
+          onHold: !!a.onHold,
+          profileId: a.profileId ?? null
         };
       });
     hive.writeFleetSnapshot({ ts: now, agents });
@@ -3813,7 +3814,8 @@ ipcMain.handle('hive:agentDirectory', () => {
       lastActiveSecAgo: u ? Math.round((now - u.ts) / 1000) : null,
       contextTokens: ctx?.tokens ?? null,
       contextLimit: ctx?.limit ?? null,
-      contextPct: ctx && ctx.limit > 0 ? Math.round((ctx.tokens / ctx.limit) * 100) : null
+      contextPct: ctx && ctx.limit > 0 ? Math.round((ctx.tokens / ctx.limit) * 100) : null,
+      profileId: a.profileId ?? null
     };
   });
   return { godId: reg.godId, agents };

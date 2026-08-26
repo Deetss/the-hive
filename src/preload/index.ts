@@ -134,6 +134,8 @@ export interface AgentDirectoryEntry {
   contextTokens: number | null;
   contextLimit: number | null;
   contextPct: number | null;
+  /** Runtime profile assigned to this agent at spawn, or null for the default login. */
+  profileId: string | null;
 }
 
 export interface AgentDirectory {
