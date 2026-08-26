@@ -257,7 +257,6 @@ export function AgentCard({
               </div>
             ) : (
               <div
-                onClick={(e) => e.stopPropagation()}
                 style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, minHeight: 14 }}
               >
                 {noteFirstLine ? (
