@@ -2802,6 +2802,19 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   // other CLIs (it must not blindly attach `--resume` when the seed failed).
   if (opts.hive && !claudeProvider) {
     const preset = providerPreset(provider);
+    const cfg2 = readConfig();
+    // Auto-mode flags — same idempotent logic as the Claude block (D9). GUI spawns
+    // already have the flag baked in by buildSpawnCommand; main-only spawns do not.
+    const ncArgs = argsWithAutoModeFlag(opts.args ?? [], cfg2.autoMode, provider);
+    // Profile model (D2 mirror for non-Claude): explicit --model in opts.args wins;
+    // else profile.model; else no injection (CLI defaults to its configured model).
+    // The Claude block has the same guard; non-Claude providers need it too so that
+    // a profile's model is honoured even when the command string omits --model.
+    if (!ncArgs.includes('--model') && preset.supportsModel && preset.modelFlag) {
+      const profileModel2 = opts.hive?.profileId ? getRuntimeProfile(opts.hive.profileId)?.model : undefined;
+      if (profileModel2) ncArgs.push(preset.modelFlag, profileModel2);
+    }
+    opts.args = ncArgs;
     const rf = preset.resumeFlag;
     const rsub = preset.resumeSubcommand;
     // An id typed into Add Agent's "resume session" field wins; otherwise fall
