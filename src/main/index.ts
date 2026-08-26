@@ -4223,7 +4223,12 @@ ipcMain.handle('sync:isSafeRemote', (_evt, arg: unknown) => sync.isSafeGitUrl(ty
 // ─── IPC: Local delegate agents ──────────────────────────────────────────────
 ipcMain.handle('lda:list', () => listLocalDelegates());
 ipcMain.handle('lda:upsert', (_evt, arg: unknown) => upsertLocalDelegate(arg));
-ipcMain.handle('lda:remove', (_evt, arg: unknown) => removeLocalDelegate(arg));
+ipcMain.handle('lda:remove', (_evt, arg: unknown) => {
+  // Clean up API key when delegate is removed
+  const id = typeof arg === 'string' ? arg.trim() : '';
+  if (id) integrations.deleteSecret(`lda:${id}:apikey`);
+  return removeLocalDelegate(arg);
+});
 ipcMain.handle('lda:health', (_evt, arg: unknown) => ldaRunner.health(typeof arg === 'string' ? arg : ''));
 ipcMain.handle('lda:invoke', async (_evt, arg: unknown) => {
   const req = arg as Parameters<typeof ldaRunner.invoke>[0];
@@ -4236,6 +4241,38 @@ ipcMain.handle('lda:invoke', async (_evt, arg: unknown) => {
     durationMs: result.durationMs
   });
   return result;
+});
+// API key write — MAIN-ONLY, never echoed back. Stores encrypted via safeStorage.
+// Called with two separate args (id, key) matching the preload ldaSetApiKey signature.
+ipcMain.handle('lda:setApiKey', (_evt, id: unknown, key: unknown) => {
+  if (typeof id !== 'string' || !id.trim() || typeof key !== 'string' || !key) {
+    return { ok: false, error: 'id and key required' };
+  }
+  const ref = `lda:${id.trim()}:apikey`;
+  try {
+    integrations.setSecret(ref, key);
+    // Patch secretRef into the delegate config so the runner knows where to look
+    const cfg = listLocalDelegates().find((d) => d.id === id.trim());
+    if (cfg && !cfg.secretRef) upsertLocalDelegate({ ...cfg, secretRef: ref });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+// API key remove — clears from secret store + clears secretRef on the delegate.
+ipcMain.handle('lda:removeApiKey', (_evt, arg: unknown) => {
+  const id = typeof arg === 'string' ? arg.trim() : '';
+  if (!id) return { ok: false, error: 'id required' };
+  integrations.deleteSecret(`lda:${id}:apikey`);
+  const cfg = listLocalDelegates().find((d) => d.id === id);
+  if (cfg?.secretRef) upsertLocalDelegate({ ...cfg, secretRef: undefined });
+  return { ok: true };
+});
+// Whether a key is stored — never returns the key itself.
+ipcMain.handle('lda:hasApiKey', (_evt, arg: unknown) => {
+  const id = typeof arg === 'string' ? arg.trim() : '';
+  const cfg = listLocalDelegates().find((d) => d.id === id);
+  return { hasKey: !!(cfg?.secretRef && integrations.getSecret(cfg.secretRef)) };
 });
 
 // ─── IPC: Triggers — history ledger + the approval gate ─────────────────────

@@ -785,7 +785,82 @@ export function listLocalDelegates(): LocalDelegateConfig[] {
 const SAFE_SLUG = /^[A-Za-z0-9._-]+$/;
 const SAFE_PATH = /^\/[A-Za-z0-9._\-/~]+$/;
 const SHELL_UNSAFE = /["'`$;|&\r\n\s]/;
-const VALID_CAPS = new Set(['find', 'map', 'run', 'check', 'task', 'loop']);
+const VALID_CAPS = new Set<string>(['find', 'map', 'run', 'check', 'task', 'loop']);
+const VALID_API_CAPS = new Set<string>(['complete', 'embed']);
+const VALID_PROVIDER_KINDS = new Set<string>(['edgentic-script', 'openai-compat', 'anthropic-compat', 'ollama']);
+
+/** Parse a dotted-decimal IPv4 string into a 32-bit integer, or null if not valid. */
+function parseIpv4(host: string): number | null {
+  const parts = host.split('.');
+  if (parts.length !== 4) return null;
+  let n = 0;
+  for (const p of parts) {
+    // Reject octal (leading zero) and hex notations — they bypass regex range checks
+    if (!/^\d+$/.test(p) || p.length > 3) return null;
+    const b = Number(p);
+    if (!Number.isInteger(b) || b < 0 || b > 255) return null;
+    n = (n << 8) | b;
+  }
+  return n >>> 0;
+}
+
+/** SSRF guard: reject cloud-metadata and loopback ranges always; reject private
+ *  LAN ranges unless allowPrivate=true.
+ *
+ *  "Always blocked" (even with allowPrivate=true):
+ *    127.0.0.0/8     loopback (127.*)
+ *    169.254.0.0/16  link-local / AWS IMDS / Azure IMDS / GCP metadata
+ *    100.64.0.0/10   CGNAT range (100.64–127.*) — includes Tailscale / alternate IMDS
+ *    0.0.0.0/8       wildcard / THIS network
+ *    ::1             IPv6 loopback
+ *    fd00::/8        IPv6 Unique Local
+ *
+ *  Alt-notation block: octal/hex IP literals and integer IPs (e.g. 2130706433)
+ *  bypass text-matching — we require dotted-decimal for IPv4, reject anything else.
+ *
+ *  "Blocked unless allowPrivate=true":
+ *    10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12   RFC 1918 private
+ *    fc00::/7                                       IPv6 private */
+function isSafeHttpUrl(urlStr: string, allowPrivate = false): boolean {
+  let u: URL;
+  try { u = new URL(urlStr); } catch { return false; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  if (SHELL_UNSAFE.test(urlStr)) return false;
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, ''); // strip IPv6 brackets
+
+  // Always-blocked names
+  if (host === 'localhost') return false;
+  if (host === '::1') return false;
+  if (/^fd[0-9a-f]{2}:/i.test(host)) return false;  // IPv6 unique local (fd00::/8)
+
+  // Numeric IPv4 address — parse to bits for accurate range matching.
+  // Reject if it looks like an IPv4 literal but fails to parse (blocks octal/hex notation).
+  const ipv4Re = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (ipv4Re.test(host)) {
+    const ip = parseIpv4(host);
+    if (ip === null) return false; // non-canonical notation (octal, hex) → reject
+    // Always blocked (regardless of allowPrivate)
+    if ((ip >>> 24) === 127) return false;                          // 127.0.0.0/8 loopback
+    if ((ip >>> 16) === 0xa9fe) return false;                      // 169.254.0.0/16 link-local/IMDS
+    if ((ip >>> 22) === 0x191) return false;                        // 100.64.0.0/10 CGNAT
+    if ((ip >>> 24) === 0) return false;                            // 0.x.x.x wildcard
+    // LAN ranges (allowPrivate bypass)
+    if (!allowPrivate) {
+      if ((ip >>> 24) === 10) return false;                         // 10.0.0.0/8
+      if ((ip >>> 16) === 0xc0a8) return false;                    // 192.168.0.0/16
+      if ((ip >>> 20) === 0xac1) return false;                     // 172.16.0.0/12
+    }
+    return true;
+  }
+
+  // Non-numeric hostname: must match safe slug pattern (letters/digits/dots/hyphens).
+  // Rejects integer IPs, IPv4-mapped IPv6 in non-bracket form, and similar tricks.
+  if (!SAFE_SLUG.test(host)) return false;
+  // DNS-resolved hostnames: we can't check their resolved IPs at config-save time.
+  // The allowPrivate flag documents user intent; runtime SSRF via DNS rebinding is
+  // out of scope for this validator (would require a per-request resolver).
+  return true;
+}
 
 export function upsertLocalDelegate(cfg: unknown): HarnessConfig {
   if (!cfg || typeof cfg !== 'object') throw new Error('invalid delegate config');
@@ -793,21 +868,64 @@ export function upsertLocalDelegate(cfg: unknown): HarnessConfig {
   if (typeof d.id !== 'string' || !d.id.trim()) throw new Error('delegate id required');
   if (typeof d.label !== 'string' || !d.label.trim()) throw new Error('delegate label required');
   if (typeof d.enabled !== 'boolean') throw new Error('delegate enabled must be boolean');
-  if (!Array.isArray(d.capabilities) || d.capabilities.length === 0) {
-    throw new Error('delegate capabilities must be a non-empty array');
-  }
+  if (!VALID_PROVIDER_KINDS.has(d.providerKind)) throw new Error(`unknown providerKind: ${d.providerKind}`);
+
+  // capabilities may be empty for http-only delegates; apiCapabilities may be empty for script-only
+  if (!Array.isArray(d.capabilities)) throw new Error('capabilities must be an array');
   for (const cap of d.capabilities) {
     if (!VALID_CAPS.has(cap)) throw new Error(`unknown capability: ${cap}`);
   }
+  if (!Array.isArray(d.apiCapabilities)) throw new Error('apiCapabilities must be an array');
+  for (const cap of d.apiCapabilities) {
+    if (!VALID_API_CAPS.has(cap)) throw new Error(`unknown apiCapability: ${cap}`);
+  }
+  if (d.capabilities.length === 0 && d.apiCapabilities.length === 0) {
+    throw new Error('at least one capability or apiCapability required');
+  }
+
   if (!d.transport || typeof d.transport !== 'object') throw new Error('delegate transport required');
-  if (d.transport.kind !== 'wsl-exec') throw new Error('unsupported transport kind (Phase 1: wsl-exec only)');
-  const { distro, scriptPrefix } = d.transport;
-  if (typeof distro !== 'string' || !SAFE_SLUG.test(distro)) {
-    throw new Error('distro must match [A-Za-z0-9._-] with no spaces or special characters');
+  const { kind } = d.transport;
+
+  if (kind === 'wsl-exec') {
+    const { distro, scriptPrefix } = d.transport as { distro: string; scriptPrefix: string };
+    if (typeof distro !== 'string' || !SAFE_SLUG.test(distro)) {
+      throw new Error('distro must match [A-Za-z0-9._-] with no spaces or special characters');
+    }
+    if (typeof scriptPrefix !== 'string' || !SAFE_PATH.test(scriptPrefix) || SHELL_UNSAFE.test(scriptPrefix)) {
+      throw new Error('scriptPrefix must be an absolute path with no shell metacharacters');
+    }
+  } else if (kind === 'ssh') {
+    const t = d.transport as { host: string; port: number; user: string; identityFile?: string; scriptPrefix: string };
+    if (typeof t.host !== 'string' || !SAFE_SLUG.test(t.host)) {
+      throw new Error('ssh host must match [A-Za-z0-9._-]');
+    }
+    if (typeof t.user !== 'string' || !SAFE_SLUG.test(t.user)) {
+      throw new Error('ssh user must match [A-Za-z0-9._-]');
+    }
+    const port = Number(t.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('ssh port must be 1-65535');
+    if (t.identityFile !== undefined) {
+      if (typeof t.identityFile !== 'string' || !SAFE_PATH.test(t.identityFile) || SHELL_UNSAFE.test(t.identityFile)) {
+        throw new Error('identityFile must be an absolute path with no shell metacharacters');
+      }
+    }
+    if (typeof t.scriptPrefix !== 'string' || !SAFE_PATH.test(t.scriptPrefix) || SHELL_UNSAFE.test(t.scriptPrefix)) {
+      throw new Error('scriptPrefix must be an absolute path with no shell metacharacters');
+    }
+  } else if (kind === 'http') {
+    const t = d.transport as { baseUrl: string; allowPrivate?: boolean };
+    const allowPrivate = t.allowPrivate === true;
+    if (typeof t.baseUrl !== 'string' || !isSafeHttpUrl(t.baseUrl, allowPrivate)) {
+      throw new Error(
+        allowPrivate
+          ? 'baseUrl must be a valid http/https URL with no shell metacharacters'
+          : 'baseUrl must be a valid public http/https URL (set allowPrivate=true for LAN addresses)'
+      );
+    }
+  } else {
+    throw new Error(`unsupported transport kind: ${kind}`);
   }
-  if (typeof scriptPrefix !== 'string' || !SAFE_PATH.test(scriptPrefix) || SHELL_UNSAFE.test(scriptPrefix)) {
-    throw new Error('scriptPrefix must be an absolute path with no shell metacharacters');
-  }
+
   const current = readConfig();
   const list = listLocalDelegates().filter((e) => e.id !== d.id.trim());
   return persistConfig({ ...current, localDelegates: [...list, { ...d, id: d.id.trim() }] });

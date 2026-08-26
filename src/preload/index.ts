@@ -1278,6 +1278,15 @@ const api = {
     ipcRenderer.invoke('lda:health', id),
   ldaInvoke: (req: unknown): Promise<{ ok: boolean; output: string; exitCode: number; durationMs: number }> =>
     ipcRenderer.invoke('lda:invoke', req),
+  /** Store an API key for a delegate (one-shot write; main encrypts + discards). */
+  ldaSetApiKey: (id: string, key: string): Promise<{ ok: boolean; ref?: string; error?: string }> =>
+    ipcRenderer.invoke('lda:setApiKey', id, key),
+  /** Remove the encrypted API key for a delegate. */
+  ldaRemoveApiKey: (id: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('lda:removeApiKey', id),
+  /** Whether a key is stored for a delegate (never returns the key itself). */
+  ldaHasApiKey: (id: string): Promise<{ hasKey: boolean }> =>
+    ipcRenderer.invoke('lda:hasApiKey', id),
 
   // ─── Active-shell telemetry ─────────────────────────────────────────────────
   /** Pull the current active-shell count on mount (cold-start backfill). */
