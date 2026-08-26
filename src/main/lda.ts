@@ -116,6 +116,14 @@ async function healthWslExec(cfg: LocalDelegateConfig, healthMs: number): Promis
 
 // ─── SSH transport ────────────────────────────────────────────────────────────
 
+/** POSIX shell single-quote escaping. Wraps the value in single quotes and
+ *  escapes any embedded single quotes with the '\'' idiom. This is the only safe
+ *  way to pass arbitrary data into a shell command string — double-quote escaping
+ *  still allows $, `, and \ expansion. */
+function shq(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'";
+}
+
 function sshBaseArgs(t: { host: string; port: number; user: string; identityFile?: string }): string[] {
   // BatchMode=yes: fail immediately if host key not accepted (no interactive prompt).
   // StrictHostKeyChecking=accept-new: silently accept new host keys but reject changed
@@ -131,8 +139,11 @@ async function runSsh(cfg: LocalDelegateConfig, cap: LdaCapability, capArgs: str
   const t = cfg.transport;
   if (t.kind !== 'ssh') return { ok: false, output: 'wrong transport', exitCode: 1, durationMs: 0 };
   const script = `${t.scriptPrefix}/${scriptName(cap)}`;
-  // Pass script + capArgs as SSH command args directly — no shell string interpolation.
-  const argv = [...sshBaseArgs(t), script, ...capArgs];
+  // SSH concatenates all command args into a single remote shell string — passing
+  // multiple positional args is NOT safe because the remote shell re-parses them.
+  // We build one shell-safe command string with every arg single-quoted via shq().
+  const remoteCmd = `PATH="$HOME/.local/scripts:$PATH" exec ${[script, ...capArgs].map(shq).join(' ')}`;
+  const argv = [...sshBaseArgs(t), remoteCmd];
   const t0 = Date.now();
   try {
     const { stdout, stderr } = await execFileAsync('ssh', argv, { maxBuffer: 4 * 1024 * 1024, timeout: invokeMs });
@@ -151,7 +162,8 @@ async function healthSsh(cfg: LocalDelegateConfig, healthMs: number): Promise<Ld
   const t = cfg.transport;
   if (t.kind !== 'ssh') return { ok: false, latencyMs: 0, error: 'wrong transport' };
   const healthScript = `${t.scriptPrefix}/edgentic`;
-  const argv = [...sshBaseArgs(t), healthScript, '--health'];
+  const remoteCmd = `PATH="$HOME/.local/scripts:$PATH" exec ${shq(healthScript)} --health`;
+  const argv = [...sshBaseArgs(t), remoteCmd];
   const t0 = Date.now();
   try {
     await execFileAsync('ssh', argv, { timeout: healthMs });

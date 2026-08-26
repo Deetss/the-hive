@@ -789,42 +789,76 @@ const VALID_CAPS = new Set<string>(['find', 'map', 'run', 'check', 'task', 'loop
 const VALID_API_CAPS = new Set<string>(['complete', 'embed']);
 const VALID_PROVIDER_KINDS = new Set<string>(['edgentic-script', 'openai-compat', 'anthropic-compat', 'ollama']);
 
+/** Parse a dotted-decimal IPv4 string into a 32-bit integer, or null if not valid. */
+function parseIpv4(host: string): number | null {
+  const parts = host.split('.');
+  if (parts.length !== 4) return null;
+  let n = 0;
+  for (const p of parts) {
+    // Reject octal (leading zero) and hex notations — they bypass regex range checks
+    if (!/^\d+$/.test(p) || p.length > 3) return null;
+    const b = Number(p);
+    if (!Number.isInteger(b) || b < 0 || b > 255) return null;
+    n = (n << 8) | b;
+  }
+  return n >>> 0;
+}
+
 /** SSRF guard: reject cloud-metadata and loopback ranges always; reject private
  *  LAN ranges unless allowPrivate=true.
  *
  *  "Always blocked" (even with allowPrivate=true):
- *    169.254.*   link-local / AWS IMDS / Azure IMDS / GCP metadata
- *    127.*       loopback (not just localhost — 127.0.0.1 is distinct from it)
- *    0.0.0.0     POSIX wildcard — resolves unpredictably
- *    ::1         IPv6 loopback
- *    100.64.*    CGNAT range (AWS, Tailscale etc. metadata endpoints)
- *    fd00::/8    IPv6 Unique Local (cloud-metadata equivalent)
+ *    127.0.0.0/8     loopback (127.*)
+ *    169.254.0.0/16  link-local / AWS IMDS / Azure IMDS / GCP metadata
+ *    100.64.0.0/10   CGNAT range (100.64–127.*) — includes Tailscale / alternate IMDS
+ *    0.0.0.0/8       wildcard / THIS network
+ *    ::1             IPv6 loopback
+ *    fd00::/8        IPv6 Unique Local
+ *
+ *  Alt-notation block: octal/hex IP literals and integer IPs (e.g. 2130706433)
+ *  bypass text-matching — we require dotted-decimal for IPv4, reject anything else.
  *
  *  "Blocked unless allowPrivate=true":
- *    10.*, 192.168.*, 172.16-31.*   RFC 1918 private ranges
- *    fc00::/7                        IPv6 private (fc/fd prefix) */
+ *    10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12   RFC 1918 private
+ *    fc00::/7                                       IPv6 private */
 function isSafeHttpUrl(urlStr: string, allowPrivate = false): boolean {
   let u: URL;
   try { u = new URL(urlStr); } catch { return false; }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
   if (SHELL_UNSAFE.test(urlStr)) return false;
-  const host = u.hostname.toLowerCase();
-  // Always blocked — cloud metadata, loopback, and link-local regardless of allowPrivate
-  if (/^169\.254\./.test(host)) return false;       // link-local / IMDS
-  if (/^127\./.test(host)) return false;             // 127.0.0.0/8 loopback
-  if (host === '0.0.0.0') return false;
-  if (host === '::1' || host === '[::1]') return false;
-  if (/^100\.64\./.test(host)) return false;         // CGNAT / AWS alternate metadata
-  if (/^fd[0-9a-f]{2}:/i.test(host)) return false;  // IPv6 unique local (fd00::/8)
-  // localhost resolves to loopback; block by name to cover future /etc/hosts tricks
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, ''); // strip IPv6 brackets
+
+  // Always-blocked names
   if (host === 'localhost') return false;
-  // Private LAN ranges — blocked unless allowPrivate (for Jetson/DGX etc.)
-  if (!allowPrivate) {
-    if (/^10\./.test(host)) return false;
-    if (/^192\.168\./.test(host)) return false;
-    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
-    if (/^fc[0-9a-f]{2}:/i.test(host)) return false; // IPv6 private fc00::/7
+  if (host === '::1') return false;
+  if (/^fd[0-9a-f]{2}:/i.test(host)) return false;  // IPv6 unique local (fd00::/8)
+
+  // Numeric IPv4 address — parse to bits for accurate range matching.
+  // Reject if it looks like an IPv4 literal but fails to parse (blocks octal/hex notation).
+  const ipv4Re = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (ipv4Re.test(host)) {
+    const ip = parseIpv4(host);
+    if (ip === null) return false; // non-canonical notation (octal, hex) → reject
+    // Always blocked (regardless of allowPrivate)
+    if ((ip >>> 24) === 127) return false;                          // 127.0.0.0/8 loopback
+    if ((ip >>> 16) === 0xa9fe) return false;                      // 169.254.0.0/16 link-local/IMDS
+    if ((ip >>> 22) === 0x191) return false;                        // 100.64.0.0/10 CGNAT
+    if ((ip >>> 24) === 0) return false;                            // 0.x.x.x wildcard
+    // LAN ranges (allowPrivate bypass)
+    if (!allowPrivate) {
+      if ((ip >>> 24) === 10) return false;                         // 10.0.0.0/8
+      if ((ip >>> 16) === 0xc0a8) return false;                    // 192.168.0.0/16
+      if ((ip >>> 20) === 0xac1) return false;                     // 172.16.0.0/12
+    }
+    return true;
   }
+
+  // Non-numeric hostname: must match safe slug pattern (letters/digits/dots/hyphens).
+  // Rejects integer IPs, IPv4-mapped IPv6 in non-bracket form, and similar tricks.
+  if (!SAFE_SLUG.test(host)) return false;
+  // DNS-resolved hostnames: we can't check their resolved IPs at config-save time.
+  // The allowPrivate flag documents user intent; runtime SSRF via DNS rebinding is
+  // out of scope for this validator (would require a per-request resolver).
   return true;
 }
 
