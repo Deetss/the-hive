@@ -52,9 +52,12 @@ export function ratePaceColor(pct: number, resetsAtIso: string, windowMins: numb
   return 'var(--cth-mint)';
 }
 
-/** Format the time until a rate-limit window resets: /Xh Ym or /Ym. */
+/** Format the time until a rate-limit window resets: /Xh Ym or /Ym.
+ *  Returns '' for unparseable ISO timestamps so callers can hide the countdown. */
 export function fmtReset(resetsAtIso: string): string {
-  const minsLeft = Math.max(0, Math.round((new Date(resetsAtIso).getTime() - Date.now()) / 60000));
+  const ms = new Date(resetsAtIso).getTime();
+  if (!Number.isFinite(ms)) return '';
+  const minsLeft = Math.max(0, Math.round((ms - Date.now()) / 60000));
   const h = Math.floor(minsLeft / 60);
   const m = minsLeft % 60;
   return h > 0 ? `/${h}h ${m}m` : `/${m}m`;

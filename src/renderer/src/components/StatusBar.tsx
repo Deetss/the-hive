@@ -3,6 +3,7 @@ import { useStore } from '@/store/store';
 import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTelemetry';
 import { useActiveShells } from '@/hooks/useShells';
 import { useRateLimits, ratePaceColor, fmtReset } from '@/hooks/useRateLimits';
+import type { RuntimeProfile } from '@/store/config';
 
 /**
  * Persistent bottom status line: live hive+fleet state at a glance.
@@ -89,10 +90,14 @@ export function StatusBar() {
   const shells = useActiveShells();
   const rateLimits = useRateLimits();
 
-  // One-time read of accountBadge from config (WORK/PERSONAL from CLAUDE_CONFIG_DIR).
+  // One-time read of app-wide badge + profiles for per-agent badge resolution.
   const [accountBadge, setAccountBadge] = useState<'WORK' | 'PERSONAL' | null>(null);
+  const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   useEffect(() => {
-    window.cth?.getConfig?.().then((c) => setAccountBadge(c.accountBadge ?? null)).catch(() => {});
+    window.cth?.getConfig?.().then((c) => {
+      setAccountBadge(c.accountBadge ?? null);
+      setRuntimeProfiles(c.runtimeProfiles ?? []);
+    }).catch(() => {});
   }, []);
 
   const live = useMemo(() => agents.filter((a) => a.ptyId && !a.archived), [agents]);
@@ -102,6 +107,21 @@ export function StatusBar() {
     () => agents.find((a) => a.id === selectedId) ?? agents.find((a) => a.isGod) ?? null,
     [agents, selectedId]
   );
+
+  // Resolve the badge for the currently focused agent.
+  // Uses its profileId → runtimeProfiles.claudeConfigDir if available;
+  // falls back to the app-wide CLAUDE_CONFIG_DIR badge otherwise.
+  const displayBadge = useMemo<'WORK' | 'PERSONAL' | null>(() => {
+    if (!accountBadge) return null;
+    if (focusAgent?.profileId) {
+      const profile = runtimeProfiles.find((p) => p.id === focusAgent.profileId);
+      if (profile?.claudeConfigDir) {
+        const dir = profile.claudeConfigDir.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? '';
+        return dir === '.claude-personal' ? 'PERSONAL' : 'WORK';
+      }
+    }
+    return accountBadge;
+  }, [focusAgent?.profileId, runtimeProfiles, accountBadge]);
 
   // Async git branch for the focused agent's cwd.
   const [branch, setBranch] = useState<string | null>(null);
@@ -166,16 +186,20 @@ export function StatusBar() {
     [messageQueues]
   );
 
-  // Fleet-worst rate limits: pick the agent with the highest 5h/7d usage.
+  // Fleet-worst rate limits among LIVE agents only (same filter as ctxPct).
+  // rateLimitsById is never pruned, so dead agents would linger; scope to live
+  // to prevent a killed agent's stale high-% from inflating the meter forever.
   const { worstFiveHour, worstSevenDay } = useMemo(() => {
+    const liveIds = new Set(live.map((a) => a.id));
     let fh: { pct: number; resetsAt: string } | null = null;
     let sd: { pct: number; resetsAt: string } | null = null;
-    for (const entry of Object.values(rateLimits)) {
+    for (const [agentId, entry] of Object.entries(rateLimits)) {
+      if (!liveIds.has(agentId)) continue;
       if (entry.fiveHour && (!fh || entry.fiveHour.pct > fh.pct)) fh = entry.fiveHour;
       if (entry.sevenDay && (!sd || entry.sevenDay.pct > sd.pct)) sd = entry.sevenDay;
     }
     return { worstFiveHour: fh, worstSevenDay: sd };
-  }, [rateLimits]);
+  }, [rateLimits, live]);
 
   const godColor = godStatus === 'ready' ? 'var(--cth-mint)'
     : godStatus === 'failed' ? 'var(--cth-coral)' : 'var(--cth-lemon)';
@@ -196,12 +220,12 @@ export function StatusBar() {
         overflow: 'hidden', minWidth: 0,
       }}
     >
-      {accountBadge && (
+      {displayBadge && (
         <>
-          <Chip title={`Account: ${accountBadge} (from CLAUDE_CONFIG_DIR)`}>
-            <Dot color={accountBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)'} />
-            <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 9, color: accountBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)' }}>
-              {accountBadge}
+          <Chip title={`Account: ${displayBadge} (from CLAUDE_CONFIG_DIR${focusAgent?.profileId ? ' via agent profile' : ''})`}>
+            <Dot color={displayBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)'} />
+            <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 9, color: displayBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)' }}>
+              {displayBadge}
             </span>
           </Chip>
           <Sep />
