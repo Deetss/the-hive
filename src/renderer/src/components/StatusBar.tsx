@@ -22,10 +22,9 @@ import type { RuntimeProfile } from '@/store/config';
  *   ctx bar: 4-cell █/░ glyph, <50 green / 50-79 yellow / >=80 red (his thresholds)
  *   model: selected agent's model id, truncated before any ' ('
  *   dir:branch: selected agent's cwd basename + git branch (async)
- *   5h/7d rate limits: NOT available — rate_limits.* flows through cth-hook but is
- *     not yet stored/exposed by the main process. Report scope: main needs to persist
- *     rate_limits from the Status hook payload and push via IPC.
- *   WORK/PERSONAL badge: NOT available — CLAUDE_CONFIG_DIR not surfaced to renderer.
+ *   5h/7d rate limits: hooks.ts reads rate_limits from the CC status JSON and pushes
+ *     via hive:rateLimitsUpdate. Chips render when CC includes the field (non-zero usage).
+ *   WORK/PERSONAL badge: derived from CLAUDE_CONFIG_DIR basename via getConfig().accountBadge.
  *   loc (edgentic savings): NOT available — edgentic runs on remote Jetson; usage.log
  *     has no accessible local path.
  *   vim mode: NOT available — .vim.mode from Status JSON not forwarded by main.
