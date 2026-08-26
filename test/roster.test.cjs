@@ -123,6 +123,9 @@ test('a corrupt file reads as "no opinion" rather than as an empty roster', () =
   // The renderer treats null as "use localStorage". Returning an empty roster
   // instead would show a blank floor and then mirror that blank back to disk.
   const home = tmpHome();
+  // The roster now lives inside the hive repo dir, which a bare tmpHome() has not
+  // created yet — make it so the corrupt file lands at the real roster path.
+  fs.mkdirSync(path.dirname(rosterPath(home)), { recursive: true });
   fs.writeFileSync(rosterPath(home), '{ this is not json');
   assert.equal(storeAt(home).read(), null);
 });
