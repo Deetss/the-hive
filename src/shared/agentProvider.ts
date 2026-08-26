@@ -201,13 +201,14 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     // (the user's project), but a hive worker must also write to its agent folder
     // at <harnessHome>/hive/agents/<id>/ (inbox→.done, memory.md, outbox JSON,
     // deliverables) — a DIFFERENT path tree from cwd, which workspace-write blocked,
-    // so codex workers couldn't do HIVE PROTOCOL housekeeping. The single bypass flag
-    // is codex's documented equivalent of `--dangerously-skip-permissions` (no -a/-s
-    // alongside it); --skip-git-repo-check suppresses the git-repo detection prompt
-    // that would otherwise block headless startup. The app already runs claude/agy in
-    // this same full-access posture.
-    autoModeFlag: '--dangerously-bypass-approvals-and-sandbox --skip-git-repo-check',
-    autoFlag: '--dangerously-bypass-approvals-and-sandbox --skip-git-repo-check',
+    // so codex workers couldn't do HIVE PROTOCOL housekeeping.
+    // --dangerously-bypass-hook-trust: runs the per-agent config.toml hooks without
+    // a trust prompt (required for Stop→drain; hooks are installed by installCodexHooks).
+    // NOTE: --skip-git-repo-check is a `codex exec` flag ONLY — it is REJECTED by bare
+    // interactive `codex`. Do not add it here. Interactive codex does not block on git
+    // detection in a non-git cwd (verified); no substitute flag is needed.
+    autoModeFlag: '--dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust',
+    autoFlag: '--dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust',
     // CODEX_NON_INTERACTIVE=1 was intended to suppress first-run prompts, but in
     // codex 0.149.1 (the new Rust binary) it forces non-interactive/exec mode: codex
     // processes the initial prompt once and exits — the Stop→{decision:'block'} drain
