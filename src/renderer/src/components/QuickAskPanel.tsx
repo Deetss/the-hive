@@ -14,12 +14,17 @@ import { PixelButton } from './PixelButton';
 const TIMEOUT_MS = 90_000;
 
 interface QAEntry {
+  /** Stable display-slot key — never changes for the lifetime of this Q. */
   id: string;
   question: string;
   /** undefined = not yet answered; string (including '') = god replied */
   answer?: string;
   askedAt: number;
-  conversation: string;
+  /** The wire-level conversation id for the CURRENT attempt. Rotates on each
+   *  retry so a stale in-flight reply to a superseded id can never satisfy a
+   *  newer attempt. `id` is the stable slot key; `currentConversation` is the
+   *  correlation key for the active bus message. */
+  currentConversation: string;
   waiting: boolean;
   timedOut: boolean;
 }
@@ -32,24 +37,26 @@ export function QuickAskPanel() {
   // Per-conversation timeout handles so we can cancel when the answer arrives.
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  const cancelTimer = (conversation: string) => {
-    const t = timers.current.get(conversation);
-    if (t !== undefined) { clearTimeout(t); timers.current.delete(conversation); }
+  const cancelTimer = (wireId: string) => {
+    const t = timers.current.get(wireId);
+    if (t !== undefined) { clearTimeout(t); timers.current.delete(wireId); }
   };
 
-  const armTimer = (conversation: string) => {
-    cancelTimer(conversation);
+  const armTimer = (wireId: string) => {
+    cancelTimer(wireId);
     const t = setTimeout(() => {
-      timers.current.delete(conversation);
+      timers.current.delete(wireId);
       setEntries((prev) =>
         prev.map((e) =>
-          e.conversation === conversation && e.waiting
+          // Only time out if this wire id is still the CURRENT one; a retry will
+          // have already rotated e.currentConversation to a newer id.
+          e.currentConversation === wireId && e.waiting
             ? { ...e, waiting: false, timedOut: true }
             : e
         )
       );
     }, TIMEOUT_MS);
-    timers.current.set(conversation, t);
+    timers.current.set(wireId, t);
   };
 
   // Clear all pending timers on unmount.
@@ -59,13 +66,16 @@ export function QuickAskPanel() {
   useEffect(() => {
     if (!window.cth?.onHiveMessage) return;
     const unsub = window.cth.onHiveMessage((e) => {
-      // Fix: use `e.body === undefined` instead of `!e.body` so an intentionally
-      // empty reply still resolves the bubble (empty string is a valid answer).
       if (!e.needsHuman || e.body === undefined || !e.conversation) return;
+      // Match on currentConversation (the active wire id for this attempt).
+      // Also resolve entries that already timed out — a real answer arriving
+      // late is strictly better than 'no answer yet'; display it and clear timedOut.
+      // Superseded ids (from earlier attempts on the same slot) never match because
+      // currentConversation was rotated to a fresh id on retry.
       cancelTimer(e.conversation);
       setEntries((prev) =>
         prev.map((entry) =>
-          entry.conversation === e.conversation && entry.waiting
+          entry.currentConversation === e.conversation && (entry.waiting || entry.timedOut)
             ? { ...entry, answer: e.body, waiting: false, timedOut: false }
             : entry
         )
@@ -83,25 +93,24 @@ export function QuickAskPanel() {
   const submit = async () => {
     const q = draft.trim();
     if (!q || sending) return;
-    const conversation = `qa-${crypto.randomUUID()}`;
+    const wireId = `qa-${crypto.randomUUID()}`;
     const entry: QAEntry = {
-      id: conversation, question: q, askedAt: Date.now(),
-      conversation, waiting: true, timedOut: false
+      id: wireId, question: q, askedAt: Date.now(),
+      currentConversation: wireId, waiting: true, timedOut: false
     };
     setEntries((prev) => [...prev, entry]);
     setDraft('');
     setSending(true);
     try {
       await window.cth.hiveSend(
-        { to: 'god', act: 'query', subject: 'Quick ask', body: q, conversation },
+        { to: 'god', act: 'query', subject: 'Quick ask', body: q, conversation: wireId },
         'human'
       );
-      // Arm the timeout now that the message is on the bus.
-      armTimer(conversation);
+      armTimer(wireId);
     } catch {
       setEntries((prev) =>
         prev.map((e) =>
-          e.conversation === conversation
+          e.id === wireId
             ? { ...e, answer: '(send failed — check god is online)', waiting: false, timedOut: false }
             : e
         )
@@ -111,18 +120,24 @@ export function QuickAskPanel() {
   };
 
   const retry = (entry: QAEntry) => {
+    // Cancel the timer for the old wire id before rotating to a fresh one so
+    // a stale original reply can never satisfy this attempt.
+    cancelTimer(entry.currentConversation);
+    const newWireId = `qa-${crypto.randomUUID()}`;
     setEntries((prev) =>
       prev.map((e) =>
-        e.conversation === entry.conversation ? { ...e, waiting: true, timedOut: false, answer: undefined } : e
+        e.id === entry.id
+          ? { ...e, currentConversation: newWireId, waiting: true, timedOut: false, answer: undefined }
+          : e
       )
     );
     void window.cth.hiveSend(
-      { to: 'god', act: 'query', subject: 'Quick ask (retry)', body: entry.question, conversation: entry.conversation },
+      { to: 'god', act: 'query', subject: 'Quick ask (retry)', body: entry.question, conversation: newWireId },
       'human'
-    ).then(() => armTimer(entry.conversation)).catch(() => {
+    ).then(() => armTimer(newWireId)).catch(() => {
       setEntries((prev) =>
         prev.map((e) =>
-          e.conversation === entry.conversation
+          e.id === entry.id
             ? { ...e, answer: '(retry failed)', waiting: false, timedOut: false }
             : e
         )
