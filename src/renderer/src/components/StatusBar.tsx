@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useStore } from '@/store/store';
 import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTelemetry';
+import { useActiveShells } from '@/hooks/useShells';
 
 /**
  * Persistent bottom status line: live hive+fleet state at a glance.
@@ -56,6 +57,7 @@ export function StatusBar() {
   const godStatus = useStore((s) => s.godStatus);
   const messageQueues = useStore((s) => s.messageQueues);
   const { samples, rate, breakers } = useFleetTelemetry();
+  const shells = useActiveShells();
 
   const live = useMemo(() => agents.filter((a) => a.ptyId && !a.archived), [agents]);
 
@@ -139,6 +141,14 @@ export function StatusBar() {
           {live.length}
         </strong>
         <span style={{ color: 'var(--cth-ink-500)' }}>active</span>
+      </Chip>
+
+      <Sep />
+      <Chip title="Active shells / open PTY terminals">
+        <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+          {shells === null ? '--' : shells}
+        </span>
+        <span style={{ color: 'var(--cth-ink-500)' }}>sh</span>
       </Chip>
 
       <Sep />
