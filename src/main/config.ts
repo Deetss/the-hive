@@ -446,7 +446,7 @@ const DEFAULTS: HarnessConfig = {
   maxConcurrentWorkers: 4,
   workerIdleTimeoutMinutes: 20,
   integrations: [],
-  defaultWorkerTokenCap: 0, // 0 = unlimited (human directive: NO per-worker cap)
+  defaultWorkerTokenCap: 1_000_000,
   semanticMemory: true,
   embeddingModel: 'minilm',
   missions: [OPS_STANDUP_MISSION],
@@ -482,7 +482,7 @@ const DEFAULTS: HarnessConfig = {
   // dark until an agent's memory crosses one of these (the verify gate is the
   // safety for the LLM step). Thresholds DECIDED by god 2026-06-06.
   reflectEnabled: true,
-  reflectIntervalMs: 1_800_000,
+  reflectIntervalMs: 3_600_000,
   reflectByteTriggerPct: 50,
   reflectSectionTrigger: 50,
   reflectRecentKeep: 12,
