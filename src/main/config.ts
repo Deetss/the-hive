@@ -142,6 +142,30 @@ export const COMPACT_MAINTENANCE_MISSION: ScheduledMission = {
  *  so an interval the user tuned by hand is left exactly where they put it. */
 const LEGACY_COMPACT_MAINTENANCE_INTERVAL_MS = 3_600_000;
 
+/** Usage-cap governor policy. The governor runs on a 60s beat and paces Claude
+ *  usage against the 5h rolling and 7d rolling windows reported by Claude Code
+ *  via the Status hook's rate_limits field. Trigger is TIME-RELATIVE: RED when
+ *  usage is at or ahead of linear pace (usage% >= elapsed%), with an early-window
+ *  floor (don't trip until meaningful usage) and an absolute backstop. */
+export interface GovernorPolicy {
+  /** Master switch. Default true. */
+  enabled?: boolean;
+  /** Points ahead of linear pace that trigger RED (default 0 = exactly at pace).
+   *  A positive value means "allow slightly ahead before tripping". */
+  paceMarginPts?: number;
+  /** YELLOW fires this many points below RED (default 10). */
+  yellowMarginPts?: number;
+  /** Don't trip RED until usage% >= this, even if ahead of pace (default 15).
+   *  Prevents a couple of early requests from tripping right after a reset. */
+  earlyWindowFloorPct?: number;
+  /** Absolute backstop: RED regardless of pace when usage% >= this (default 90). */
+  absoluteBackstopPct?: number;
+  /** Max age of agent rate-limit data to include in aggregation (default 10min). */
+  recentAgentWindowMs?: number;
+  /** Manual override: 'force-green' bypasses computed mode until cleared. */
+  manualOverride?: 'force-green';
+}
+
 /** Circuit-breaker thresholds (Lane A #6.6b). The breaker runs inside the
  *  heartbeat beat, so it only ticks when the heartbeat is enabled. Trip
  *  conditions are behavioral by default; `costCapUsd` is the only $-based one and
@@ -282,6 +306,8 @@ export interface HarnessConfig {
   defaultWorkerTokenCap?: number;
   /** Circuit-breaker thresholds (Lane A #6.6b). Unset = conservative defaults. */
   circuitBreaker?: CircuitBreakerConfig;
+  /** Usage-cap governor: paces Claude usage against 5h+7d rate-limit windows. */
+  governorPolicy?: GovernorPolicy;
   /** Enterprise Knowledge Graph (multimodal context for agents). Default OFF. */
   knowledgeGraph?: KnowledgeGraphConfig;
   /** Fire native desktop notifications on agent lifecycle events (idle finish / waiting for input). */

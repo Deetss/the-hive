@@ -274,6 +274,7 @@ const breaker = new CircuitBreaker(() => {
 // heartbeat mission is disabled (it ships off).
 let fleetTimer: ReturnType<typeof setInterval> | null = null;
 let breakerBeatTimer: ReturnType<typeof setInterval> | null = null;
+let governorBeatTimer: ReturnType<typeof setInterval> | null = null;
 // Cross-device advisory-lock heartbeat: refreshes <hive>/.sync/owner.json so a
 // second device can tell a live hive from a crashed one (see syncLock).
 let lockHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -2571,6 +2572,17 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   const claudeProvider = isClaudeProvider(provider);
   opts.provider = provider;
   if (opts.hive) opts.hive = { ...opts.hive, provider };
+  // ── Usage governor: block new Claude spawns when RED ─────────────────────────
+  // The governor pauses EXISTING agents and blocks new ones. Workers/hive agents
+  // are blocked just like user-initiated spawns (no free pass; the whole hive
+  // should degrade when the window is critical). Ephemeral-worker spawns go through
+  // spawnAgentCore too, so this gate covers all paths.
+  if (claudeProvider && governorMode === 'red') {
+    const cfg0 = readConfig();
+    if ((cfg0.governorPolicy?.enabled ?? true) && cfg0.governorPolicy?.manualOverride !== 'force-green') {
+      return { ok: false, error: 'Usage governor: Claude spawn blocked (rate-limit window critical). Use edgentic or Azure delegate.' };
+    }
+  }
   // ── Missing engine CLI → run its installer visibly (pre-spawn) ───────────────
   // If the agent's engine binary (claude/codex/…) isn't installed, spawning it
   // just dies with "— process exited (code 1) —" and the user has no idea why.
@@ -3129,6 +3141,23 @@ ipcMain.handle('config:get', (): HarnessConfig => {
   return { ...c, accountBadge, billingMode };
 });
 ipcMain.handle('fleet:rateLimitsSnapshot', () => hookServer.allRateLimits());
+// Pull the current governor mode (cold-start / reconnect backfill).
+ipcMain.handle('fleet:governorSnapshot', () => ({
+  mode: governorMode,
+  pausedAgents: [...governorPausedAgents]
+}));
+// Manual override: 'force-green' bypasses pace triggers; null clears the override.
+ipcMain.handle('governor:setOverride', (_evt, override: unknown) => {
+  const v = override === 'force-green' ? 'force-green' : undefined;
+  const cfg = readConfig();
+  writeConfig({ governorPolicy: { ...(cfg.governorPolicy ?? {}), manualOverride: v } });
+  if (v === 'force-green' && governorMode !== 'green') {
+    governorMode = 'green';
+    recoverGovernorAgents();
+    try { liveWebContents()?.send('hive:governorMode', { mode: 'green', override: v }); } catch { /* */ }
+  }
+  return { ok: true };
+});
 ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
   // FIRST RUN: every hive-bound service is started by bootstrapHiveServices(),
   // which runs once at app-ready and early-returns on `!hive.enabled()` — i.e.
@@ -5300,12 +5329,134 @@ function runWorkerWakeBeat(): void {
  *  Guarded (clear-then-set) so a re-bootstrap (changeHome recovery) OR a
  *  powerMonitor resume can't stack duplicate timers — these are setInterval
  *  handles that freeze during true system sleep and must be re-armed on wake. */
+/** Window lengths for the two Claude rate-limit windows. */
+const WINDOW_5H_MS = 5 * 60 * 60 * 1000;
+const WINDOW_7D_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Current governor mode (persisted across beats; IPC-pushed to renderer). */
+let governorMode: 'green' | 'yellow' | 'red' = 'green';
+/** Agent ids paused by the governor (so we can un-pause on recovery). */
+const governorPausedAgents = new Set<string>();
+
+/** One governor beat: evaluate pace vs usage for both rate-limit windows, set the
+ *  floor mode (GREEN/YELLOW/RED), pause/unblock Claude agents, and push the mode
+ *  to the renderer for the StatusBar chip. 60s cadence (always-on). */
+function runGovernorBeat(): void {
+  if (!hive.enabled()) return;
+  const cfg = readConfig();
+  const policy = cfg.governorPolicy ?? {};
+  if (policy.enabled === false) {
+    if (governorMode !== 'green') {
+      governorMode = 'green';
+      try { liveWebContents()?.send('hive:governorMode', { mode: 'green' }); } catch { /* */ }
+    }
+    return;
+  }
+  // Manual override: hold GREEN regardless of pace
+  if (policy.manualOverride === 'force-green') {
+    if (governorMode !== 'green') {
+      governorMode = 'green';
+      recoverGovernorAgents();
+      try { liveWebContents()?.send('hive:governorMode', { mode: 'green', override: 'force-green' }); } catch { /* */ }
+    }
+    return;
+  }
+
+  const paceMargin = policy.paceMarginPts ?? 0;
+  const yellowMargin = policy.yellowMarginPts ?? 10;
+  const earlyFloor = policy.earlyWindowFloorPct ?? 15;
+  const backstop = policy.absoluteBackstopPct ?? 90;
+  const recentMs = policy.recentAgentWindowMs ?? 10 * 60 * 1000;
+
+  // Pull rate limits across all recently-active agents; take worst pct per window.
+  const allLimits = hookServer.allRateLimits();
+  const now = Date.now();
+  let maxFiveHour: { pct: number; resetsAt: string } | null = null;
+  let maxSevenDay: { pct: number; resetsAt: string } | null = null;
+  for (const entry of Object.values(allLimits)) {
+    if (now - entry.ts > recentMs) continue; // stale — skip
+    if (entry.fiveHour && (!maxFiveHour || entry.fiveHour.pct > maxFiveHour.pct)) maxFiveHour = entry.fiveHour;
+    if (entry.sevenDay && (!maxSevenDay || entry.sevenDay.pct > maxSevenDay.pct)) maxSevenDay = entry.sevenDay;
+  }
+  if (!maxFiveHour && !maxSevenDay) return; // no live rate-limit data — stay in current mode
+
+  /** Evaluate one window: returns 'red', 'yellow', or 'green' + the margin. */
+  function evalWindow(pct: number, resetsAt: string, windowMs: number): { level: 'green' | 'yellow' | 'red'; ahead: number; reason: string } {
+    const resetMs = new Date(resetsAt).getTime();
+    const windowStart = resetMs - windowMs;
+    const elapsed = Math.max(0, Math.min(100, ((now - windowStart) / windowMs) * 100));
+    const ahead = pct - elapsed; // positive = ahead of pace, negative = behind
+
+    // Absolute backstop
+    if (pct >= backstop) return { level: 'red', ahead, reason: `usage ${pct.toFixed(1)}% >= backstop ${backstop}%` };
+    // Early-window floor: don't trip until meaningful usage
+    if (pct < earlyFloor) return { level: 'green', ahead, reason: `usage ${pct.toFixed(1)}% < floor ${earlyFloor}%` };
+    // Pace-based
+    if (pct >= elapsed + paceMargin) return { level: 'red', ahead, reason: `usage ${pct.toFixed(1)}% >= pace ${elapsed.toFixed(1)}% (+${paceMargin}pt margin)` };
+    if (pct >= elapsed + paceMargin - yellowMargin) return { level: 'yellow', ahead, reason: `usage ${pct.toFixed(1)}% approaching pace ${elapsed.toFixed(1)}%` };
+    return { level: 'green', ahead, reason: `usage ${pct.toFixed(1)}% < pace ${elapsed.toFixed(1)}%` };
+  }
+
+  const five = maxFiveHour ? evalWindow(maxFiveHour.pct, maxFiveHour.resetsAt, WINDOW_5H_MS) : null;
+  const seven = maxSevenDay ? evalWindow(maxSevenDay.pct, maxSevenDay.resetsAt, WINDOW_7D_MS) : null;
+
+  // Take the more conservative window (highest-severity)
+  const rank = (l: 'green' | 'yellow' | 'red' | undefined) => l === 'red' ? 2 : l === 'yellow' ? 1 : 0;
+  let newMode: 'green' | 'yellow' | 'red' = 'green';
+  let reason = 'all clear';
+  if ((rank(five?.level) >= rank(seven?.level)) && five) { newMode = five.level; reason = `5h: ${five.reason}`; }
+  else if (seven) { newMode = seven.level; reason = `7d: ${seven.reason}`; }
+
+  const prevMode = governorMode;
+  governorMode = newMode;
+
+  if (newMode === 'red' && prevMode !== 'red') {
+    // Escalate to RED: pause active Claude agents + notify god
+    const reg = hive.registry();
+    for (const [id, a] of Object.entries(reg.agents)) {
+      if (a.archived || a.isOvermind) continue;
+      if (!isClaudeProvider(a.provider as AgentProvider ?? 'claude')) continue;
+      if (!ptyForAgent(id)) continue;
+      try { control.pause(id, true); governorPausedAgents.add(id); } catch { /* */ }
+    }
+    hive.send({
+      to: 'god',
+      act: 'inform',
+      subject: 'Usage governor: RED — degrading to budget',
+      body: `Rate-limit pace exceeded (${reason}). Claude agents paused; new Claude spawns blocked. Route new work to delegate/edgentic until the window resets.`
+    }, 'system');
+    console.log('[governor] RED:', reason);
+  } else if (newMode !== 'red' && prevMode === 'red') {
+    recoverGovernorAgents();
+    console.log('[governor] recovered to', newMode);
+  }
+
+  // Push mode + window data to renderer for the StatusBar chip
+  try {
+    liveWebContents()?.send('hive:governorMode', {
+      mode: newMode,
+      reason,
+      fiveHour: maxFiveHour ? { pct: maxFiveHour.pct, resetsAt: maxFiveHour.resetsAt, ...(five ?? {}) } : null,
+      sevenDay: maxSevenDay ? { pct: maxSevenDay.pct, resetsAt: maxSevenDay.resetsAt, ...(seven ?? {}) } : null
+    });
+  } catch { /* window gone */ }
+}
+
+function recoverGovernorAgents(): void {
+  for (const id of governorPausedAgents) {
+    try { control.pause(id, false); } catch { /* */ }
+  }
+  governorPausedAgents.clear();
+}
+
 function armAlwaysOnBeats(): void {
   if (fleetTimer) clearInterval(fleetTimer);
   writeFleetSnapshot();
   fleetTimer = setInterval(writeFleetSnapshot, 8_000);
   if (breakerBeatTimer) clearInterval(breakerBeatTimer);
   breakerBeatTimer = setInterval(() => { try { runBreakerBeat(300_000); } catch (e) { console.error('[breaker beat]', e); } }, 30_000);
+  if (governorBeatTimer) clearInterval(governorBeatTimer);
+  governorBeatTimer = setInterval(() => { try { runGovernorBeat(); } catch (e) { console.error('[governor beat]', e); } }, 60_000);
   if (workerWakeTimer) clearInterval(workerWakeTimer);
   workerWakeTimer = setInterval(() => { try { runWorkerWakeBeat(); } catch (e) { console.error('[worker-wake beat]', e); } }, WORKER_WAKE_POLL_MS);
   runWorkerWakeBeat(); // catch-up on arm — power-resume re-arms and drains the backlog

@@ -1328,6 +1328,20 @@ const api = {
     return () => ipcRenderer.off('hive:rateLimitsUpdate', handler);
   },
 
+  // ─── Usage governor ────────────────────────────────────────────────────────
+  /** Cold-start pull: current governor mode + which agents are paused by it. */
+  governorSnapshot: (): Promise<{ mode: 'green' | 'yellow' | 'red'; pausedAgents: string[] }> =>
+    ipcRenderer.invoke('fleet:governorSnapshot'),
+  /** Set or clear the manual override (null = clear; 'force-green' = bypass). */
+  setGovernorOverride: (override: 'force-green' | null): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('governor:setOverride', override),
+  /** Subscribe to governor mode pushes. Returns unsubscribe fn. */
+  onGovernorMode: (cb: (payload: { mode: 'green' | 'yellow' | 'red'; reason?: string; override?: string; fiveHour?: unknown; sevenDay?: unknown }) => void): (() => void) => {
+    const handler = (_evt: IpcRendererEvent, payload: { mode: 'green' | 'yellow' | 'red'; reason?: string }): void => cb(payload);
+    ipcRenderer.on('hive:governorMode', handler);
+    return () => ipcRenderer.off('hive:governorMode', handler);
+  },
+
   // ─── Triggers: history ledger + approval gate ───────────────────────────────
   /** The whole ledger, newest first (both directions, both sources). */
   listTriggerHistory: (): Promise<TriggerHistoryEntry[]> =>
