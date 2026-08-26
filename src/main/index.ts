@@ -19,6 +19,8 @@ import {
   modelForRole, OPS_STANDUP_MISSION, HEARTBEAT_MISSION, COMPACT_MAINTENANCE_MISSION, type HarnessConfig, type ScheduledMission
 } from './config';
 import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde } from './fs';
+import * as syncLock from './syncLock';
+import * as sync from './sync';
 import { normalizeWeekly, weeklyDelayMs } from '../shared/weeklySchedule';
 import {
   getBranch, getStatus, getLog, getBranches, getAheadBehind, isRepo, getDiff, mainRepoRoot,
@@ -269,6 +271,9 @@ const breaker = new CircuitBreaker(() => {
 // heartbeat mission is disabled (it ships off).
 let fleetTimer: ReturnType<typeof setInterval> | null = null;
 let breakerBeatTimer: ReturnType<typeof setInterval> | null = null;
+// Cross-device advisory-lock heartbeat: refreshes <hive>/.sync/owner.json so a
+// second device can tell a live hive from a crashed one (see syncLock).
+let lockHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
 // Feed the breaker's api_error-storm trip from Oscar's OTel api_error spans —
 // Jim's one breaker input with no on-branch source (telemetry.onApiError seam).
 telemetry.onApiError((agentId) => breaker.recordError(agentId));
@@ -3624,6 +3629,10 @@ function teardownAndQuit(): void {
   try { persist.close(); } catch (e) { console.error('[quit] persist.close:', e); }
   try { hive.stopAllProxyBridges(); } catch (e) { console.error('[quit] stopAllProxyBridges:', e); }
   try { ptyManager.killAll(); } catch (e) { console.error('[quit] killAll:', e); }
+  // Release the cross-device advisory lock, then (best-effort) push the released
+  // hive so the next device sees "free" and no stale-owner TTL wait is needed.
+  try { const r = hive.root(); if (r) syncLock.release(r); } catch (e) { console.error('[quit] sync lock release:', e); }
+  try { const r = hive.root(); if (r) sync.syncOnQuit(r); } catch (e) { console.error('[quit] syncOnQuit:', e); }
   app.quit();
 }
 ipcMain.handle('app:confirmClose', () => {
@@ -4083,6 +4092,36 @@ ipcMain.handle('org:setTrigger', (_evt, arg: unknown) => {
   };
   writeConfig({ orgTrigger: next });
   return next;
+});
+
+// ─── IPC: Device sync (v1 — git-based, one device at a time) ─────────────────
+// All inert until a remote is configured. Secrets never travel (the sync unit is
+// the hive repo only; secrets live in userData, outside it).
+ipcMain.handle('sync:getStatus', () => {
+  const hr = hive.root();
+  return hr ? sync.getStatus(hr) : null;
+});
+ipcMain.handle('sync:setRemote', (_evt, arg: unknown) => {
+  const hr = hive.root();
+  if (!hr) return { ok: false, error: 'hive not configured' };
+  const url = typeof arg === 'string' ? arg : '';
+  const res = sync.setRemote(hr, url);
+  // First push is explicit so a bad URL/credential surfaces now, not at quit.
+  if (res.ok && url.trim()) { try { sync.syncOnQuit(hr); } catch { /* reported via next status */ } }
+  return res;
+});
+ipcMain.handle('sync:now', () => {
+  const hr = hive.root();
+  if (!hr) return { ok: false, error: 'hive not configured' };
+  // Quiesce = pause auto-delivery for every agent during the git op, then restore
+  // the prior paused set (never touches halted/paused flags).
+  const ids = Object.keys(hive.registry().agents ?? {});
+  const prior = ids.filter((id) => control.isAutoDeliveryPaused(id));
+  return sync.syncNow(
+    hr,
+    () => control.replaceAutoDeliveryPauses(ids),
+    () => control.replaceAutoDeliveryPauses(prior)
+  );
 });
 
 // ─── IPC: Triggers — history ledger + the approval gate ─────────────────────
@@ -4860,6 +4899,18 @@ ipcMain.handle('workers:stop', (_evt, workerId: string): { ok: boolean; error?: 
 function bootstrapHiveServices(): void {
   if (!hive.enabled()) return;
   hive.ensureHive();
+  // Claim the cross-device advisory lock (see syncLock). The start-time REFUSAL
+  // gate — when a FOREIGN device holds a live lock — runs in the sync pull path
+  // (syncOnStart) BEFORE this bootstrap; here we simply record this device as the
+  // current owner and warn if a foreign live owner is somehow still present.
+  try {
+    const hr = hive.root();
+    if (hr) {
+      const foreign = syncLock.foreignLiveOwner(hr);
+      if (foreign) console.warn(`[sync-lock] hive appears active on ${foreign.host} (device ${foreign.device}); proceeding but a sync push may conflict`);
+      if (hr) syncLock.acquire(hr, app.getVersion());
+    }
+  } catch (e) { console.error('[hive] sync lock acquire:', e); }
   // Tell the hive what it is running inside, BEFORE anything spawns: the prompt
   // builder reads this, so an agent spawned earlier would never learn it.
   hive.setRuntimeInfo({ version: app.getVersion(), packaged: app.isPackaged, appPath: app.getAppPath() });
@@ -4998,6 +5049,10 @@ function armAlwaysOnBeats(): void {
   if (workerWakeTimer) clearInterval(workerWakeTimer);
   workerWakeTimer = setInterval(() => { try { runWorkerWakeBeat(); } catch (e) { console.error('[worker-wake beat]', e); } }, WORKER_WAKE_POLL_MS);
   runWorkerWakeBeat(); // catch-up on arm — power-resume re-arms and drains the backlog
+  if (lockHeartbeatTimer) clearInterval(lockHeartbeatTimer);
+  lockHeartbeatTimer = setInterval(() => {
+    try { const r = hive.root(); if (r) syncLock.heartbeat(r, app.getVersion()); } catch (e) { console.error('[sync-lock beat]', e); }
+  }, 60_000);
 }
 
 /** Wall-clock instant we last observed the machine suspend or lock, so a resume
@@ -5138,6 +5193,23 @@ app.whenReady().then(() => {
   // never restarts on its own. Falls back to a notify-only releases/latest
   // check where native updating isn't possible (win-portable, dev-ish builds).
   initAutoUpdater(() => liveWebContents());
+  // Device-sync: pull the hive from its remote BEFORE bootstrap (inert unless a
+  // remote is configured). Fast-forward only; a foreign live lock or a non-ff
+  // divergence is surfaced to the renderer. We still bootstrap afterwards so this
+  // path — which is off by default and untested at runtime here — can never brick
+  // the app; the single-instance lock and the advisory-lock warnings remain the
+  // guardrails, and a hard-refuse is a gated follow-up once the UX is validated.
+  try {
+    const hr = hive.root();
+    if (hr) {
+      const res = sync.syncOnStart(hr);
+      if (!res.ok) console.error('[sync] start pull:', res.error);
+      if (res.blocked) {
+        console.warn(`[sync] hive appears active on ${res.blocked.host} (device ${res.blocked.device})`);
+        try { liveWebContents()?.send('sync:foreignActive', res.blocked); } catch { /* window not up yet */ }
+      }
+    }
+  } catch (e) { console.error('[sync] syncOnStart:', e); }
   // Bootstrap the hive (if harnessHome is configured) and start the message router.
   bootstrapHiveServices();
   // Survive sleep/lock. macOS freezes libuv timers during true system sleep, so a

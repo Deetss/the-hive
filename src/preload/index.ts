@@ -1210,6 +1210,17 @@ const api = {
   setOrgTrigger: (cfg: OrgTriggerConfig): Promise<OrgTriggerConfig> =>
     ipcRenderer.invoke('org:setTrigger', cfg),
 
+  // ─── Device sync (v1 — git-based, one device at a time) ─────────────────────
+  /** Current sync status, or null when the hive isn't configured. Inert (remote
+   *  null, ahead/behind 0) until a remote is set. */
+  getSyncStatus: (): Promise<unknown> => ipcRenderer.invoke('sync:getStatus'),
+  /** Set/replace the push-pull remote (empty string clears it, disabling sync).
+   *  On a non-empty URL this also does the first push so a bad URL surfaces now. */
+  setSyncRemote: (url: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('sync:setRemote', url),
+  /** Manual "Sync now": quiesce → commit → ff-only pull → push → resume. */
+  syncNow: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('sync:now'),
+
   // ─── Triggers: history ledger + approval gate ───────────────────────────────
   /** The whole ledger, newest first (both directions, both sources). */
   listTriggerHistory: (): Promise<TriggerHistoryEntry[]> =>
