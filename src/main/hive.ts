@@ -1574,6 +1574,7 @@ export class HiveManager {
   /** Tell the renderer a message was routed, with its resolved recipients, so
    *  the floor can fly an envelope from the sender to each one. Best-effort. */
   private emitMessage(msg: HiveMessage, targets: string[]): void {
+    const needsHuman = msg.to === 'human';
     this.emit?.('hive:message', {
       id: msg.id,
       from: msg.from,
@@ -1583,7 +1584,11 @@ export class HiveManager {
       targets,
       // Coral-tints the floor envelope for a message the agent flagged for the
       // human (now routed to the god proxy). Cosmetic only — no queue behind it.
-      needsHuman: msg.to === 'human'
+      needsHuman,
+      // Quick-ask reply delivery: when an agent sends a message to 'human',
+      // surface its body and conversation id so the Ask panel can match the
+      // reply to the pending question and display it inline.
+      ...(needsHuman ? { body: msg.body, conversation: msg.conversation } : {})
     });
   }
 
