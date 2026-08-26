@@ -387,6 +387,8 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
   const [dispatchTo, setDispatchTo] = useState<string>(''); // '' = Abathur decides
   const [dispatchText, setDispatchText] = useState('');
   const [dispatchMsg, setDispatchMsg] = useState<string | null>(null);
+  const [localSkills, setLocalSkills] = useState<Array<{ name: string; description: string }>>([]);
+  const [suggestIdx, setSuggestIdx] = useState(-1);
   // ── ISSUES section state ──
   const [issueRepo, setIssueRepo] = useState<string>('');
   const [issues, setIssues] = useState<GHIssue[]>([]);
@@ -409,6 +411,13 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
   useEffect(() => {
     if (seed.seq > 0) setDispatchText(seed.text);
   }, [seed.seq, seed.text]);
+
+  // Load local skills once so they appear in the slash-suggest dropdown.
+  useEffect(() => {
+    void window.cth.skillsLocal()
+      .then((skills) => setLocalSkills((skills ?? []).map((s) => ({ name: s.name, description: s.description ?? '' }))))
+      .catch(() => {});
+  }, [agent.cwd]);
 
   // Restart an agent's PTY in place. `resume:true` reattaches its prior Claude
   // conversation (`--resume <sessionId>`, resolved in the main process from the
@@ -683,14 +692,76 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
             ))}
           </Select>
         </div>
-        <textarea
-          value={dispatchText}
-          onChange={(e) => setDispatchText(e.target.value)}
-          onPaste={handleDispatchPaste}
-          rows={2}
-          placeholder="Describe the task… (Abathur decomposes, writes the card, and assigns)"
-          style={textareaStyle}
-        />
+        {(() => {
+          const slashQ = dispatchText.startsWith('/') ? dispatchText.slice(1).toLowerCase() : null;
+          const suggestions = slashQ !== null ? [
+            ...COMMAND_GROUPS.flatMap((g) => g.items)
+              .filter((c) => c.kind === 'slash' && (slashQ === '' || c.cmd.toLowerCase().includes(slashQ)))
+              .map((c) => ({ cmd: c.cmd, hint: c.desc })),
+            ...localSkills
+              .filter((s) => slashQ === '' || s.name.toLowerCase().includes(slashQ) || s.description.toLowerCase().includes(slashQ))
+              .map((s) => ({ cmd: `/${s.name}`, hint: s.description }))
+          ].slice(0, 12) : [];
+          const pickSuggestion = (cmd: string) => {
+            setDispatchText(cmd + ' ');
+            setSuggestIdx(-1);
+          };
+          return (
+            <div style={{ position: 'relative' }}>
+              {suggestions.length > 0 && (
+                <div style={{
+                  position: 'absolute', bottom: '100%', left: 0, right: 0, zIndex: 200,
+                  background: 'var(--cth-paper-100)',
+                  boxShadow: '0 0 0 1.5px var(--cth-ink-700), 0 -3px 0 var(--cth-ink-900)',
+                  maxHeight: 220, overflowY: 'auto'
+                }}>
+                  {suggestions.map(({ cmd, hint }, i) => (
+                    <button
+                      key={cmd}
+                      onMouseDown={(e) => { e.preventDefault(); pickSuggestion(cmd); }}
+                      style={{
+                        width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
+                        padding: '5px 8px',
+                        background: i === suggestIdx ? 'var(--cth-cream-200)' : 'transparent',
+                        display: 'flex', alignItems: 'baseline', gap: 8,
+                        boxShadow: 'inset 0 -1px 0 var(--cth-ink-100)'
+                      }}
+                      onMouseEnter={() => setSuggestIdx(i)}
+                      onMouseLeave={() => setSuggestIdx(-1)}
+                    >
+                      <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 12, color: 'var(--cth-ink-900)', flexShrink: 0 }}>{cmd}</span>
+                      <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{hint}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <textarea
+                value={dispatchText}
+                onChange={(e) => { setDispatchText(e.target.value); setSuggestIdx(-1); }}
+                onPaste={handleDispatchPaste}
+                onKeyDown={(e) => {
+                  if (suggestions.length === 0) return;
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSuggestIdx((i) => Math.min(i + 1, suggestions.length - 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSuggestIdx((i) => Math.max(i - 1, -1));
+                  } else if ((e.key === 'Enter' || e.key === 'Tab') && suggestIdx >= 0) {
+                    e.preventDefault();
+                    pickSuggestion(suggestions[suggestIdx].cmd);
+                  } else if (e.key === 'Escape') {
+                    setSuggestIdx(-1);
+                    setDispatchText('');
+                  }
+                }}
+                rows={2}
+                placeholder="Describe the task… or / for skills & commands"
+                style={textareaStyle}
+              />
+            </div>
+          );
+        })()}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
           <PixelButton variant="primary" size="sm" onClick={dispatch} disabled={!dispatchText.trim()}>
             dispatch
