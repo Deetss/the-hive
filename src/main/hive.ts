@@ -828,7 +828,8 @@ export class HiveManager {
               // for this automated spawn — the flag's documented use ("automation
               // that already vets hook sources"). Without it the hooks silently
               // never fire. Must precede the positional prompt.
-              preArgs.push('--dangerously-bypass-hook-trust');
+              if (!preArgs.includes('--dangerously-bypass-hook-trust'))
+                preArgs.push('--dangerously-bypass-hook-trust');
             }
             else if (desc.shim === 'pi') {
               // Pi (earendil-works) has a rich pi.on(event) lifecycle. We drop a

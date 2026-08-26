@@ -40,8 +40,10 @@ export function buildWorkerLaunch(opts: {
   // (not substring — copilot's flag starts with `-s`) means the request chose.
   const provider = inferAgentProvider(command, opts.requestProvider);
   const autoFlag = opts.autoMode ? autoModeFlagForProvider(provider) : '';
-  if (autoFlag && !tokenizeCommand(command).includes(tokenizeCommand(autoFlag)[0])) {
-    command += ` ${autoFlag}`;
+  if (autoFlag) {
+    const cmdTokens = tokenizeCommand(command);
+    const missingTokens = tokenizeCommand(autoFlag).filter(t => !cmdTokens.includes(t));
+    if (missingTokens.length) command += ' ' + missingTokens.join(' ');
   }
   // god authors `command` as a full command LINE ("claude --model … --permission-mode …"),
   // but the PTY layer takes ONE executable name (resolveCommand) plus argv — the

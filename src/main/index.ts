@@ -2720,6 +2720,15 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
         }
       );
       opts.args = [...(opts.args ?? []), ...inj.args];
+      // Belt-and-suspenders: renderer (buildSpawnCommand) and hive preArgs
+      // (installCodexHooks) both inject --dangerously-bypass-hook-trust. Dedup
+      // pure-boolean flags so codex never sees a flag twice (exit 2 on duplicate).
+      { const seen = new Set<string>();
+        opts.args = opts.args.filter(a => {
+          if (a !== '--dangerously-bypass-hook-trust' && a !== '--dangerously-bypass-approvals-and-sandbox') return true;
+          if (seen.has(a)) return false;
+          seen.add(a); return true;
+        }); }
       seedPrompt = inj.seedPrompt;
       // Point the agent's mempalace CLI at the shared palace + the `kg` CLI at the
       // enterprise knowledge store (both no-ops / empty when their flags are off).
