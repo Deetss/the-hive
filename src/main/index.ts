@@ -15,13 +15,14 @@ import { initAutoUpdater, abortPendingRestart } from './updater';
 import { RealtimeFloorWatcher } from './realtimeFloorWatcher';
 import {
   readConfig, writeConfig, setAgentTokenCap, resetConfig, ensureHarnessHome, ensureClaudePermissionsAccepted,
-  resolveHarnessHome, getRuntimeProfile,
+  resolveHarnessHome, getRuntimeProfile, listLocalDelegates, upsertLocalDelegate, removeLocalDelegate,
   modelForRole, OPS_STANDUP_MISSION, HEARTBEAT_MISSION, COMPACT_MAINTENANCE_MISSION, type HarnessConfig, type ScheduledMission
 } from './config';
 import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde } from './fs';
 import * as syncLock from './syncLock';
 import * as sync from './sync';
 import * as profiles from './profiles';
+import { ldaRunner } from './lda';
 import { normalizeWeekly, weeklyDelayMs } from '../shared/weeklySchedule';
 import {
   getBranch, getStatus, getLog, getBranches, getAheadBehind, isRepo, getDiff, mainRepoRoot,
@@ -4190,6 +4191,24 @@ ipcMain.handle('sync:joinHive', (_evt, arg: unknown) => {
 // Let the renderer's join form reuse the EXACT same URL guard the backend enforces
 // (no duplicated regex to drift), for immediate feedback before a submit.
 ipcMain.handle('sync:isSafeRemote', (_evt, arg: unknown) => sync.isSafeGitUrl(typeof arg === 'string' ? arg : ''));
+
+// ─── IPC: Local delegate agents ──────────────────────────────────────────────
+ipcMain.handle('lda:list', () => listLocalDelegates());
+ipcMain.handle('lda:upsert', (_evt, arg: unknown) => upsertLocalDelegate(arg));
+ipcMain.handle('lda:remove', (_evt, arg: unknown) => removeLocalDelegate(arg));
+ipcMain.handle('lda:health', (_evt, arg: unknown) => ldaRunner.health(typeof arg === 'string' ? arg : ''));
+ipcMain.handle('lda:invoke', async (_evt, arg: unknown) => {
+  const req = arg as Parameters<typeof ldaRunner.invoke>[0];
+  const result = await ldaRunner.invoke(req);
+  hive.appendLog({
+    kind: 'lda-call',
+    delegateId: req.delegateId,
+    capability: req.args.capability,
+    ok: result.ok,
+    durationMs: result.durationMs
+  });
+  return result;
+});
 
 // ─── IPC: Triggers — history ledger + the approval gate ─────────────────────
 ipcMain.handle('triggerHistory:list', () => listTriggerHistory());

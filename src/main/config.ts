@@ -12,6 +12,7 @@ import {
 import { defaultMcpDefaults } from '../shared/mcpCatalog';
 import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
 import { type RuntimeProfile, normalizeRuntimeProfile, normalizeRuntimeProfiles } from '../shared/runtimeProfile';
+import type { LocalDelegateConfig } from '../shared/localDelegate';
 import { expandTilde, normalizeHiveHome } from './fs';
 import type { IntegrationRecord } from '../shared/integrations';
 import {
@@ -335,6 +336,10 @@ export interface HarnessConfig {
    *  METADATA only: a profile's `claudeConfigDir` is a PATH pointer to a login dir
    *  outside the synced hive repo — no credential is ever stored here. Default []. */
   runtimeProfiles?: RuntimeProfile[];
+  /** User-configured local delegate agents — ephemeral per-request capability boxes
+   *  (e.g. a Jetson/DGX running a local model) that the orchestrator can route bulk
+   *  read/summarize/draft work to natively. Phase 1: wsl-exec transport only. */
+  localDelegates?: LocalDelegateConfig[];
   /** Runtime-derived WORK / PERSONAL badge from CLAUDE_CONFIG_DIR basename. Not persisted. */
   accountBadge?: 'WORK' | 'PERSONAL';
   /** Runtime-derived billing mode. 'api' when ANTHROPIC_API_KEY is set (BYOK / direct API
@@ -449,6 +454,7 @@ const DEFAULTS: HarnessConfig = {
   // (incl. god) default to Fable 5. A per-agent model choice still overrides it.
   defaultModel: 'claude-fable-5',
   runtimeProfiles: [],
+  localDelegates: [],
   // Seeded from the MCP catalog so the consent defaults never drift from it
   // (safe-readonly ON, write/secret OFF).
   mcpDefaults: defaultMcpDefaults(),
@@ -768,6 +774,49 @@ export function removeRuntimeProfile(id: unknown): HarnessConfig {
   const current = readConfig();
   const list = normalizeRuntimeProfiles(current.runtimeProfiles).filter((p) => p.id !== id.trim());
   return persistConfig({ ...current, runtimeProfiles: list });
+}
+
+// — Local delegate agents —
+
+export function listLocalDelegates(): LocalDelegateConfig[] {
+  return (readConfig().localDelegates ?? []) as LocalDelegateConfig[];
+}
+
+const SAFE_SLUG = /^[A-Za-z0-9._-]+$/;
+const SAFE_PATH = /^\/[A-Za-z0-9._\-/~]+$/;
+const SHELL_UNSAFE = /["'`$;|&\r\n\s]/;
+const VALID_CAPS = new Set(['find', 'map', 'run', 'check', 'task', 'loop']);
+
+export function upsertLocalDelegate(cfg: unknown): HarnessConfig {
+  if (!cfg || typeof cfg !== 'object') throw new Error('invalid delegate config');
+  const d = cfg as LocalDelegateConfig;
+  if (typeof d.id !== 'string' || !d.id.trim()) throw new Error('delegate id required');
+  if (typeof d.label !== 'string' || !d.label.trim()) throw new Error('delegate label required');
+  if (typeof d.enabled !== 'boolean') throw new Error('delegate enabled must be boolean');
+  if (!Array.isArray(d.capabilities) || d.capabilities.length === 0) {
+    throw new Error('delegate capabilities must be a non-empty array');
+  }
+  for (const cap of d.capabilities) {
+    if (!VALID_CAPS.has(cap)) throw new Error(`unknown capability: ${cap}`);
+  }
+  if (!d.transport || typeof d.transport !== 'object') throw new Error('delegate transport required');
+  if (d.transport.kind !== 'wsl-exec') throw new Error('unsupported transport kind (Phase 1: wsl-exec only)');
+  const { distro, scriptPrefix } = d.transport;
+  if (typeof distro !== 'string' || !SAFE_SLUG.test(distro)) {
+    throw new Error('distro must match [A-Za-z0-9._-] with no spaces or special characters');
+  }
+  if (typeof scriptPrefix !== 'string' || !SAFE_PATH.test(scriptPrefix) || SHELL_UNSAFE.test(scriptPrefix)) {
+    throw new Error('scriptPrefix must be an absolute path with no shell metacharacters');
+  }
+  const current = readConfig();
+  const list = listLocalDelegates().filter((e) => e.id !== d.id.trim());
+  return persistConfig({ ...current, localDelegates: [...list, { ...d, id: d.id.trim() }] });
+}
+
+export function removeLocalDelegate(id: unknown): HarnessConfig {
+  if (typeof id !== 'string' || !id.trim()) throw new Error('invalid delegate id');
+  const current = readConfig();
+  return persistConfig({ ...current, localDelegates: listLocalDelegates().filter((e) => e.id !== (id as string).trim()) });
 }
 
 /** Wipe the persisted config back to first-run defaults so the app boots into
