@@ -146,10 +146,14 @@ export interface AgentDirectory {
 /** One question→answer exchange with the human, recorded ON the task card. */
 export interface HumanQA {
   q: string;
+  kind?: 'question' | 'action' | 'review';
   a?: string;
   askedAt?: string;
   answeredAt?: string;
   dismissedAt?: string;
+  doneAt?: string;
+  docPath?: string;
+  approved?: boolean;
 }
 
 /** A card on the task kanban, persisted to hive/tasks.json. */

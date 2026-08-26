@@ -293,6 +293,9 @@ interface State {
    *  humanMessages.filter(!resolved).length on top of this via selector. */
   askMePending: number;
   setAskMePending: (n: number) => void;
+  /** Count of pending 'Assigned to me' items (unanswered humanQA across all tasks). */
+  assignedPending: number;
+  setAssignedPending: (n: number) => void;
   /** Conversation IDs the human sent as Quick-Ask queries. Used to exclude
    *  god's replies from the Ask Me direct-message stream.
    *  TODO: evict stale ids (e.g. cap at 200 or clear on session reset) — fine at
@@ -910,6 +913,8 @@ export const useStore = create<State>((set, get) => ({
   clearActivityUnread: () => set({ activityUnread: 0 }),
   askMePending: 0,
   setAskMePending: (n) => set({ askMePending: n }),
+  assignedPending: 0,
+  setAssignedPending: (n) => set({ assignedPending: n }),
   quickAskConversations: [],
   trackQuickAskConversation: (id) => set((s) => ({
     quickAskConversations: s.quickAskConversations.includes(id)
