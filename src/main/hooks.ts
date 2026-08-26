@@ -26,10 +26,11 @@ interface HookPayload {
   transcript_path?: string;
   /** Status-line payloads only: the session's live context accounting. */
   context_window?: { total_input_tokens?: number; context_window_size?: number };
-  /** Status-line payloads only: per-account rate-limit windows from CC. */
+  /** Status-line payloads only: per-account rate-limit windows from CC.
+   *  CC sends resets_at as a Unix epoch SECONDS integer, not an ISO string. */
   rate_limits?: {
-    five_hour?: { used_percentage?: number; resets_at?: string };
-    seven_day?:  { used_percentage?: number; resets_at?: string };
+    five_hour?: { used_percentage?: number; resets_at?: number | string };
+    seven_day?:  { used_percentage?: number; resets_at?: number | string };
   };
   cwd?: string;
   tool_name?: string;
@@ -170,12 +171,23 @@ export class HookServer {
         });
       }
       // Persist rate_limits for the 5h/7d pace meters in the status bar.
+      // CC sends resets_at as a Unix epoch SECONDS integer (not an ISO string);
+      // convert at the boundary so downstream renderer code stays string-typed.
       const rl = p.rate_limits;
       if (agentId && rl) {
-        const fiveHour = typeof rl.five_hour?.used_percentage === 'number' && typeof rl.five_hour?.resets_at === 'string'
-          ? { pct: rl.five_hour.used_percentage, resetsAt: rl.five_hour.resets_at } : null;
-        const sevenDay = typeof rl.seven_day?.used_percentage === 'number' && typeof rl.seven_day?.resets_at === 'string'
-          ? { pct: rl.seven_day.used_percentage, resetsAt: rl.seven_day.resets_at } : null;
+        const toIso = (v: unknown): string | null => {
+          if (typeof v === 'string' && v) return v;
+          if (typeof v === 'number' && v > 0) return new Date(v * 1000).toISOString();
+          return null;
+        };
+        const fhRaw = rl.five_hour;
+        const fiveHour = fhRaw && typeof fhRaw.used_percentage === 'number'
+          ? (() => { const iso = toIso(fhRaw.resets_at); return iso ? { pct: fhRaw.used_percentage as number, resetsAt: iso } : null; })()
+          : null;
+        const sdRaw = rl.seven_day;
+        const sevenDay = sdRaw && typeof sdRaw.used_percentage === 'number'
+          ? (() => { const iso = toIso(sdRaw.resets_at); return iso ? { pct: sdRaw.used_percentage as number, resetsAt: iso } : null; })()
+          : null;
         const entry = { fiveHour, sevenDay, ts: Date.now() };
         this.rateLimitsById.set(agentId, entry);
         this.getWebContents()?.send('hive:rateLimitsUpdate', { agentId, ...entry });
