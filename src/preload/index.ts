@@ -184,6 +184,11 @@ export interface HiveRouteEvent {
   subject: string;
   targets: string[];
   needsHuman: boolean;
+  /** Present when needsHuman is true — the message body, so the Ask panel can
+   *  display god's reply inline without a separate fetch. */
+  body?: string;
+  /** Present when needsHuman is true — matches the reply to the pending question. */
+  conversation?: string;
 }
 
 /** A direct hive message addressed to a provider that cannot drain hive inbox.
