@@ -51,6 +51,8 @@ type McpDefaultsMap = { [id: string]: { enabled: boolean } } | undefined;
 
 export type MessageAct = 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done';
 
+export type ActivityBadge = 'INFO' | 'PASS' | 'SHIPPED' | 'FINDING' | 'FAIL' | 'BLOCK';
+
 export interface HiveMessage {
   id: string;
   conversation: string;
@@ -64,6 +66,14 @@ export interface HiveMessage {
   requires_reply: boolean;
   needs_human: boolean;
   created_at: string;
+  /** When true, the message is surfaced in the Activity feed (parallel to
+   *  needs_human for the Ask Me tab). God and agents set this on updates they
+   *  want Dylan to see (review verdicts, build outcomes, findings). */
+  surface_activity?: boolean;
+  /** Short friendly headline for the Activity feed entry. Defaults to subject. */
+  activity_headline?: string;
+  /** Badge type for the Activity feed chip. */
+  activity_badge?: ActivityBadge;
 }
 
 /** One hive message reshaped for the voice read-layer (`hive:messages`): the
@@ -1575,6 +1585,7 @@ export class HiveManager {
    *  the floor can fly an envelope from the sender to each one. Best-effort. */
   private emitMessage(msg: HiveMessage, targets: string[]): void {
     const needsHuman = msg.to === 'human';
+    const surfaceActivity = msg.surface_activity === true;
     this.emit?.('hive:message', {
       id: msg.id,
       from: msg.from,
@@ -1588,8 +1599,19 @@ export class HiveManager {
       // Quick-ask reply delivery: when an agent sends a message to 'human',
       // surface its body and conversation id so the Ask panel can match the
       // reply to the pending question and display it inline.
-      ...(needsHuman ? { body: msg.body, conversation: msg.conversation } : {})
+      ...(needsHuman ? { body: msg.body, conversation: msg.conversation } : {}),
+      // Activity feed: forward tagging fields so the renderer can surface the
+      // update in the Activity tab without polling the raw event log.
+      ...(surfaceActivity ? {
+        surfaceActivity: true,
+        activityHeadline: msg.activity_headline,
+        activityBadge: msg.activity_badge,
+        body: msg.body,
+        conversation: msg.conversation
+      } : {})
     });
+    // FAIL/BLOCK toast is handled by index.ts's setRoutedObserver where
+    // readConfig().notifications can be checked. hive.ts has no config import.
   }
 
   /** Non-Claude providers cannot drain hive inbox; hand direct mail to the

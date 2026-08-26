@@ -3695,7 +3695,24 @@ const closingTime = new ClosingTimeController(
   // at their next hook boundary instead of waiting for a Stop.
   control
 );
-hive.setRoutedObserver((msg, targets) => closingTime.onRouted(msg, targets));
+hive.setRoutedObserver((msg, targets) => {
+  closingTime.onRouted(msg, targets);
+  // Electron toast for FAIL/BLOCK activity updates, gated on the notifications
+  // setting (same guard as breakerToast above). Lives here, not in hive.ts,
+  // because hive.ts intentionally has no config import.
+  if (msg.surface_activity && (msg.activity_badge === 'FAIL' || msg.activity_badge === 'BLOCK')) {
+    if (readConfig().notifications) {
+      try {
+        if (Notification.isSupported()) {
+          new Notification({
+            title: msg.activity_headline ?? msg.subject,
+            body: msg.body.slice(0, 200)
+          }).show();
+        }
+      } catch { /* notification unsupported */ }
+    }
+  }
+});
 ipcMain.handle('app:startClosingTime', () => closingTime.start());
 ipcMain.handle('app:cancelClosingTime', () => closingTime.cancel());
 

@@ -189,10 +189,9 @@ export interface HiveRouteEvent {
   body?: string;
   /** Present when needsHuman is true — matches the reply to the pending question. */
   conversation?: string;
-  /** When true, surface this message in the Activity feed. Set by the router
-   *  when the message has surface_activity=true (set by god/agents). */
+  /** When true, surface this message in the Activity feed (parallel to needsHuman). */
   surfaceActivity?: boolean;
-  /** Short friendly headline for the Activity feed entry. */
+  /** Short friendly headline for the Activity feed entry; defaults to subject. */
   activityHeadline?: string;
   /** Badge type for the Activity feed chip. */
   activityBadge?: 'INFO' | 'PASS' | 'SHIPPED' | 'FINDING' | 'FAIL' | 'BLOCK';

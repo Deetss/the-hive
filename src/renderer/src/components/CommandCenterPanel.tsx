@@ -80,11 +80,12 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
 
 type TabDef = { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] };
 
-function AskMeTabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean; accent: string; onClick: () => void }) {
+function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean; accent: string; onClick: () => void }) {
   const taskPending = useStore((s) => s.askMePending);
   const msgPending = useStore((s) => s.humanMessages.filter((m) => !m.resolved).length);
-  const pending = taskPending + msgPending;
-  const showBadge = t.key === 'human' && pending > 0 && !active;
+  const activityUnread = useStore((s) => s.activityUnread);
+  const badge = t.key === 'human' ? taskPending + msgPending : t.key === 'activity' ? activityUnread : 0;
+  const showBadge = badge > 0 && !active;
   return (
     <button
       onClick={onClick}
@@ -110,7 +111,7 @@ function AskMeTabButton({ t, active, accent, onClick }: { t: TabDef; active: boo
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '0 3px', boxSizing: 'border-box', lineHeight: 1
         }}>
-          {pending > 9 ? '9+' : pending}
+          {badge > 9 ? '9+' : badge}
         </span>
       )}
     </button>
@@ -299,7 +300,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
         borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
       }}>
         {visibleTabs.map((t) => (
-          <AskMeTabButton key={t.key} t={t} active={tab === t.key} accent={agent.accent} onClick={() => setTab(t.key)} />
+          <TabButton key={t.key} t={t} active={tab === t.key} accent={agent.accent} onClick={() => setTab(t.key)} />
         ))}
       </div>
 
@@ -1250,51 +1251,112 @@ function TokenLimitEditor({ value, onSet }: { value?: number; onSet: (tokens: nu
   );
 }
 
-// ─── Activity tab — hive event log + board ───────────────────────────────────
+// ─── Activity feed — friendly insights + raw log ─────────────────────────────
+
+import { type ActivityEntry } from '@/store/store';
+
+const BADGE_COLORS: Record<ActivityEntry['badge'], string> = {
+  INFO: 'var(--cth-sky)',
+  PASS: 'var(--cth-mint)',
+  SHIPPED: 'var(--cth-mint)',
+  FINDING: 'var(--cth-lemon)',
+  FAIL: 'var(--cth-coral)',
+  BLOCK: 'var(--cth-coral)'
+};
 
 interface LogEntry { ts?: number; kind?: string; [k: string]: unknown }
 
 function ActivityTab() {
+  // Feed entries live in the store (populated by App.tsx's always-mounted
+  // subscription) so they survive tab switches and accumulate off-tab.
+  const feed = useStore((s) => s.activityFeed);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [showRaw, setShowRaw] = useState(false);
   const [log, setLog] = useState<LogEntry[]>([]);
-  const [board, setBoard] = useState('');
+  const clearActivityUnread = useStore((s) => s.clearActivityUnread);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Clear unread badge when this tab mounts.
+  useEffect(() => { clearActivityUnread(); }, [clearActivityUnread]);
+
+  // Raw log (lazy — only polls when the toggle is open).
   useEffect(() => {
+    if (!showRaw) return;
     const refresh = async () => {
       try { setLog((await window.cth.hiveLog(60)) as LogEntry[]); } catch { /* noop */ }
-      try { setBoard(await window.cth.hiveBoard()); } catch { /* noop */ }
     };
     refresh();
     timer.current = setInterval(refresh, 3000);
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, []);
+  }, [showRaw]);
 
-  const fmt = (e: LogEntry): string => {
+  const fmtRaw = (e: LogEntry): string => {
     switch (e.kind) {
-      case 'spawn': return `spawned ${e.name ?? e.agentId}`;
-      case 'message': return `${e.from} → ${e.to}: ${e.subject || e.act}`;
-      case 'drain': return `${e.agentId} drained ${e.count} msg(s)`;
-      case 'escalate': return `escalated to human: ${e.subject ?? ''}`;
+      case 'spawn': return `spawned ${String(e.name ?? e.agentId ?? '')}`;
+      case 'message': return `${String(e.from ?? '')} → ${String(e.to ?? '')}: ${String(e.subject || e.act || '')}`;
+      case 'drain': return `${String(e.agentId ?? '')} drained ${String(e.count ?? '')} msg(s)`;
+      case 'escalate': return `escalated to human: ${String(e.subject ?? '')}`;
       case 'approval': return `approval ${e.approve ? 'granted' : 'denied'}`;
       default: return JSON.stringify(e);
     }
   };
 
+  const reversedFeed = [...feed].reverse();
+
   return (
     <Scroll>
-      <Section title="ACTIVITY">
-        {log.length === 0 && <Muted>Nothing yet.</Muted>}
-        {[...log].reverse().map((e, i) => (
-          <div key={i} style={{ fontSize: 12, color: 'var(--cth-ink-700)', padding: '2px 0', display: 'flex', gap: 6 }}>
-            <span style={{ color: 'var(--cth-ink-300)', flexShrink: 0 }}>{e.kind ?? '·'}</span>
-            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fmt(e)}</span>
-          </div>
-        ))}
+      <Section title="UPDATES">
+        {reversedFeed.length === 0 && (
+          <Muted>No tagged updates yet. God and agents surface insights here when they flag a message with surface_activity=true.</Muted>
+        )}
+        {reversedFeed.map((entry) => {
+          const expanded = expandedIds.has(entry.id);
+          return (
+            <div key={entry.id} style={{ marginBottom: 8, background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', cursor: 'pointer' }}
+                onClick={() => setExpandedIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id);
+                  return next;
+                })}>
+                <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, padding: '1px 4px', background: BADGE_COLORS[entry.badge], color: 'var(--cth-ink-900)', flexShrink: 0 }}>
+                  {entry.badge}
+                </span>
+                <span style={{ flex: 1, fontFamily: 'var(--cth-font-mono)', fontSize: 13, fontWeight: 600, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {entry.headline}
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--cth-ink-300)', flexShrink: 0 }}>
+                  {entry.from} · {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              {expanded && (
+                <div style={{ padding: '0 8px 8px' }}>
+                  <div style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 12, color: 'var(--cth-ink-700)', whiteSpace: 'pre-wrap', lineHeight: '17px' }}>
+                    {entry.body}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </Section>
 
-      <Section title="BOARD">
-        <Pre>{board || 'The board is empty.'}</Pre>
-      </Section>
+      <div style={{ padding: '0 8px 4px' }}>
+        <button onClick={() => setShowRaw((v) => !v)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-400)', padding: 0 }}>
+          {showRaw ? '▼ RAW LOG' : '▶ RAW LOG'}
+        </button>
+      </div>
+      {showRaw && (
+        <Section title="RAW EVENT LOG">
+          {log.length === 0 && <Muted>Nothing yet.</Muted>}
+          {[...log].reverse().map((e, i) => (
+            <div key={i} style={{ fontSize: 11, color: 'var(--cth-ink-500)', padding: '1px 0', display: 'flex', gap: 6 }}>
+              <span style={{ color: 'var(--cth-ink-300)', flexShrink: 0 }}>{String(e.kind ?? '·')}</span>
+              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fmtRaw(e)}</span>
+            </div>
+          ))}
+        </Section>
+      )}
     </Scroll>
   );
 }
