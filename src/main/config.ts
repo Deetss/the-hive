@@ -785,7 +785,29 @@ export function listLocalDelegates(): LocalDelegateConfig[] {
 const SAFE_SLUG = /^[A-Za-z0-9._-]+$/;
 const SAFE_PATH = /^\/[A-Za-z0-9._\-/~]+$/;
 const SHELL_UNSAFE = /["'`$;|&\r\n\s]/;
-const VALID_CAPS = new Set(['find', 'map', 'run', 'check', 'task', 'loop']);
+const VALID_CAPS = new Set<string>(['find', 'map', 'run', 'check', 'task', 'loop']);
+const VALID_API_CAPS = new Set<string>(['complete', 'embed']);
+const VALID_PROVIDER_KINDS = new Set<string>(['edgentic-script', 'openai-compat', 'anthropic-compat', 'ollama']);
+
+/** SSRF guard: reject private/cloud-metadata IP ranges unless allowPrivate=true.
+ *  Only the host is checked; port and path are not evaluated here. */
+function isSafeHttpUrl(urlStr: string, allowPrivate = false): boolean {
+  let u: URL;
+  try { u = new URL(urlStr); } catch { return false; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  if (SHELL_UNSAFE.test(urlStr)) return false;
+  if (allowPrivate) return true;
+  const host = u.hostname.toLowerCase();
+  // Cloud metadata / link-local / loopback — always blocked even with allowPrivate=false
+  if (/^169\.254\./.test(host)) return false;
+  if (/^fd[0-9a-f]{2}:/i.test(host)) return false;
+  // Private ranges — blocked unless allowPrivate
+  if (/^10\./.test(host)) return false;
+  if (/^192\.168\./.test(host)) return false;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+  if (host === '::1' || host === 'localhost') return false;
+  return true;
+}
 
 export function upsertLocalDelegate(cfg: unknown): HarnessConfig {
   if (!cfg || typeof cfg !== 'object') throw new Error('invalid delegate config');
@@ -793,21 +815,64 @@ export function upsertLocalDelegate(cfg: unknown): HarnessConfig {
   if (typeof d.id !== 'string' || !d.id.trim()) throw new Error('delegate id required');
   if (typeof d.label !== 'string' || !d.label.trim()) throw new Error('delegate label required');
   if (typeof d.enabled !== 'boolean') throw new Error('delegate enabled must be boolean');
-  if (!Array.isArray(d.capabilities) || d.capabilities.length === 0) {
-    throw new Error('delegate capabilities must be a non-empty array');
-  }
+  if (!VALID_PROVIDER_KINDS.has(d.providerKind)) throw new Error(`unknown providerKind: ${d.providerKind}`);
+
+  // capabilities may be empty for http-only delegates; apiCapabilities may be empty for script-only
+  if (!Array.isArray(d.capabilities)) throw new Error('capabilities must be an array');
   for (const cap of d.capabilities) {
     if (!VALID_CAPS.has(cap)) throw new Error(`unknown capability: ${cap}`);
   }
+  if (!Array.isArray(d.apiCapabilities)) throw new Error('apiCapabilities must be an array');
+  for (const cap of d.apiCapabilities) {
+    if (!VALID_API_CAPS.has(cap)) throw new Error(`unknown apiCapability: ${cap}`);
+  }
+  if (d.capabilities.length === 0 && d.apiCapabilities.length === 0) {
+    throw new Error('at least one capability or apiCapability required');
+  }
+
   if (!d.transport || typeof d.transport !== 'object') throw new Error('delegate transport required');
-  if (d.transport.kind !== 'wsl-exec') throw new Error('unsupported transport kind (Phase 1: wsl-exec only)');
-  const { distro, scriptPrefix } = d.transport;
-  if (typeof distro !== 'string' || !SAFE_SLUG.test(distro)) {
-    throw new Error('distro must match [A-Za-z0-9._-] with no spaces or special characters');
+  const { kind } = d.transport;
+
+  if (kind === 'wsl-exec') {
+    const { distro, scriptPrefix } = d.transport as { distro: string; scriptPrefix: string };
+    if (typeof distro !== 'string' || !SAFE_SLUG.test(distro)) {
+      throw new Error('distro must match [A-Za-z0-9._-] with no spaces or special characters');
+    }
+    if (typeof scriptPrefix !== 'string' || !SAFE_PATH.test(scriptPrefix) || SHELL_UNSAFE.test(scriptPrefix)) {
+      throw new Error('scriptPrefix must be an absolute path with no shell metacharacters');
+    }
+  } else if (kind === 'ssh') {
+    const t = d.transport as { host: string; port: number; user: string; identityFile?: string; scriptPrefix: string };
+    if (typeof t.host !== 'string' || !SAFE_SLUG.test(t.host)) {
+      throw new Error('ssh host must match [A-Za-z0-9._-]');
+    }
+    if (typeof t.user !== 'string' || !SAFE_SLUG.test(t.user)) {
+      throw new Error('ssh user must match [A-Za-z0-9._-]');
+    }
+    const port = Number(t.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('ssh port must be 1-65535');
+    if (t.identityFile !== undefined) {
+      if (typeof t.identityFile !== 'string' || !SAFE_PATH.test(t.identityFile) || SHELL_UNSAFE.test(t.identityFile)) {
+        throw new Error('identityFile must be an absolute path with no shell metacharacters');
+      }
+    }
+    if (typeof t.scriptPrefix !== 'string' || !SAFE_PATH.test(t.scriptPrefix) || SHELL_UNSAFE.test(t.scriptPrefix)) {
+      throw new Error('scriptPrefix must be an absolute path with no shell metacharacters');
+    }
+  } else if (kind === 'http') {
+    const t = d.transport as { baseUrl: string; allowPrivate?: boolean };
+    const allowPrivate = t.allowPrivate === true;
+    if (typeof t.baseUrl !== 'string' || !isSafeHttpUrl(t.baseUrl, allowPrivate)) {
+      throw new Error(
+        allowPrivate
+          ? 'baseUrl must be a valid http/https URL with no shell metacharacters'
+          : 'baseUrl must be a valid public http/https URL (set allowPrivate=true for LAN addresses)'
+      );
+    }
+  } else {
+    throw new Error(`unsupported transport kind: ${kind}`);
   }
-  if (typeof scriptPrefix !== 'string' || !SAFE_PATH.test(scriptPrefix) || SHELL_UNSAFE.test(scriptPrefix)) {
-    throw new Error('scriptPrefix must be an absolute path with no shell metacharacters');
-  }
+
   const current = readConfig();
   const list = listLocalDelegates().filter((e) => e.id !== d.id.trim());
   return persistConfig({ ...current, localDelegates: [...list, { ...d, id: d.id.trim() }] });
