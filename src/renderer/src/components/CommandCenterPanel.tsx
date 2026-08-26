@@ -19,7 +19,7 @@ import { MemoryGraphPanel } from './MemoryGraphPanel';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
 import { COMMAND_GROUPS } from '@shared/claudeCommands';
 import { roleForHiveSpawn } from '@shared/agentRole';
-import { useStore, triggerHistoryVisible, type Agent } from '@/store/store';
+import { useStore, triggerHistoryVisible, type Agent, type HumanMessage } from '@/store/store';
 import { usePtyParser } from '@/hooks/usePtyParser';
 import {
   buildSpawnCommand,
@@ -121,6 +121,25 @@ function AskMeTabButton({ t, active, accent, onClick }: { t: TabDef; active: boo
  *  cols/rows and corrupt the display. */
 export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent; fullscreen?: boolean }) {
   const [tab, setTab] = useState<CCTab>('terminal');
+
+  // Always-on hive message subscription — must live here (not in AskMeTab) so
+  // messages are captured even when the ask-me tab is not active (Fix #2).
+  // Fix #1: only surface act:'query'/'request' — not 'inform' replies that belong
+  // to QuickAskPanel's own god-replies-to-human stream.
+  const addHumanMessage = useStore((s) => s.addHumanMessage);
+  useEffect(() => {
+    if (!window.cth?.onHiveMessage) return;
+    return window.cth.onHiveMessage((e) => {
+      if (!e.needsHuman || !e.body || !e.id) return;
+      if (e.act !== 'query' && e.act !== 'request') return; // skip inform replies (QuickAskPanel handles those)
+      addHumanMessage({
+        id: e.id, from: e.from, subject: e.subject ?? '',
+        body: e.body!, act: e.act,
+        arrivedAt: Date.now(), resolved: false, replyDraft: ''
+      } satisfies HumanMessage);
+    });
+  }, [addHumanMessage]);
+
   // The trigger-history ledger has nothing to say until an outside party can
   // reach us, so its tab appears only once an org key or a webhook exists. This
   // is the first config-gated tab in the panel: TABS stays the canonical order
@@ -560,13 +579,18 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
     const hasImage = Array.from(e.clipboardData.items).some((item) => item.type.startsWith('image/'));
     if (!hasImage) return;
     e.preventDefault();
+    // Capture caret position before the async save — the textarea DOM element
+    // holds the live positions; stale closure on dispatchText would overwrite
+    // any keystrokes typed while saveClipboardImage() is in flight.
+    const ta = e.currentTarget;
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
     const res = await window.cth.saveClipboardImage();
     if (res.ok) {
-      const ta = e.currentTarget;
-      const start = ta.selectionStart ?? dispatchText.length;
-      const end = ta.selectionEnd ?? dispatchText.length;
       const ref = `[image: ${res.file.path}]`;
-      setDispatchText(dispatchText.slice(0, start) + ref + dispatchText.slice(end));
+      setDispatchText((prev) => prev.slice(0, start) + ref + prev.slice(end));
+    } else {
+      setDispatchText((prev) => prev + ` [image paste failed: ${res.error}]`);
     }
   };
 

@@ -4,19 +4,6 @@ import { PixelBadge } from './PixelBadge';
 import { useStore } from '@/store/store';
 import { type HiveTask, type HumanQA, openQuestion, waitsOnHuman } from './TasksKanban';
 
-/** A direct message from the hive addressed to the human (not via a task card). */
-interface HumanMessage {
-  id: string;
-  from: string;
-  subject: string;
-  body: string;
-  act: string;
-  arrivedAt: number;
-  /** true once the human acknowledges/replies */
-  resolved: boolean;
-  replyDraft: string;
-}
-
 /**
  * ASK ME — first-class human feedback through the task system.
  *
@@ -59,7 +46,10 @@ export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
   const [tasks, setTasks] = useState<HiveTask[]>(_cachedAskTasks);
-  const [messages, setMessages] = useState<HumanMessage[]>([]);
+  // Direct messages live in the store — survive unmount/tab switches.
+  const messages = useStore((s) => s.humanMessages);
+  const resolveHumanMessage = useStore((s) => s.resolveHumanMessage);
+  const updateHumanMessageDraft = useStore((s) => s.updateHumanMessageDraft);
   // Drafts live in the STORE (keyed by task id) — switching tabs unmounts this
   // view, and a half-typed answer must survive the round trip.
   const drafts = useStore((s) => s.answerDrafts);
@@ -83,30 +73,7 @@ export function AskMeTab() {
     return () => { if (timer.current) clearInterval(timer.current); };
   }, [refresh]);
 
-  // Subscribe to direct hive messages addressed to the human (not task-based).
-  // act:'query' and act:'request' from god/agents land here as a separate stream.
-  useEffect(() => {
-    if (!window.cth?.onHiveMessage) return;
-    const unsub = window.cth.onHiveMessage((e) => {
-      if (!e.needsHuman || !e.body || !e.id) return;
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === e.id)) return prev; // dedupe
-        return [...prev, {
-          id: e.id,
-          from: e.from,
-          subject: e.subject ?? '',
-          body: e.body!,
-          act: e.act,
-          arrivedAt: Date.now(),
-          resolved: false,
-          replyDraft: ''
-        }];
-      });
-    });
-    return unsub;
-  }, []);
-
-  // Keep the store badge count current.
+  // Keep the store task-badge count current (message part updated in CommandCenterPanel).
   useEffect(() => {
     const taskPending = tasks.filter(waitsOnHuman).length;
     const msgPending = messages.filter((m) => !m.resolved).length;
@@ -249,14 +216,14 @@ export function AskMeTab() {
             <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
               <textarea
                 value={msg.replyDraft}
-                onChange={(e) => setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, replyDraft: e.target.value } : m))}
+                onChange={(e) => updateHumanMessageDraft(msg.id, e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                     void (async () => {
                       const text = msg.replyDraft.trim();
                       if (!text) return;
                       await window.cth.hiveSend({ to: msg.from, act: 'inform', subject: `Re: ${msg.subject}`, body: text }, 'human');
-                      setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, resolved: true } : m));
+                      resolveHumanMessage(msg.id);
                     })();
                   }
                 }}
@@ -272,12 +239,12 @@ export function AskMeTab() {
                   const text = msg.replyDraft.trim();
                   if (!text) return;
                   await window.cth.hiveSend({ to: msg.from, act: 'inform', subject: `Re: ${msg.subject}`, body: text }, 'human');
-                  setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, resolved: true } : m));
+                  resolveHumanMessage(msg.id);
                 })()}>
                 reply &amp; resolve
               </PixelButton>
               <PixelButton variant="secondary" size="sm"
-                onClick={() => setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, resolved: true } : m))}>
+                onClick={() => resolveHumanMessage(msg.id)}>
                 dismiss
               </PixelButton>
             </div>

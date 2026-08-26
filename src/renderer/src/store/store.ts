@@ -13,6 +13,19 @@ import {
   type HireReviewQueue
 } from '@shared/hireQueue';
 import { DEFAULT_ORG_TRIGGER, type OrgTriggerConfig, type WebhookTrigger } from '@shared/triggers';
+
+/** A direct hive message from god/agents addressed to the human (not via a task card).
+ *  Lives in the store so it survives AskMeTab unmount / tab switches. */
+export interface HumanMessage {
+  id: string;
+  from: string;
+  subject: string;
+  body: string;
+  act: string;
+  arrivedAt: number;
+  resolved: boolean;
+  replyDraft: string;
+}
 import { isCompactionCommand } from '@shared/providerAutomation';
 import { preferredAgentRole } from '@shared/agentRole';
 import { isInboxNudge } from '@shared/hiveNudge';
@@ -249,9 +262,15 @@ interface State {
   requestDispatchSeed: (text: string) => void;
   clearDispatchSeedRequest: () => void;
   /** Count of unresolved items in the Ask Me tab (humanQA pending + direct
-   *  queries to human). Drives the tab badge. Updated by AskMeTab. */
+   *  queries to human). Drives the tab badge. Updated by AskMeTab + CommandCenterPanel. */
   askMePending: number;
   setAskMePending: (n: number) => void;
+  /** Direct hive messages from god/agents addressed to the human.
+   *  Persisted in the store so they survive AskMeTab unmount/tab switches. */
+  humanMessages: HumanMessage[];
+  addHumanMessage: (msg: HumanMessage) => void;
+  resolveHumanMessage: (id: string) => void;
+  updateHumanMessageDraft: (id: string, draft: string) => void;
   /** Unsent ASK ME answer drafts, keyed by task id — so switching tabs (which
    *  unmounts the ask-me view) doesn't eat a half-typed answer. */
   answerDrafts: Record<string, string>;
@@ -847,6 +866,17 @@ export const useStore = create<State>((set, get) => ({
   clearDispatchSeedRequest: () => set({ dispatchSeedRequest: null }),
   askMePending: 0,
   setAskMePending: (n) => set({ askMePending: n }),
+  humanMessages: [],
+  addHumanMessage: (msg) => set((s) => {
+    if (s.humanMessages.some((m) => m.id === msg.id)) return s; // dedupe
+    return { humanMessages: [...s.humanMessages, msg] };
+  }),
+  resolveHumanMessage: (id) => set((s) => ({
+    humanMessages: s.humanMessages.map((m) => m.id === id ? { ...m, resolved: true } : m)
+  })),
+  updateHumanMessageDraft: (id, draft) => set((s) => ({
+    humanMessages: s.humanMessages.map((m) => m.id === id ? { ...m, replyDraft: draft } : m)
+  })),
   answerDrafts: {},
   setAnswerDraft: (taskId, text) =>
     set((s) => ({ answerDrafts: { ...s.answerDrafts, [taskId]: text } })),
