@@ -1,5 +1,6 @@
 import { useState, useEffect, type CSSProperties } from 'react';
-import type { HarnessConfig, AgentProvider } from '@/store/config';
+import type { HarnessConfig, AgentProvider, RuntimeProfile } from '@/store/config';
+import { AGENT_PROVIDER_PRESETS, isClaudeProvider } from '@/store/config';
 import { PixelButton } from './PixelButton';
 import { ProviderLogo } from './ProviderLogo';
 import { OSS_BLOG_LINKS } from '@shared/ossModels';
@@ -75,6 +76,13 @@ export function AiEnginesSettings({ config }: { config: HarnessConfig }) {
   const [models, setModels] = useState<Partial<Record<AgentProvider, string>>>(
     config.providerDefaultModels ?? {}
   );
+  // Runtime profiles (v1) — reusable engine+account+model bundles. Non-secret
+  // metadata; persisted to config.json via the same updateConfig path as above.
+  const [profiles, setProfiles] = useState<RuntimeProfile[]>(config.runtimeProfiles ?? []);
+  const [draftName, setDraftName] = useState('');
+  const [draftProvider, setDraftProvider] = useState<AgentProvider>('claude');
+  const [draftModel, setDraftModel] = useState('');
+  const [draftConfigDir, setDraftConfigDir] = useState('');
 
   // Reseed set/not-set flags on mount (write-only — only the boolean is fetched).
   useEffect(() => {
@@ -122,6 +130,28 @@ export function AiEnginesSettings({ config }: { config: HarnessConfig }) {
     const next = { ...models, [id]: value.trim() || undefined };
     setModels(next);
     try { await window.cth.updateConfig({ providerDefaultModels: next }); } catch { /* noop */ }
+  };
+
+  const persistProfiles = async (next: RuntimeProfile[]) => {
+    setProfiles(next);
+    try { await window.cth.updateConfig({ runtimeProfiles: next }); } catch { /* noop */ }
+  };
+  const addProfile = async () => {
+    const name = draftName.trim();
+    if (!name) return;
+    const profile: RuntimeProfile = {
+      id: crypto.randomUUID(),
+      name,
+      provider: draftProvider,
+      model: draftModel.trim() || undefined,
+      claudeConfigDir: isClaudeProvider(draftProvider) ? (draftConfigDir.trim() || undefined) : undefined,
+      createdAt: Date.now()
+    };
+    await persistProfiles([...profiles, profile]);
+    setDraftName(''); setDraftModel(''); setDraftConfigDir('');
+  };
+  const removeProfileById = async (id: string) => {
+    await persistProfiles(profiles.filter((p) => p.id !== id));
   };
 
   return (
@@ -200,6 +230,75 @@ export function AiEnginesSettings({ config }: { config: HarnessConfig }) {
             onClick={(e) => { e.preventDefault(); void window.cth.openExternal(OSS_BLOG_LINKS.macMini); }}
             style={linkStyle}
           >set it up on a Mac Mini</a>.
+        </div>
+      </div>
+
+      {/* Runtime profiles (v1) — reusable engine + account + model bundles */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={headStyle}>RUNTIME PROFILES</div>
+        <div style={{ fontSize: 12, color: 'var(--cth-ink-700)', lineHeight: '17px' }}>
+          Reusable engine + account + model bundles you can pick when adding an agent.
+          For a <strong>Claude</strong> profile, set a <strong>config dir</strong> — its own
+          <code> ~/.claude</code> login — so that agent runs under a separate account. Log into it
+          once with <code>CLAUDE_CONFIG_DIR=&lt;dir&gt; claude</code>. The dir is a path only; no
+          key is stored here, and it must live outside the synced hive repo.
+        </div>
+
+        {profiles.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {profiles.map((p) => (
+              <div key={p.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
+                boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', background: 'var(--cth-paper-100)'
+              }}>
+                <ProviderLogo provider={p.provider} size={14} />
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 13, color: 'var(--cth-ink-900)', fontFamily: 'var(--cth-font-ui)' }}>{p.name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.provider}{p.model ? ` · ${p.model}` : ''}{p.claudeConfigDir ? ` · ${p.claudeConfigDir}` : ''}
+                  </span>
+                </div>
+                <PixelButton variant="secondary" size="sm" onClick={() => removeProfileById(p.id)}>Delete</PixelButton>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <input
+              placeholder="profile name (e.g. Claude · work account)"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              style={{ ...inputStyle, flex: 1, minWidth: 160 }}
+            />
+            <select
+              value={draftProvider}
+              onChange={(e) => setDraftProvider(e.target.value as AgentProvider)}
+              style={{ ...inputStyle, maxWidth: 150, cursor: 'pointer' }}
+            >
+              {AGENT_PROVIDER_PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <input
+              placeholder="model (optional — provider default)"
+              value={draftModel}
+              onChange={(e) => setDraftModel(e.target.value)}
+              style={{ ...inputStyle, flex: 1, minWidth: 160 }}
+            />
+            {isClaudeProvider(draftProvider) && (
+              <input
+                placeholder="Claude config dir (account login path)"
+                value={draftConfigDir}
+                onChange={(e) => setDraftConfigDir(e.target.value)}
+                style={{ ...inputStyle, flex: 1, minWidth: 160 }}
+              />
+            )}
+            <PixelButton variant="secondary" size="sm" onClick={addProfile}>Add profile</PixelButton>
+          </div>
         </div>
       </div>
 

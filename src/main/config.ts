@@ -11,6 +11,7 @@ import {
 } from '../shared/agentProvider';
 import { defaultMcpDefaults } from '../shared/mcpCatalog';
 import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
+import { type RuntimeProfile, normalizeRuntimeProfile, normalizeRuntimeProfiles } from '../shared/runtimeProfile';
 import { expandTilde, normalizeHiveHome } from './fs';
 import type { IntegrationRecord } from '../shared/integrations';
 import {
@@ -323,6 +324,11 @@ export interface HarnessConfig {
   providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
+  /** Agent RUNTIME PROFILES — reusable named bundles of engine + account(auth-dir)
+   *  + model + args, selectable per-agent at spawn (see shared/runtimeProfile.ts).
+   *  METADATA only: a profile's `claudeConfigDir` is a PATH pointer to a login dir
+   *  outside the synced hive repo — no credential is ever stored here. Default []. */
+  runtimeProfiles?: RuntimeProfile[];
   /** Master toggle for the Slack → Abathur's-queue integration. */
   slackEnabled?: boolean;
   /** Slack app signing secret (Basic Information → Signing Secret). Never logged. */
@@ -431,6 +437,7 @@ const DEFAULTS: HarnessConfig = {
   // over the role-based tiers (modelForRole) in the spawn handler, so all agents
   // (incl. god) default to Fable 5. A per-agent model choice still overrides it.
   defaultModel: 'claude-fable-5',
+  runtimeProfiles: [],
   // Seeded from the MCP catalog so the consent defaults never drift from it
   // (safe-readonly ON, write/secret OFF).
   mcpDefaults: defaultMcpDefaults(),
@@ -688,6 +695,38 @@ export function setAgentTokenCap(agentId: unknown, tokenCap: unknown): HarnessCo
     ...current,
     agentTokenCaps
   });
+}
+
+/** All valid runtime profiles from the config on disk (junk-filtered). */
+export function listRuntimeProfiles(): RuntimeProfile[] {
+  return normalizeRuntimeProfiles(readConfig().runtimeProfiles);
+}
+
+/** One runtime profile by id, or null. Resolved MAIN-side at spawn to derive a
+ *  Claude agent's per-account CLAUDE_CONFIG_DIR. */
+export function getRuntimeProfile(id: unknown): RuntimeProfile | null {
+  if (typeof id !== 'string' || !id.trim()) return null;
+  return listRuntimeProfiles().find((p) => p.id === id.trim()) ?? null;
+}
+
+/** Insert or replace a runtime profile by id (read-modify-write against the latest
+ *  config on disk, same discipline as setAgentTokenCap so concurrent snapshots
+ *  don't clobber each other). Rejects a malformed profile. */
+export function upsertRuntimeProfile(profile: unknown): HarnessConfig {
+  const normalized = normalizeRuntimeProfile(profile);
+  if (!normalized) throw new Error('invalid runtime profile');
+  const current = readConfig();
+  const list = normalizeRuntimeProfiles(current.runtimeProfiles).filter((p) => p.id !== normalized.id);
+  list.push(normalized);
+  return persistConfig({ ...current, runtimeProfiles: list });
+}
+
+/** Delete a runtime profile by id. */
+export function removeRuntimeProfile(id: unknown): HarnessConfig {
+  if (typeof id !== 'string' || !id.trim()) throw new Error('invalid runtime profile id');
+  const current = readConfig();
+  const list = normalizeRuntimeProfiles(current.runtimeProfiles).filter((p) => p.id !== id.trim());
+  return persistConfig({ ...current, runtimeProfiles: list });
 }
 
 /** Wipe the persisted config back to first-run defaults so the app boots into

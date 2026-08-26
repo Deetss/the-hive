@@ -133,6 +133,11 @@ export interface AgentMeta {
   name: string;
   /** Which CLI this agent runs on. Defaults to 'claude' when unset (legacy). */
   provider?: AgentProvider;
+  /** The runtime profile that launched this agent (shared/runtimeProfile.ts), if
+   *  any. Recorded on the registry so the floor/roster knows which engine+account
+   *  an agent belongs to; the profile's per-account CLAUDE_CONFIG_DIR is resolved
+   *  MAIN-side at spawn and passed to ensureAgent as `opts.claudeConfigDir`. */
+  profileId?: string;
   role?: string;
   capabilities?: string[];
   cwd: string;
@@ -613,6 +618,11 @@ export class HiveManager {
        *  copied into the agent's `.claude/skills/` per spawn; undefined or missing
        *  is a no-op (tolerated until Kevin populates the resource dir). */
       skillsDir?: string;
+      /** Runtime-profiles v1 — a Claude agent's per-ACCOUNT CLAUDE_CONFIG_DIR (its
+       *  own `~/.claude` login), resolved MAIN-side from the agent's runtime profile
+       *  and set into the spawn env below for Claude providers only. Undefined = the
+       *  operator's default login (unchanged behavior). */
+      claudeConfigDir?: string;
     } = {}
   ): Promise<SpawnInjection> {
     const root = this.root();
@@ -850,6 +860,20 @@ export class HiveManager {
       env.OTEL_LOGS_EXPORT_INTERVAL = '2000';
       env.OTEL_RESOURCE_ATTRIBUTES = `agent.id=${meta.id},agent.name=${meta.name}`;
     }
+    // Runtime-profiles v1 — per-ACCOUNT Claude login isolation. When this agent's
+    // runtime profile pins a `claudeConfigDir`, point THIS Claude agent at that
+    // account's `~/.claude` (its own login), so two Claude agents can run under two
+    // different accounts. This is the one missing wire the design flagged: it rides
+    // the per-agent env, which WINS over the inherited `CLAUDE_CONFIG_DIR` kept in
+    // ptyEnv.ts's CLAUDE_CONFIG_KEEP list (per-agent env is applied last in
+    // buildPtyEnv). Claude providers only; a blank dir leaves the operator default.
+    // (NOTE for reconciliation with Jim's feat/device-sync: this ADDS a
+    // CLAUDE_CONFIG_DIR assignment in the same env object he relocates CODEX_HOME
+    // out of — different var, additive, no overlap.)
+    if (claudeProvider && opts.claudeConfigDir) {
+      env.CLAUDE_CONFIG_DIR = opts.claudeConfigDir;
+    }
+
     const args: string[] = [];
     if (!claudeProvider) return { args, env };
 
@@ -1327,7 +1351,7 @@ export class HiveManager {
     // saying nothing, and COMMANDS.md documents it either way for the case where
     // the operator turns it on after god was already running.
     const spawnQueueLine = meta.isGod && this.orchestratorMaySpawn()
-      ? `SPAWNING A WORKER: you can start an ephemeral worker yourself by writing ONE JSON file into ${inRoot('spawn-requests')}/<id>.json. Required: \`objective\` (what the worker must do) and \`cwd\` (the repo it runs in). Optional: \`name\`, \`command\`, \`provider\`, \`model\`, \`isolate\` (default true = its own git worktree), \`tokenCap\`, and \`slack\` ({channel, thread_ts}) to route its failures back to a thread. The harness polls that directory, spawns \`worker-<id>\`, and moves the request to \`spawn-requests/.done/\` on success or \`.failed/\` with a reason. This is the ONLY way you can spawn; a hire manifest under research/hires/ needs the human to confirm it in the UI, so it is not a route you can complete on your own. Reuse an existing agent first, as above — a worker is a fresh spend every time.`
+      ? `SPAWNING A WORKER: you can start an ephemeral worker yourself by writing ONE JSON file into ${inRoot('spawn-requests')}/<id>.json. Required: \`objective\` (what the worker must do) and \`cwd\` (the repo it runs in). Optional: \`name\`, \`command\`, \`provider\`, \`model\`, \`profile\` (a saved runtime-profile id = engine+account+model bundle; fills in engine/model/command where the request is silent), \`isolate\` (default true = its own git worktree), \`tokenCap\`, and \`slack\` ({channel, thread_ts}) to route its failures back to a thread. The harness polls that directory, spawns \`worker-<id>\`, and moves the request to \`spawn-requests/.done/\` on success or \`.failed/\` with a reason. This is the ONLY way you can spawn; a hire manifest under research/hires/ needs the human to confirm it in the UI, so it is not a route you can complete on your own. Reuse an existing agent first, as above — a worker is a fresh spend every time.`
       : '';
     const godLine = meta.isGod
       ? 'You are the GOD / ORCHESTRATOR of this hive — your job is to ORCHESTRATE, not to implement: maintain live situational awareness and delegate the work. (1) AWARENESS — always know what is going on: keep an accurate picture of every agent (active vs archived/idle), the task board, and all in-flight work; drain your inbox continually and triage every other agent\'s requests, answering clarifications so the team runs autonomously. (2) DELEGATE — decompose work and fan it out to the hive agents via their inboxes (route messages and assign owners; do not do their jobs); do NOT take on grunt implementation yourself. Stay aware of who is already on the floor and delegate OPPORTUNISTICALLY: BEFORE you spawn anything, CHECK THE LIVE ROSTER (active agents in registry.json + their state in fleet.json) and prefer routing to an EXISTING agent that fits — above all when the request names one ("ask Pam to…", "have Jim…"), route to that agent instead of reflexively creating a new one. Reuse an idle or already-running agent whose role matches; only spawn a fresh agent when no existing one is a sensible fit, and say that you checked. One capable owner beats a duplicate. (3) OWN ONLY THE IMPORTANT, high-leverage things — task decomposition, dispatch decisions, sign-offs, conflict resolution, branch integration, and final QA — and remain the sole scribe of board.md. You are otherwise fully autonomous — there is NO separate approval queue. For the genuinely critical (destructive actions, spending real money, scope changes, unresolvable conflicts), ask the human directly in your own session and let the tool-permission prompt gate the action; the human approves natively, including remotely from their phone via /remote-control. Keep the team unblocked. When you DISPATCH a task, write it as a 4-part contract so the agent can run autonomously: (1) OBJECTIVE — the concrete goal; (2) OUTPUT — the expected deliverable/format; (3) TOOLS — what to use or avoid, and any references to read instead of re-deriving; (4) BOUNDARIES — scope limits + the definition of done. Pass references (file paths, message ids, board sections), not pasted content — keep dispatches short.'
