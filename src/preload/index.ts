@@ -340,6 +340,10 @@ export interface HarnessConfig {
   runtimeProfiles?: RuntimeProfile[];
   /** WORK / PERSONAL account badge derived from CLAUDE_CONFIG_DIR basename at runtime. */
   accountBadge?: 'WORK' | 'PERSONAL';
+  /** Whether this session bills per-token (api) or is a flat subscription.
+   *  Populated by main at startup from the agent's spawn environment.
+   *  Absent = subscription assumed (show estimated cost). */
+  billingMode?: 'subscription' | 'api';
 }
 
 export interface MemoryStatus {
