@@ -687,8 +687,8 @@ export function argsWithAutoModeFlag(args: string[], autoMode: boolean, provider
   const flag = autoModeFlagForProvider(provider);
   if (!flag) return args;
   const tokens = flag.trim().split(/\s+/);
-  if (args.includes(tokens[0])) return args;
-  return [...args, ...tokens];
+  const missing = tokens.filter(t => !args.includes(t));
+  return missing.length ? [...args, ...missing] : args;
 }
 
 /** Returns any env vars the provider needs for non-interactive / first-run suppression. */
