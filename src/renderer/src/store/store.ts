@@ -248,6 +248,10 @@ interface State {
   dispatchSeedRequest: { text: string; seq: number } | null;
   requestDispatchSeed: (text: string) => void;
   clearDispatchSeedRequest: () => void;
+  /** Count of unresolved items in the Ask Me tab (humanQA pending + direct
+   *  queries to human). Drives the tab badge. Updated by AskMeTab. */
+  askMePending: number;
+  setAskMePending: (n: number) => void;
   /** Unsent ASK ME answer drafts, keyed by task id — so switching tabs (which
    *  unmounts the ask-me view) doesn't eat a half-typed answer. */
   answerDrafts: Record<string, string>;
@@ -841,6 +845,8 @@ export const useStore = create<State>((set, get) => ({
   requestDispatchSeed: (text) =>
     set((s) => ({ dispatchSeedRequest: { text, seq: (s.dispatchSeedRequest?.seq ?? 0) + 1 } })),
   clearDispatchSeedRequest: () => set({ dispatchSeedRequest: null }),
+  askMePending: 0,
+  setAskMePending: (n) => set({ askMePending: n }),
   answerDrafts: {},
   setAnswerDraft: (taskId, text) =>
     set((s) => ({ answerDrafts: { ...s.answerDrafts, [taskId]: text } })),
