@@ -22,7 +22,8 @@ import {
   existsSync, mkdirSync, readFileSync, writeFileSync, renameSync,
   readdirSync, statSync, rmSync, appendFileSync, symlinkSync, copyFileSync, chmodSync
 } from 'node:fs';
-import { join, dirname, isAbsolute } from 'node:path';
+import { join, dirname, isAbsolute, normalize } from 'node:path';
+import Database from 'better-sqlite3';
 import { homedir } from 'node:os';
 import { spawnSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
@@ -820,7 +821,7 @@ export class HiveManager {
           if (desc.kind === 'hooks') {
             if (desc.shim === 'agy') this.installAgyHooks();
             else if (desc.shim === 'codex') {
-              env.CODEX_HOME = this.installCodexHooks(engineDir);
+              env.CODEX_HOME = this.installCodexHooks(engineDir, meta.cwd);
               // Codex refuses to run hooks from a config dir without persisted
               // "hook trust" (normally an interactive gate). Our hooks.json is
               // hive-authored inside an isolated CODEX_HOME, so we bypass that gate
@@ -1979,7 +1980,7 @@ export class HiveManager {
    *  untouched. The user's ~/.codex/auth.json is linked in and their config.toml is
    *  copied + extended (login + model/provider/trust settings still apply).
    *  Returns the CODEX_HOME path for the caller to put in the worker's env. */
-  private installCodexHooks(dir: string): string {
+  private installCodexHooks(dir: string, agentCwd?: string): string {
     const home = join(dir, '.codex');
     try {
       mkdirSync(home, { recursive: true });
@@ -2006,6 +2007,42 @@ export class HiveManager {
         if (existsSync(src) && !existsSync(dest)) {
           try { copyFileSync(src, dest); } catch { /* best-effort */ }
         }
+      }
+      // Ensure the agent's OWN cwd is trusted so the "Do you trust this directory?"
+      // dialog is NEVER shown for this agent's workspace. Codex checks the threads
+      // table for a prior session with approval_mode='never' in the same cwd. We
+      // open/create state_5.sqlite (better-sqlite3 creates on first open), ensure
+      // the threads table exists, and insert a sentinel row. Works on any machine
+      // regardless of whether the user has previously opened codex in this cwd.
+      if (agentCwd) {
+        const stateDb = join(home, 'state_5.sqlite');
+        try {
+          // Codex stores cwd with the Windows extended-length path prefix on Win32.
+          const codexCwd = process.platform === 'win32'
+            ? '\\\\?\\' + normalize(agentCwd).replace(/\//g, '\\')
+            : agentCwd;
+          const db = new Database(stateDb);
+          // Create the threads table if not present (fresh machine / first run).
+          // `IF NOT EXISTS` is safe when the DB was copied from personal (migrations
+          // already ran, table already exists — this becomes a no-op).
+          db.exec(`CREATE TABLE IF NOT EXISTS threads (
+            id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL, source TEXT NOT NULL, model_provider TEXT NOT NULL,
+            cwd TEXT NOT NULL, title TEXT NOT NULL, sandbox_policy TEXT NOT NULL,
+            approval_mode TEXT NOT NULL, tokens_used INTEGER NOT NULL DEFAULT 0,
+            has_user_event INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0
+          )`);
+          const now = Math.floor(Date.now() / 1000);
+          db.prepare(`
+            INSERT OR IGNORE INTO threads
+              (id, rollout_path, created_at, updated_at, source, model_provider,
+               cwd, title, sandbox_policy, approval_mode)
+            VALUES (?, '', ?, ?, 'cli', 'hive-pretrust', ?, 'hive pre-trust',
+                    '{"type":"disabled"}', 'never')
+          `).run('hive-pretrust-' + Buffer.from(agentCwd).toString('base64').slice(0, 20),
+            now, now, codexCwd);
+          db.close();
+        } catch { /* best-effort — a real session will still create the trust entry */ }
       }
       // The managed app-server daemon used by Codex Remote Control is launched
       // from the standalone install rooted at $CODEX_HOME/packages. Share the
