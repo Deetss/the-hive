@@ -203,11 +203,18 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     // deliverables) — a DIFFERENT path tree from cwd, which workspace-write blocked,
     // so codex workers couldn't do HIVE PROTOCOL housekeeping. The single bypass flag
     // is codex's documented equivalent of `--dangerously-skip-permissions` (no -a/-s
-    // alongside it). The app already runs claude/agy in this same full-access posture.
-    autoModeFlag: '--dangerously-bypass-approvals-and-sandbox',
-    autoFlag: '--dangerously-bypass-approvals-and-sandbox',
-    // Suppresses first-run interactive prompts (directory-trust gate, installer).
-    nonInteractiveEnv: { CODEX_NON_INTERACTIVE: '1' },
+    // alongside it); --skip-git-repo-check suppresses the git-repo detection prompt
+    // that would otherwise block headless startup. The app already runs claude/agy in
+    // this same full-access posture.
+    autoModeFlag: '--dangerously-bypass-approvals-and-sandbox --skip-git-repo-check',
+    autoFlag: '--dangerously-bypass-approvals-and-sandbox --skip-git-repo-check',
+    // CODEX_NON_INTERACTIVE=1 was intended to suppress first-run prompts, but in
+    // codex 0.149.1 (the new Rust binary) it forces non-interactive/exec mode: codex
+    // processes the initial prompt once and exits — the Stop→{decision:'block'} drain
+    // loop can never fire. The directory-trust gate is already bypassed by
+    // --dangerously-bypass-approvals-and-sandbox; the git check by
+    // --skip-git-repo-check. Do not re-add this env var.
+    nonInteractiveEnv: {},
     supportsModel: true,
     modelFlag: '--model',
     // Codex is NOT hiveAware in the Claude-flag sense: it has no
