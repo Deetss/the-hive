@@ -199,14 +199,14 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   const [description, setDescription] = useState(pendingHire?.description ?? 'a fresh harness');
   const [hireMeta, setHireMeta] = useState<HireManifest | null>(pendingHire);
   // Runtime-profiles v1 — which saved engine+account+model bundle launched this
-  // agent. Recorded on the spawn so the registry knows the agent's account. A
-  // manual provider/model change detaches the profile (it no longer matches).
+  // agent. Model/provider picks are overrides on top of the profile (D2 precedence:
+  // modal wins else profile); they do NOT detach it. Profile still supplies the
+  // account / claudeConfigDir. Only an explicit 'Default account' selection clears it.
   const [profileId, setProfileId] = useState<string | undefined>(undefined);
 
   // Picking a model rebuilds the command; the command field stays editable for
   // power users (it's the source of truth for the actual spawn).
   const pickModel = (id?: string) => {
-    setProfileId(undefined);
     setModel(id);
     setCommand(buildSpawnCommand(config, id, provider));
   };
@@ -227,7 +227,6 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   // Codex spawns `codex`, not the configured `claude`). For 'custom' we keep the
   // user's typed command rather than blanking it.
   const pickProvider = (id: AgentProvider) => {
-    setProfileId(undefined);
     setProvider(id);
     // Seed the model: Claude from the global defaultModel; other engines from the
     // per-engine default set in Settings → AI Engines (providerDefaultModels), else
