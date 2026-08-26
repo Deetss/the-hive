@@ -55,7 +55,7 @@ export const CODEX_COMMAND_GROUPS: CmdGroup[] = [
     title: 'AUTOMATION (HEADLESS)',
     items: [
       { cmd: 'codex -p "your prompt"', kind: 'cli', desc: 'Non-interactive print mode: run one prompt and exit.', usage: 'codex -p "summarise this file"' },
-      { cmd: 'codex --skip-git-repo-check', kind: 'cli', desc: 'Skip the git-repo detection prompt on startup. The Hive passes this automatically (alongside --dangerously-bypass-approvals-and-sandbox) in auto mode.' }
+      { cmd: 'codex --dangerously-bypass-hook-trust', kind: 'cli', desc: 'Run config.toml lifecycle hooks without a trust prompt. The Hive passes this automatically (alongside --dangerously-bypass-approvals-and-sandbox) in auto mode to enable Stop→drain.' }
     ]
   },
   {
