@@ -2,11 +2,35 @@ import * as pty from 'node-pty';
 import type { WebContents } from 'electron';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { delimiter, join, win32 } from 'node:path';
+import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { ensureKilled, hardKillTree } from './procKill';
 import { expandTilde } from './fs';
 import { buildPtyEnv } from './ptyEnv';
 import { captureFromLoginShell, userShellPath } from './shellEnv';
+
+/**
+ * PREPEND the user's personal `~/bin` to an agent PATH on Windows.
+ *
+ * The agent PATH on win32 is `process.env.PATH` — the app's process environment.
+ * A packaged app launched from the Windows Start/taskbar inherits ONLY the Windows
+ * registry PATH (user + machine), which omits directories added by interactive
+ * shell profiles (e.g. git-bash rc files, asdf shims, or — the reason this exists
+ * — the `~/bin` where the edgentic WSL-bridge shims live). Prepending `~/bin`
+ * ensures every spawned agent can resolve `edgentic`, `edgentic-find`, etc. by
+ * name even when the app wasn't launched from a shell that already has it.
+ *
+ * Generic: uses `homedir()` so this works for any user, not just Dylan.
+ * No-op when `~/bin` doesn't exist on this machine.
+ */
+export function withUserBinPath(path: string): string {
+  if (process.platform !== 'win32') return path; // non-win agents get the login-shell PATH
+  const userBin = join(homedir(), 'bin');
+  if (!existsSync(userBin)) return path;
+  const entries = path.split(delimiter).filter(Boolean);
+  if (entries.includes(userBin)) return path;
+  return [userBin, ...entries].join(delimiter);
+}
 
 /** APPEND the hive's bundled-node dir (`<HIVE_ROOT>/bin/runtime`, which holds a
  *  shim literally named `node`) to a child's PATH.
@@ -541,7 +565,7 @@ export class PtyManager {
       // the interactive-shell launch it replaces cost ~1s of main-thread freeze
       // on EVERY spawn.
       const userPath = withHiveRuntimeFallback(
-        process.platform === 'win32' ? (process.env.PATH || '') : userShellPath(),
+        withUserBinPath(process.platform === 'win32' ? (process.env.PATH || '') : userShellPath()),
         opts.env?.HIVE_ROOT
       );
 
