@@ -22,6 +22,7 @@ import { StatusBar } from './StatusBar';
 import { GitTab } from './GitTab';
 import { FilesTab } from './FilesTab';
 import { useAppTheme, toggleAppTheme } from '@/design/theme';
+import { UpdateBadge } from './UpdateBadge';
 import type { HarnessConfig } from '@/store/config';
 
 /** Roster rail width. A fixed 232px is right on a 14" laptop but reads as a
@@ -324,6 +325,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
         {/* Same top-right controls as the main title bar — fullscreen covers
             it, so theme / exit-fullscreen / IDE must live here too. */}
         <div className="cth-titlebar-nodrag" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <UpdateBadge />
           <button
             onClick={toggleRoster}
             title={rosterCollapsed ? 'Show the agent list' : 'Hide the agent list — full-width terminal'}
