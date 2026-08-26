@@ -2927,13 +2927,19 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   if (opts.hive?.profileId) {
     const cloudProfile = getRuntimeProfile(opts.hive.profileId);
     if (cloudProfile?.baseUrl && cloudProfile.apiKeyRef) {
-      const cloudKey = integrations.getSecret(cloudProfile.apiKeyRef);
-      if (cloudKey) {
-        opts.env = {
-          ...(opts.env ?? {}),
-          OPENAI_BASE_URL: cloudProfile.baseUrl,
-          OPENAI_API_KEY: cloudKey
-        };
+      // Re-validate at spawn time: a stale or tampered config.json could carry a URL
+      // that passed validation when saved but now targets a private or unsafe host.
+      if (isSafeHttpUrl(cloudProfile.baseUrl, cloudProfile.allowPrivate ?? false)) {
+        const cloudKey = integrations.getSecret(cloudProfile.apiKeyRef);
+        if (cloudKey) {
+          opts.env = {
+            ...(opts.env ?? {}),
+            OPENAI_BASE_URL: cloudProfile.baseUrl,
+            OPENAI_API_KEY: cloudKey
+          };
+        }
+      } else {
+        console.warn(`[spawn] profile ${cloudProfile.id} baseUrl failed SSRF check at spawn — endpoint not injected`);
       }
     }
   }
@@ -3139,6 +3145,17 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
     for (const prev of prevProfiles) {
       if (!nextIds.has(prev.id) && prev.apiKeyRef) {
         try { integrations.deleteSecret(prev.apiKeyRef); } catch { /* best-effort */ }
+      }
+    }
+    // Reject any incoming profile whose baseUrl fails the SSRF guard — same guard
+    // upsertRuntimeProfile enforces, closing the bypass where config:update wrote
+    // profiles directly without re-validation.
+    for (const p of patch.runtimeProfiles) {
+      if (p && typeof (p as { baseUrl?: unknown }).baseUrl === 'string') {
+        const { baseUrl, allowPrivate } = p as { baseUrl: string; allowPrivate?: boolean };
+        if (baseUrl && !isSafeHttpUrl(baseUrl, allowPrivate ?? false)) {
+          return { ok: false, error: 'invalid or unsafe baseUrl in runtimeProfiles' };
+        }
       }
     }
   }
