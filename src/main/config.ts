@@ -766,10 +766,21 @@ export function listLocalDelegates(): LocalDelegateConfig[] {
   return (readConfig().localDelegates ?? []) as LocalDelegateConfig[];
 }
 
+const SAFE_SLUG = /^[A-Za-z0-9._-]+$/;
+const SAFE_PATH = /^\/[A-Za-z0-9._\-/]+$/;
+const SHELL_UNSAFE = /["'`$;|&\r\n]/;
+
 export function upsertLocalDelegate(cfg: unknown): HarnessConfig {
   if (!cfg || typeof cfg !== 'object') throw new Error('invalid delegate config');
   const d = cfg as LocalDelegateConfig;
   if (typeof d.id !== 'string' || !d.id.trim()) throw new Error('delegate id required');
+  if (d.transport?.kind === 'wsl-exec') {
+    const { distro, scriptPrefix } = d.transport;
+    if (!SAFE_SLUG.test(distro)) throw new Error('distro must match [A-Za-z0-9._-]');
+    if (!SAFE_PATH.test(scriptPrefix) || SHELL_UNSAFE.test(scriptPrefix)) {
+      throw new Error('scriptPrefix must be an absolute path with no shell metacharacters');
+    }
+  }
   const current = readConfig();
   const list = listLocalDelegates().filter((e) => e.id !== d.id.trim());
   return persistConfig({ ...current, localDelegates: [...list, d] });

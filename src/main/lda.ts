@@ -67,11 +67,12 @@ function runWslExec(cfg: LocalDelegateConfig, cap: LdaCapability, capArgs: strin
   }
   const { distro, scriptPrefix } = cfg.transport;
   const script = `${scriptPrefix}/${scriptName(cap)}`;
-  // Build the remote bash -c string; PATH prepend ensures edgentic's own
-  // internal rerank call resolves the same way the bridge script does.
-  const remote = `PATH="$HOME/.local/scripts:$PATH" exec "${script}" "$@"`;
+  // Pass `script` as the positional $1 rather than interpolating it into the
+  // -c string, so shell metacharacters in a misconfigured scriptPrefix cannot
+  // execute. distro and scriptPrefix are validated at upsert time (config.ts).
+  const remote = `PATH="$HOME/.local/scripts:$PATH" exec "$1" "$@"`;
   const t0 = Date.now();
-  const result = spawnSync('wsl.exe', ['-d', distro, '-e', 'bash', '-c', remote, '_', ...capArgs], {
+  const result = spawnSync('wsl.exe', ['-d', distro, '-e', 'bash', '-c', remote, '_', script, ...capArgs], {
     encoding: 'utf8',
     maxBuffer: 4 * 1024 * 1024
   });
@@ -101,9 +102,10 @@ export const ldaRunner = {
     if (!cfg) return { ok: false, latencyMs: 0, error: `no delegate: ${id}` };
     if (cfg.transport.kind !== 'wsl-exec') return { ok: false, latencyMs: 0, error: 'unsupported transport' };
     const { distro, scriptPrefix } = cfg.transport;
-    const remote = `PATH="$HOME/.local/scripts:$PATH" exec "${scriptPrefix}/edgentic" --health`;
+    const healthScript = `${scriptPrefix}/edgentic`;
+    const remote = `PATH="$HOME/.local/scripts:$PATH" exec "$1" --health`;
     const t0 = Date.now();
-    const result = spawnSync('wsl.exe', ['-d', distro, '-e', 'bash', '-c', remote], { encoding: 'utf8' });
+    const result = spawnSync('wsl.exe', ['-d', distro, '-e', 'bash', '-c', remote, '_', healthScript], { encoding: 'utf8' });
     const latencyMs = Date.now() - t0;
     if (result.status === 0) return { ok: true, latencyMs };
     return { ok: false, latencyMs, error: (result.stderr ?? result.stdout ?? '').trim().slice(0, 200) };
