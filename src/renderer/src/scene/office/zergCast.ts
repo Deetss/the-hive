@@ -15,13 +15,13 @@ import {
 // Authored sprite assets (FLUX-generated from the official refs, background keyed
 // out, downscaled). A unit with an asset uses it instead of the procedural
 // drawing; the rest fall back to procedural until their asset lands.
-import abathurUrl from '@/assets/zerg/abathur.png?url';
+import abathurUrl from '@/assets/zerg/abathur-slither.png?url';
 const ASSET_URLS: Partial<Record<ZergCharacterName, string>> = {
   abathur: abathurUrl,
 };
 
-// Serpentine units animate as a continuous traveling-wave slither instead of the
-// walk cycle. They must have an authored asset (the wave is applied to it).
+// Serpentine units animate as a continuous loop sliced from an authored
+// horizontal sprite sheet (N frames), instead of the walk cycle.
 const SLITHER: ReadonlySet<ZergCharacterName> = new Set<ZergCharacterName>(['abathur']);
 export function zergIsSlither(name: string): boolean {
   return SLITHER.has(name as ZergCharacterName);
@@ -141,30 +141,26 @@ async function loadAssetFrames(url: string): Promise<Texture[][]> {
   return [row, row, row]; // the front pose serves every direction
 }
 
-/** A continuous slither: N frames of a traveling sine wave shifted per scanline.
- *  The amplitude envelope (sin over the body height) anchors the head and the
- *  base and peaks through the mid-body, so it writhes instead of sliding whole. */
+/** A continuous slither sliced from a horizontal sprite sheet of `frameCount`
+ *  equal-width frames (each frameW × H). The frames are the authored animation,
+ *  so the loop plays them in order. */
 async function loadSlitherFrames(url: string, frameCount = 8): Promise<Texture[][]> {
   const img = new Image();
   img.src = url;
   await img.decode();
-  const W = img.width, H = img.height, PAD = 7;
-  const mkFrame = (phase: number): Texture => {
+  const H = img.height;
+  const frameW = Math.floor(img.width / frameCount);
+  const seq: Texture[] = [];
+  for (let f = 0; f < frameCount; f++) {
     const c = document.createElement('canvas');
-    c.width = W + PAD * 2; c.height = H;
+    c.width = frameW; c.height = H;
     const ctx = c.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
-    for (let y = 0; y < H; y++) {
-      const envelope = 1 - y / (H - 1); // tail (bottom) anchored, head/body sway most
-      const dx = Math.round(6 * envelope * Math.sin((2 * Math.PI * y) / 26 - phase));
-      ctx.drawImage(img, 0, y, W, 1, PAD + dx, y, W, 1);
-    }
+    ctx.drawImage(img, f * frameW, 0, frameW, H, 0, 0, frameW, H);
     const tex = Texture.from(c);
     tex.source.scaleMode = 'nearest';
-    return tex;
-  };
-  const seq: Texture[] = [];
-  for (let f = 0; f < frameCount; f++) seq.push(mkFrame((2 * Math.PI * f) / frameCount));
+    seq.push(tex);
+  }
   return [seq, seq, seq]; // continuous mode loops row 0
 }
 
