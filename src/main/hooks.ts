@@ -301,7 +301,7 @@ export class HookServer {
     // knows the floor all the time instead of only when it remembers to Read.
     // God-only and one line — every other agent is unaffected.
     const wantsRoster = (event === 'SessionStart' || event === 'UserPromptSubmit')
-      && !!agentId && this.hive.isGod(agentId);
+      && !!agentId && this.hive.isOvermind(agentId);
     // Hand the roster the LIVE context-window occupancy (contextById) so each
     // agent line can carry a `ctx NN%` — god then sees whose context is nearly
     // full when it routes work, instead of guessing from cumulative token spend.

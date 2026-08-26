@@ -354,7 +354,7 @@ export function useHive(config: HarnessConfig | null): void {
       useStore.getState().syncDescriptionsFromRoles(roles);
       const { agents, archivedAgents } = useStore.getState();
       for (const a of [...agents, ...archivedAgents]) {
-        const next = preferredAgentRole(a.description, roles[a.id], !!a.isGod);
+        const next = preferredAgentRole(a.description, roles[a.id], !!a.isOvermind);
         if (isDurableRole(next) && next !== roles[a.id]) {
           void window.cth.hivePatchAgentRole(a.id, next);
         }
@@ -379,15 +379,15 @@ export function useHive(config: HarnessConfig | null): void {
       godSpawning.current = true;
       useStore.getState().removeAgent(GOD_ID); // clear any stale restored entry
 
-      const godProvider = config.godProvider ?? 'claude';
-      const godModel = config.godModel;
-      const command = buildSpawnCommand(config, godModel, godProvider);
+      const overmindProvider = config.overmindProvider ?? 'claude';
+      const overmindModel = config.overmindModel;
+      const command = buildSpawnCommand(config, overmindModel, overmindProvider);
       const [exe, ...args] = tokenizeCommand(command.trim());
       const res = await window.cth.spawnPty({
         id: GOD_PTY,
         cwd: config.harnessHome!,
         command: exe,
-        provider: godProvider,
+        provider: overmindProvider,
         args,
         cols: 100,
         rows: 30,
@@ -397,7 +397,7 @@ export function useHive(config: HarnessConfig | null): void {
         // fresh session. Without this the most important context on the floor —
         // the orchestrator's — was lost on every restart.
         resume: true,
-        hive: { id: GOD_ID, name: 'Abathur', provider: godProvider, cwd: config.harnessHome!, isGod: true, role: 'orchestrator (god)' }
+        hive: { id: GOD_ID, name: 'Abathur', provider: overmindProvider, cwd: config.harnessHome!, isOvermind: true, role: 'Overmind' }
       });
       if (cancelled) { godSpawning.current = false; return; }
       if (!res.ok) { godSpawning.current = false; useStore.getState().setGodStatus('failed'); return; }
@@ -416,9 +416,9 @@ export function useHive(config: HarnessConfig | null): void {
         currentStation: 'desk',
         ptyId: GOD_PTY,
         command: command.trim(),
-        provider: godProvider,
-        model: godModel,
-        isGod: true,
+        provider: overmindProvider,
+        model: overmindModel,
+        isOvermind: true,
         recentTextTs: Date.now()
       };
       useStore.getState().addAgent(god);
@@ -437,18 +437,18 @@ export function useHive(config: HarnessConfig | null): void {
       bootGraceUntil.current[GOD_ID] = Date.now() + BOOT_GRACE_MS;
       void (async () => {
         try {
-          const remoteCommand = remoteControlCommandForProvider(godProvider, 'Abathur');
+          const remoteCommand = remoteControlCommandForProvider(overmindProvider, 'Abathur');
           if (remoteCommand) {
             // settleMs pauses the chain ~1.5s after /remote-control before the
             // orientation prompt (fresh spawns only) is submitted next.
-            await submitToPty(GOD_PTY, remoteCommand, godProvider, REMOTE_CONTROL_SETTLE_MS);
+            await submitToPty(GOD_PTY, remoteCommand, overmindProvider, REMOTE_CONTROL_SETTLE_MS);
           }
           if (!cancelled && !resumedGod) {
             // A type-into-tui god (Crush) can't ride its hive protocol on argv, so the
             // main process hands it back as seedPrompt — type it FIRST (identity), then
             // the orientation kick. Serialized via writeChains so they can't jam. (ondev-b)
-            if (res.seedPrompt) await submitToPty(GOD_PTY, res.seedPrompt, godProvider);
-            await submitToPty(GOD_PTY, INITIAL_GOD_PROMPT, godProvider);
+            if (res.seedPrompt) await submitToPty(GOD_PTY, res.seedPrompt, overmindProvider);
+            await submitToPty(GOD_PTY, INITIAL_GOD_PROMPT, overmindProvider);
           }
         } catch { /* PTY may have died during startup */ }
         finally { bootGraceUntil.current[GOD_ID] = 0; }
@@ -522,7 +522,7 @@ export function useHive(config: HarnessConfig | null): void {
         if (needsHuman && !idleWaiting) {
           // Only the god agent escalates to the human; sub-agents are autonomous
           // and read as "waiting" (parked on god, not on you).
-          updateAgent(e.agentId, { status: self.isGod ? 'blocked' : 'waiting' });
+          updateAgent(e.agentId, { status: self.isOvermind ? 'blocked' : 'waiting' });
         } else {
           // Idle notification — responded, nothing to do. Linger, don't flag.
           updateAgent(e.agentId, { status: 'idle', action: 'idle', carrying: undefined });
@@ -725,7 +725,7 @@ export function useHive(config: HarnessConfig | null): void {
     const iv = setInterval(() => {
       const { agents, updateAgent } = useStore.getState();
       for (const a of agents) {
-        if (!a.ptyId || a.isGod || !a.seedPrompt || seeded.current.has(a.id)) continue;
+        if (!a.ptyId || a.isOvermind || !a.seedPrompt || seeded.current.has(a.id)) continue;
         seeded.current.add(a.id);
         const ptyId = a.ptyId;
         const seed = a.seedPrompt;
@@ -1031,7 +1031,7 @@ export function useHive(config: HarnessConfig | null): void {
         ptyId: rec.id,
         command: rec.command,
         provider: rec.provider as Agent['provider'],
-        isGod: false,
+        isOvermind: false,
         recentTextTs: Date.now()
       };
       useStore.getState().addAgent(agent);
@@ -1175,8 +1175,8 @@ export function useHive(config: HarnessConfig | null): void {
         // a rebuilt one only if it predates the persisted `command` field.
         const command = (a.command ?? '').trim() || buildSpawnCommand(cfg, a.model, provider);
         const [exe, ...args] = tokenizeCommand(command);
-        const hive = a.isGod
-          ? { id: a.id, name: a.name, cwd, provider, isGod: true, role: roleForHiveSpawn(a) }
+        const hive = a.isOvermind
+          ? { id: a.id, name: a.name, cwd, provider, isOvermind: true, role: roleForHiveSpawn(a) }
           : a.isAssistant
           ? { id: a.id, name: a.name, cwd, provider, isAssistant: true, role: roleForHiveSpawn(a) }
           : { id: a.id, name: a.name, cwd, provider, role: roleForHiveSpawn(a) };

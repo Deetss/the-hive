@@ -70,9 +70,13 @@ export interface HarnessConfig {
   defaultCommand: string;
   /** Default model for newly spawned agents (e.g. 'claude-sonnet-4-6[1m]'); unset = CLI default. */
   defaultModel?: string;
-  /** Which provider+model powers the GOD orchestrator ("Abathur"). Default
+  /** Which provider+model powers the Overmind orchestrator ("Abathur"). Default
    *  'claude' / 'claude-opus-4-8'. Mirrors src/main/config.ts. */
+  overmindProvider?: AgentProvider;
+  overmindModel?: string;
+  /** @deprecated back-compat for existing config.json pre-v0.5.0 */
   godProvider?: AgentProvider;
+  /** @deprecated back-compat for existing config.json pre-v0.5.0 */
   godModel?: string;
   /** Per-server consent for the default MCP bundle, keyed by catalog id (mirrors
    *  src/main/config.ts; seeded from MCP_CATALOG). */
@@ -369,9 +373,9 @@ export function modelsForProvider(provider: AgentProvider): ModelOption[] {
 /** Providers shown in the Command Center's cross-provider model picker.
  *  God must remain on a provider with a working inbox drain; otherwise switching
  *  to a terminal-only provider would silently disable orchestration. */
-export function modelProvidersForAgent(isGod = false) {
+export function modelProvidersForAgent(isOvermind = false) {
   return AGENT_PROVIDER_PRESETS.filter((preset) =>
-    preset.supportsModel && (!isGod || preset.canReceiveInbox)
+    preset.supportsModel && (!isOvermind || preset.canReceiveInbox)
   );
 }
 

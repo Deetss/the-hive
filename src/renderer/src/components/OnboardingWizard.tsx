@@ -98,8 +98,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   // Anonymous usage stats (TELEMETRY.md). Default ON (opt-out); persisted by
   // finish() so unchecking before finishing means nothing is ever sent.
   const [shareStats, setShareStats] = useState<boolean>(true);
-  const [godProvider, setGodProvider] = useState<AgentProvider>('claude');
-  const [godModel, setGodModel] = useState<string | undefined>(
+  const [overmindProvider, setGodProvider] = useState<AgentProvider>('claude');
+  const [overmindModel, setGodModel] = useState<string | undefined>(
     providerPreset('claude').recommendedOrchestratorModel
   );
   const [error, setError] = useState<string | undefined>();
@@ -119,7 +119,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     finally { setProbing(false); }
   };
   useEffect(() => { void probeEngines(); }, []);
-  const selectedEngine = classifyEngineAvailability(engines, godProvider);
+  const selectedEngine = classifyEngineAvailability(engines, overmindProvider);
   const engineBlocked = engineBlocksOnboarding(selectedEngine);
 
   // Permissions & reliability toggles. These apply IMMEDIATELY on change (their
@@ -188,9 +188,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     if (!harnessHome) { setError('Pick a harness home folder first.'); setBusy(false); setStep('home'); return; }
     // The orchestrator step already refuses to advance on this, but a late probe
     // result can change the answer after the user has moved on. Never write a
-    // godProvider that is known to be unable to boot.
+    // overmindProvider that is known to be unable to boot.
     if (engineBlocked) {
-      setError(`${providerPreset(godProvider).label} is not installed. Install it and press "check again", or pick another engine.`);
+      setError(`${providerPreset(overmindProvider).label} is not installed. Install it and press "check again", or pick another engine.`);
       setBusy(false); setStep('orchestrator'); return;
     }
     const ensure = await window.cth.ensureHarnessHome(harnessHome);
@@ -205,8 +205,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       harnessHome, // the same trimmed value we just mkdir'd, not the raw field
       registeredRepos: repos,
       autoMode,
-      godProvider,
-      godModel,
+      overmindProvider,
+      overmindModel,
       telemetryEnabled: shareStats
     });
     setBusy(false);
@@ -436,7 +436,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {AGENT_PROVIDER_PRESETS.filter((p) => canReceiveInbox(p.id)).map((p) => {
-                    const sel = godProvider === p.id;
+                    const sel = overmindProvider === p.id;
                     return (
                       <label key={p.id} style={{
                         display: 'flex', alignItems: 'center', gap: 10,
@@ -447,7 +447,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                       }}>
                         <input
                           type="radio"
-                          name="godProvider"
+                          name="overmindProvider"
                           value={p.id}
                           checked={sel}
                           onChange={() => {
@@ -507,7 +507,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 2px var(--cth-ink-900)',
                     fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)'
                   }}>
-                    <span>{engineAvailabilityMessage(selectedEngine, providerPreset(godProvider).label)}</span>
+                    <span>{engineAvailabilityMessage(selectedEngine, providerPreset(overmindProvider).label)}</span>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       <PixelButton variant="secondary" size="sm" onClick={() => { void probeEngines(); }} disabled={probing}>
                         {probing ? 'checking...' : 'check again'}
@@ -523,11 +523,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>Model</div>
                   <select
-                    value={godModel ?? ''}
+                    value={overmindModel ?? ''}
                     onChange={(e) => setGodModel(e.target.value || undefined)}
                     style={inputStyle}
                   >
-                    {modelsForProvider(godProvider).map((m) => (
+                    {modelsForProvider(overmindProvider).map((m) => (
                       <option key={m.label} value={m.id ?? ''}>{m.label}</option>
                     ))}
                   </select>
@@ -768,7 +768,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                       // screen, instead of letting a pick that cannot boot through
                       // to a Abathur that never starts.
                       if (step === 'orchestrator' && engineBlocked) {
-                        setError(`${providerPreset(godProvider).label} is not installed. Install it and press "check again", or pick another engine.`);
+                        setError(`${providerPreset(overmindProvider).label} is not installed. Install it and press "check again", or pick another engine.`);
                         return;
                       }
                       setError(undefined);

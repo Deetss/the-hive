@@ -378,8 +378,8 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
       setRepos(c.registeredRepos ?? []);
       setTokenCap(c.costCapTokens);
       setAgentTokenCaps(c.agentTokenCaps ?? {});
-      setEngineProvider(c.godProvider ?? 'claude');
-      setEngineModel(c.godModel);
+      setEngineProvider(c.overmindProvider ?? 'claude');
+      setEngineModel(c.overmindModel);
       setDefaultModel(c.defaultModel);
     }).catch(() => { /* noop */ });
   }, []);
@@ -487,7 +487,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
         name: a.name,
         cwd: a.cwd,
         provider,
-        isGod: a.isGod,
+        isOvermind: a.isOvermind,
         isAssistant: a.isAssistant,
         role: roleForHiveSpawn(a)
       };
@@ -639,7 +639,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
           </span>
           <Select value={dispatchTo} onChange={setDispatchTo}>
             <option value="">Abathur decides</option>
-            {agents.filter((a) => !a.isGod).map((a) => (
+            {agents.filter((a) => !a.isOvermind).map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </Select>
@@ -699,7 +699,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
                   border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
                   fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-900)'
                 }}
-              >{a.name}{a.isGod ? ' (god)' : ''}</button>
+              >{a.name}{a.isOvermind ? ' (god)' : ''}</button>
               <PixelBadge status={armed ? 'looping' : a.status} />
               {armed && <span title={breaker?.reason} style={{ color: 'var(--cth-coral)', fontSize: 12 }}>⚠</span>}
               <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--cth-ink-500)' }}>
@@ -769,7 +769,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
                 here. The GOD agent's model lives in the engine row below
                 (provider+model+apply), so we DON'T render this second selector for
                 it — one model picker, not two. */}
-            {!a.isGod && (
+            {!a.isOvermind && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <Select
                 value={encodeProviderModel(agentProvider, a.model)}
@@ -796,7 +796,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
                     {agentPreset.label} · {a.model ?? 'current'}
                   </option>
                 )}
-                {modelProvidersForAgent(a.isGod).map((preset) => (
+                {modelProvidersForAgent(a.isOvermind).map((preset) => (
                   <optgroup key={preset.id} label={preset.label}>
                     {modelsForProvider(preset.id).map((model) => {
                       // `defaultModel` is a Claude model id, so it can only mark
@@ -844,7 +844,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
                 {restartErrors[a.id]}
               </div>
             )}
-            {a.isGod && (
+            {a.isOvermind && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', flexShrink: 0 }}>engine:</span>
                 <Select
@@ -881,7 +881,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
                     if (engineProvider !== currentProvider) {
                       if (!window.confirm("This restarts Abathur; a conversation on a different engine can't be resumed.")) return;
                     }
-                    await window.cth.updateConfig({ godProvider: engineProvider, godModel: engineModel });
+                    await window.cth.updateConfig({ overmindProvider: engineProvider, overmindModel: engineModel });
                     await restartWithModel(a, engineModel, { provider: engineProvider, resume: false });
                   }}
                 >

@@ -28,8 +28,8 @@ export interface AgentCardProps {
   contextLimit?: number;
   selected?: boolean;
   /** Your clone — gets a persistent accent frame + BOSS tag so it stands out.
-   *  (`isGod` / the `god` agent id stay as-is internally; this is display only.) */
-  isGod?: boolean;
+   *  (`isOvermind` / the `god` agent id stay as-is internally; this is display only.) */
+  isOvermind?: boolean;
   onClick?: () => void;
   /** Persists an inline display-name edit; identity and hive paths stay unchanged. */
   onRename?: (name: string) => Promise<{ ok: boolean; error?: string }>;
@@ -55,7 +55,7 @@ const fmtK = (n: number): string => `${Math.round(n / 1000)}k`;
  */
 export function AgentCard({
   name, character, accent, status, ptyId, project, action, progress = 0,
-  contextTokens, contextLimit, selected, isGod, onClick, onRename,
+  contextTokens, contextLimit, selected, isOvermind, onClick, onRename,
   doingCount = 0, onTaskNoteClick, draggable, note, onEditNote
 }: AgentCardProps) {
   const [hover, setHover] = useState(false);
@@ -63,7 +63,7 @@ export function AgentCard({
   // IDENTITY and SELECTION are two different things, and conflating them is why
   // selecting Abathur appeared to do nothing.
   //
-  // The card used to pass `isGod || selected` into PixelPanel's 'active' variant,
+  // The card used to pass `isOvermind || selected` into PixelPanel's 'active' variant,
   // whose frame is `inset 1px + 3px accent + 5px ink` — five pixels of border in
   // the agent's OWN accent. Three problems in one: the selection cue changed
   // colour per agent (the "blue halo" on a sky agent), it was invisible on god
@@ -102,20 +102,20 @@ export function AgentCard({
   // missing) has somewhere to sit rather than pushing the row apart.
   const width = 220;
   const height = 78;
-  const lift = (isGod ? -2 : 0) - (hover ? 1 : 0) - (selected ? 1 : 0);
+  const lift = (isOvermind ? -2 : 0) - (hover ? 1 : 0) - (selected ? 1 : 0);
   /** God's distinction: a tinted surface plus a thin accent border all the way
    *  around — NOT the 3px rule that used to sit on the top edge alone. That rule
    *  read as a stray yellow bar rather than as part of the card, and an edge
    *  treatment that only exists on one side always looks like a mistake or a
    *  progress bar. Same 1px geometry as every other card, so the box is
    *  unchanged and the selection ring still means exactly one thing everywhere. */
-  const godSurface: React.CSSProperties = isGod
+  const godSurface: React.CSSProperties = isOvermind
     ? {
         background: `var(--cth-${accent}-light)`,
         boxShadow: `inset 0 0 0 1px var(--cth-${accent})`
       }
     : {};
-  const dropShadow = isGod
+  const dropShadow = isOvermind
     ? `2px 3px 0 0 rgba(26,19,32,${hover ? 0.2 : 0.14})`
     : (hover ? '1px 2px 0 0 rgba(26,19,32,0.12)' : 'none');
   // Ring first so it sits tight to the card, then the existing drop shadow.
@@ -182,12 +182,12 @@ export function AgentCard({
         <div style={{ display: 'flex', gap: 8, height: '100%' }}>
           {/* Portrait tile — vertically centred so the card reads calm and even. */}
           <div style={{
-            width: 36, height: isGod ? 50 : 46, alignSelf: 'center',
+            width: 36, height: isOvermind ? 50 : 46, alignSelf: 'center',
             // God's CARD is now accent-light, so the tile cannot be — it would
             // vanish into its own background. Paper reads as an inset frame
             // against the tint, which is what the tile is meant to look like.
-            background: isGod ? 'var(--cth-paper-100)' : `var(--cth-${accent}-light)`,
-            boxShadow: `inset 0 0 0 1px var(--cth-ink-${isGod ? '300' : '100'})`,
+            background: isOvermind ? 'var(--cth-paper-100)' : `var(--cth-${accent}-light)`,
+            boxShadow: `inset 0 0 0 1px var(--cth-ink-${isOvermind ? '300' : '100'})`,
             // Anchor the sprite's TOP: the 56px-tall portrait overflows this
             // tile, and bottom-anchoring cropped the head — crop feet, not face.
             display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflow: 'hidden',
@@ -212,7 +212,7 @@ export function AgentCard({
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                   }}>{name.toUpperCase()}</span>
                 )}
-                {isGod && (
+                {isOvermind && (
                   <span style={{
                     fontFamily: 'var(--cth-font-display)', fontSize: 7, lineHeight: '11px',
                     background: `var(--cth-${accent})`, color: 'var(--cth-ink-900)',
@@ -239,7 +239,7 @@ export function AgentCard({
 
             {/* God: voice on its own compact row. Workers: the private note row.
                 Both sit ABOVE the gauge, so it is never covered. */}
-            {isGod ? (
+            {isOvermind ? (
               // Talk grows an info mark when the OpenAI key is missing, so this
               // row can hold three things instead of two. `overflow: hidden` is
               // the guard: the toggle's label shrinks first (it has minWidth:0),

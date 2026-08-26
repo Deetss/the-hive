@@ -16,7 +16,7 @@ export interface AgentNode {
   label: string;
   accent: AccentColorName;
   status: StatusKind;
-  isGod: boolean;
+  isOvermind: boolean;
   /** number of message edges touching this agent (drives node size) */
   degree: number;
 }
@@ -62,7 +62,7 @@ export interface MinimalAgent {
   name: string;
   accent: AccentColorName;
   status: StatusKind;
-  isGod?: boolean;
+  isOvermind?: boolean;
 }
 export interface MessageLogEntry {
   ts?: number;
@@ -148,7 +148,7 @@ export function buildGraph(
       label: a.name,
       accent: a.accent,
       status: a.status,
-      isGod: !!a.isGod,
+      isOvermind: !!a.isOvermind,
       degree: degree.get(a.id) ?? 0
     });
   }

@@ -304,7 +304,7 @@ export function OfficeFloor() {
       calG.on('pointertap', (ev) => {
         ev.stopPropagation();
         const st = useStore.getState();
-        const god = st.agents.find((a) => a.isGod);
+        const god = st.agents.find((a) => a.isOvermind);
         if (god) st.select(god.id);
         st.requestCommandCenterTab('triggers');
       });
@@ -373,7 +373,7 @@ export function OfficeFloor() {
       // All other workers claim seats from 1 onward.
       const GOD_SEAT = 0;
       const claimSeat = (agent: Agent): number | null => {
-        if (agent.isGod) { seatClaims.add(GOD_SEAT); return GOD_SEAT; }
+        if (agent.isOvermind) { seatClaims.add(GOD_SEAT); return GOD_SEAT; }
         for (let i = 1; i < seatTiles.length; i++) {
           if (!seatClaims.has(i)) { seatClaims.add(i); return i; }
         }
@@ -595,7 +595,7 @@ export function OfficeFloor() {
 
       /** Distance from the god's avatar in px, or Infinity when he's absent. */
       const godDistance = (px: number, py: number): number => {
-        const god = useStore.getState().agents.find((a) => a.isGod);
+        const god = useStore.getState().agents.find((a) => a.isOvermind);
         const grt = god ? runtimes.get(god.id) : undefined;
         if (!grt) return Infinity;
         const p = grt.character.getPixelPosition();
@@ -663,7 +663,7 @@ export function OfficeFloor() {
         releaseBreak(rt);
         rt.character.hideThought();
         const agent = agentById(id);
-        if (agent?.isGod) { rt.character.sitAtDesk(true); return; }
+        if (agent?.isOvermind) { rt.character.sitAtDesk(true); return; }
         const c = rt.character;
         if (!arrived) {
           // Never made it to the café (watchdog) — a held mug still goes home.
@@ -721,7 +721,7 @@ export function OfficeFloor() {
       };
 
       const breakEligible = (agent: Agent, rt: Runtime): boolean => {
-        if (agent.isGod || rt.brk || rt.err || rt.run || rt.cupCarryHome) return false;
+        if (agent.isOvermind || rt.brk || rt.err || rt.run || rt.cupCarryHome) return false;
         if (agent.status !== 'idle' && agent.status !== 'success') return false;
         return !rt.character.isSitting();   // already parked at a desk → leave it
       };
@@ -893,7 +893,7 @@ export function OfficeFloor() {
         let agent: Agent | undefined;
         let rt: Runtime | undefined;
         if (spot.godOnly) {
-          const god = useStore.getState().agents.find((a) => a.isGod);
+          const god = useStore.getState().agents.find((a) => a.isOvermind);
           const grt = god ? runtimes.get(god.id) : undefined;
           if (!god || !grt || grt.err || grt.brk
             || (god.status !== 'idle' && god.status !== 'success')
@@ -919,7 +919,7 @@ export function OfficeFloor() {
           const lines = ERRAND_THOUGHTS[spot.kind];
           c.showThought(lines[Math.floor(Math.random() * lines.length)]);
           const finish = (): void => {
-            const wasGod = !!agent!.isGod;
+            const wasGod = !!agent!.isOvermind;
             releaseErrand(rt!);
             c.hideThought();
             if (wasGod) c.sitAtDesk(true);  // the boss returns to his throne
@@ -960,7 +960,7 @@ export function OfficeFloor() {
         auraCooldown -= dt;
         if (auraCooldown > 0) return;
         auraCooldown = 1.5;
-        const god = useStore.getState().agents.find((a) => a.isGod);
+        const god = useStore.getState().agents.find((a) => a.isOvermind);
         const grt = god ? runtimes.get(god.id) : undefined;
         if (!grt) return;
         const gp = grt.character.getPixelPosition();
@@ -997,7 +997,7 @@ export function OfficeFloor() {
             rt.character.setCarryingCup(false);
             rt.character.setCupOnDesk(true);
             const agent = agentById(id);
-            if (agent && !agent.isGod && (agent.status === 'idle' || agent.status === 'success')) {
+            if (agent && !agent.isOvermind && (agent.status === 'idle' || agent.status === 'success')) {
               rt.character.startWandering();
             }
           }
@@ -1031,7 +1031,7 @@ export function OfficeFloor() {
       boardG.on('pointertap', (ev) => {
         ev.stopPropagation();
         const st = useStore.getState();
-        const god = st.agents.find((a) => a.isGod);
+        const god = st.agents.find((a) => a.isOvermind);
         if (god) st.select(god.id);
         st.requestCommandCenterTab('tasks');
       });
@@ -1140,7 +1140,7 @@ export function OfficeFloor() {
       askG.on('pointertap', (ev) => {
         ev.stopPropagation();
         const st = useStore.getState();
-        const god = st.agents.find((a) => a.isGod);
+        const god = st.agents.find((a) => a.isOvermind);
         if (god) st.select(god.id);
         st.requestCommandCenterTab('human');
       });
@@ -1298,7 +1298,7 @@ export function OfficeFloor() {
        *  god for fresh pins / orphan cards. Returns undefined → instant redraw. */
       const actorFor = (assignee: string | undefined, preferGod: boolean): string | undefined => {
         if (!preferGod && assignee && runtimes.has(assignee)) return assignee;
-        const god = useStore.getState().agents.find((a) => a.isGod);
+        const god = useStore.getState().agents.find((a) => a.isOvermind);
         return god && runtimes.has(god.id) ? god.id : undefined;
       };
 
@@ -1378,7 +1378,7 @@ export function OfficeFloor() {
       // distinct brood so the floor shows variety instead of every unit alike.
       const themeCastNames = Object.keys(theme.cast.byName);
       const pickThemeCharacter = (agent: Agent): string => {
-        if (agent.isGod) return theme.cast.defaultCharacter;
+        if (agent.isOvermind) return theme.cast.defaultCharacter;
         const pool = themeCastNames.filter((n) => n !== theme.cast.defaultCharacter);
         const names = pool.length ? pool : themeCastNames;
         let h = 0;
@@ -1472,7 +1472,7 @@ export function OfficeFloor() {
         const wasBusy = rt.prevStatus === 'working' || rt.prevStatus === 'thinking' || rt.prevStatus === 'compacting';
         const isBusy = agent.status === 'working' || agent.status === 'thinking' || agent.status === 'compacting';
         if (isBusy && !wasBusy) rt.busySince = Date.now();
-        const finishedWork = !force && !agent.isGod
+        const finishedWork = !force && !agent.isOvermind
           && wasBusy && (agent.status === 'idle' || agent.status === 'success')
           && rt.busySince !== undefined && Date.now() - rt.busySince >= CHEER_MIN_BUSY_MS;
         if (!isBusy) rt.busySince = undefined;
@@ -1553,7 +1553,7 @@ export function OfficeFloor() {
             break;
           case 'success':
             c.setStatusGlyph('success');
-            if (agent.isGod) { c.hideThought(); c.sitAtDesk(true); break; }
+            if (agent.isOvermind) { c.hideThought(); c.sitAtDesk(true); break; }
             c.startWandering();
             if (finishedWork) {
               c.cheer();
@@ -1571,7 +1571,7 @@ export function OfficeFloor() {
           default:
             c.setStatusGlyph('none');
             // The god runs the floor from its desk; everyone else wanders when idle.
-            if (agent.isGod) { c.sitAtDesk(true); c.showThought(liveActivity(agent, 'running the floor')); }
+            if (agent.isOvermind) { c.sitAtDesk(true); c.showThought(liveActivity(agent, 'running the floor')); }
             else if (finishedWork) {
               // Task done → a quick cheer on the spot, then back to roaming.
               c.startWandering();

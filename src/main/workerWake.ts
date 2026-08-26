@@ -70,7 +70,7 @@ export interface WorkerWakeFacts {
   /** Worker agent id (god is never a candidate). */
   agentId: string;
   /** True when this agent is the orchestrator — god is never nudged. */
-  isGod?: boolean;
+  isOvermind?: boolean;
   /** Live PTY id, or undefined when the agent has no terminal. */
   ptyId?: string;
   /** Timestamp of the PTY's last output (0 = never output). */
@@ -114,7 +114,7 @@ export class WorkerWakeWatchdog {
   decide(facts: readonly WorkerWakeFacts[], now = Date.now()): string[] {
     const out: string[] = [];
     for (const f of facts) {
-      if (f.isGod || f.inboxCount <= 0 || !f.ptyId) continue;
+      if (f.isOvermind || f.inboxCount <= 0 || !f.ptyId) continue;
       if (f.autoDeliveryPaused || f.paused || f.halted) continue;
       if (f.lastOutputAt <= 0) continue; // never produced output → still booting
       if (now - f.lastOutputAt < WORKER_WAKE_IDLE_MS) continue; // mid-turn

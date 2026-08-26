@@ -205,12 +205,18 @@ export interface HarnessConfig {
   defaultCommand: string;
   /** Default model for newly spawned agents (e.g. 'claude-sonnet-4-6[1m]'); unset = CLI default. */
   defaultModel?: string;
-  /** Which provider powers the GOD orchestrator ("Abathur"). The persona is
+  /** Which provider powers the Overmind orchestrator ("Abathur"). The persona is
    *  constant; only its engine is selectable. Default 'claude'. Eligible providers
    *  are those that can receive inbox (claude/codex/antigravity/qwen). */
-  godProvider?: AgentProvider;
-  /** The model GOD runs on. Unset falls back to the provider preset's
+  overmindProvider?: AgentProvider;
+  /** The model Overmind runs on. Unset falls back to the provider preset's
    *  `recommendedOrchestratorModel`, then MODEL_GOD. Default 'claude-opus-4-8'. */
+  overmindModel?: string;
+  /** @deprecated Renamed to overmindProvider in v0.5.0. Kept for back-compat
+   *  so existing config.json files continue to deserialise without data loss. */
+  godProvider?: AgentProvider;
+  /** @deprecated Renamed to overmindModel in v0.5.0. Kept for back-compat
+   *  so existing config.json files continue to deserialise without data loss. */
   godModel?: string;
   /** Per-server consent state for the default MCP bundle, keyed by catalog id.
    *  Seeded from MCP_CATALOG (safe-readonly ON, write/secret OFF); the user flips
@@ -436,8 +442,8 @@ const DEFAULTS: HarnessConfig = {
   autoMode: true,
   orchestratorMaySpawn: false,
   defaultCommand: 'claude',
-  godProvider: 'claude',
-  godModel: 'claude-opus-4-8',
+  overmindProvider: 'claude',
+  overmindModel: 'claude-opus-4-8',
   // Global default model for every agent that hasn't picked one explicitly — wins
   // over the role-based tiers (modelForRole) in the spawn handler, so all agents
   // (incl. god) default to Fable 5. A per-agent model choice still overrides it.
@@ -779,7 +785,7 @@ const MODEL_HELPER = 'claude-haiku-4-5-20251001';     // narrow, cheap helpers
 /** Minimal structural shape for tiering — a subset of AgentMeta so config.ts
  *  stays free of a hive.ts import. */
 export interface RoleHint {
-  isGod?: boolean;
+  isOvermind?: boolean;
   role?: string;
   capabilities?: string[];
 }
@@ -791,13 +797,15 @@ export interface RoleHint {
  *  explicit per-agent model selection always wins. */
 export function modelForRole(
   meta: RoleHint,
-  config?: Pick<HarnessConfig, 'godProvider' | 'godModel'>
+  config?: Pick<HarnessConfig, 'overmindProvider' | 'overmindModel' | 'godProvider' | 'godModel'>
 ): string | undefined {
-  if (meta.isGod) {
-    // GOD engine is selectable: an explicit godModel wins, else the chosen
-    // provider's recommended orchestrator model, else the legacy Opus default.
-    const preset = providerPreset(config?.godProvider ?? 'claude');
-    return config?.godModel ?? preset.recommendedOrchestratorModel ?? MODEL_GOD;
+  if (meta.isOvermind) {
+    // overmindModel/overmindProvider are the canonical names (v0.5.0+).
+    // godModel/godProvider are the legacy names kept for back-compat with
+    // existing config.json that hasn't been re-saved under the new keys.
+    const provider = config?.overmindProvider ?? config?.godProvider ?? 'claude';
+    const preset = providerPreset(provider);
+    return config?.overmindModel ?? config?.godModel ?? preset.recommendedOrchestratorModel ?? MODEL_GOD;
   }
   const hay = `${meta.role ?? ''} ${(meta.capabilities ?? []).join(' ')}`.toLowerCase();
   if (/\b(triage|rout|verif|lint|format|summar|classif|label)/.test(hay)) return MODEL_HELPER;

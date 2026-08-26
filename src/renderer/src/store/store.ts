@@ -82,7 +82,7 @@ export interface Agent {
    *  shown on the floor as a card above the seated avatar */
   lastPrompt?: string;
   /** the orchestrator ("god") agent — seated in Abathur's room, runs the floor */
-  isGod?: boolean;
+  isOvermind?: boolean;
   /** Abathur's prep assistant — send-only; enriches prompts and forwards them to
    *  the god. Excluded from broadcast fan-out and from the restorable-dead sweep. */
   isAssistant?: boolean;
@@ -685,7 +685,7 @@ export const useStore = create<State>((set, get) => ({
       const apply = (list: Agent[]): Agent[] => {
         let changed = false;
         const next = list.map((a) => {
-          const description = preferredAgentRole(a.description, roles[a.id], !!a.isGod);
+          const description = preferredAgentRole(a.description, roles[a.id], !!a.isOvermind);
           if (description === a.description) return a;
           changed = true;
           return { ...a, description };
@@ -754,7 +754,7 @@ export const useStore = create<State>((set, get) => ({
       // order, and a god-first sort at render time would silently override the
       // user's own arrangement every frame. This just makes the head the honest
       // default; a deliberate drag still wins and still persists.
-      const agents = agent.isGod ? [agent, ...s.agents] : [...s.agents, agent];
+      const agents = agent.isOvermind ? [agent, ...s.agents] : [...s.agents, agent];
       // Re-spawning an archived agent un-archives it: an id is active xor archived.
       const archivedAgents = s.archivedAgents.filter((a) => a.id !== agent.id);
       // A live (re)spawn also consumes any restorable entry for the same id.
@@ -942,7 +942,7 @@ export const useStore = create<State>((set, get) => ({
       // (full spawn recipe retained) instead of silently vanishing. God and the
       // prep assistant are excluded — they auto-respawn at boot.
       const dead = s.agents.filter(
-        (a) => a.ptyId && !live.has(a.ptyId) && !a.isGod && !a.isAssistant
+        (a) => a.ptyId && !live.has(a.ptyId) && !a.isOvermind && !a.isAssistant
       );
       const restorableAgents = [
         ...s.restorableAgents.filter((r) => !dead.some((d) => d.id === r.id)),

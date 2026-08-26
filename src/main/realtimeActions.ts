@@ -145,8 +145,8 @@ const SETTING_POLICY: Record<string, {
   // confirm: behavior-changing — echo old→new + distinct token
   autoMode: { tier: 'confirm', type: 'boolean' },
   defaultModel: { tier: 'confirm', type: 'string' },
-  godProvider: { tier: 'confirm', type: 'string' },
-  godModel: { tier: 'confirm', type: 'string' },
+  overmindProvider: { tier: 'confirm', type: 'string' },
+  overmindModel: { tier: 'confirm', type: 'string' },
   maxConcurrentWorkers: { tier: 'confirm', type: 'number', min: 1, max: 16 },
   costCapTokens: { tier: 'confirm', type: 'number', min: 0, max: 1_000_000_000 },
   maxTurns: { tier: 'confirm', type: 'number', min: 1, max: 1000 },
@@ -201,7 +201,7 @@ function isMassTarget(target: string): boolean {
   return false;
 }
 
-interface ResolvedAgent { id: string; name: string; isGod: boolean }
+interface ResolvedAgent { id: string; name: string; isOvermind: boolean }
 
 /** Resolve a spoken target ("jim", "kill oscar", an id) to a single live agent, or
  *  return a spoken disambiguation error. Prefers non-archived matches. */
@@ -209,8 +209,8 @@ function resolveAgent(target: string, reg: Registry): ResolvedAgent | { error: s
   const t = norm(target);
   if (!t) return { error: 'no agent was named' };
   const entries = Object.entries(reg.agents ?? {});
-  const mk = (id: string, m: { name?: string; isGod?: boolean }): ResolvedAgent => ({
-    id, name: m.name || id, isGod: !!m.isGod || id === reg.godId
+  const mk = (id: string, m: { name?: string; isOvermind?: boolean }): ResolvedAgent => ({
+    id, name: m.name || id, isOvermind: !!m.isOvermind || id === reg.godId
   });
   // exact id
   const byId = entries.find(([id]) => id.toLowerCase() === t);
@@ -606,7 +606,7 @@ function proposeDestructive(deps: RealtimeActionDeps, verb: string, a: Record<st
     // God policy per verb: kill/pause/halt/archive on god stay voice-forbidden.
     // clear_context on god is ALLOWED behind confirm — it's recoverable
     // (sessions resume) and "clear Abathur's context" is a real operator need.
-    if (r.isGod && verb !== 'clear_context')
+    if (r.isOvermind && verb !== 'clear_context')
       return { ok: false, spoken: `${verb} on the god orchestrator is voice-forbidden. That has to be done in the UI.` };
 
     const commit =

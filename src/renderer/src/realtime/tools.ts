@@ -276,8 +276,8 @@ export function realtimeReadTools(): ReturnType<typeof tool>[] {
           const parts: string[] = [];
           parts.push(`Autonomy mode is ${c.autoMode ? 'on' : 'off'}.`);
           if (c.defaultModel) parts.push(`The default model is ${c.defaultModel}.`);
-          if (c.godProvider || c.godModel)
-            parts.push(`The god orchestrator runs ${[c.godProvider, c.godModel].filter(Boolean).join(' ')}.`);
+          if (c.overmindProvider || c.overmindModel)
+            parts.push(`The god orchestrator runs ${[c.overmindProvider, c.overmindModel].filter(Boolean).join(' ')}.`);
           if (typeof cc.maxConcurrentWorkers === 'number')
             parts.push(`Up to ${plural(cc.maxConcurrentWorkers, 'worker')} run concurrently.`);
           // De-monetized: report only the token cap (no dollar cap), and avoid
@@ -631,7 +631,7 @@ export async function realtimeSessionSummary(): Promise<string> {
       window.cth.hiveTasks()
     ]);
     const rows = (Array.isArray(dir?.agents) ? (dir.agents as unknown[]) : []).map(obj).filter((a) => !a.archived);
-    const godRow = rows.find((a) => a.isGod === true);
+    const godRow = rows.find((a) => a.isOvermind === true);
     const lines = rows.slice(0, 20).map((a) => {
       const bits = [
         `${str(a.name) || str(a.id)} is ${str(a.status) || 'in an unknown state'}`,

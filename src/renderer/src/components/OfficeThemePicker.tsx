@@ -51,7 +51,7 @@ export function OfficeThemePicker({ config }: { config: HarnessConfig }) {
   };
 
   const nonGodAgents = () =>
-    useStore.getState().agents.filter((a) => !a.isGod && !a.isAssistant);
+    useStore.getState().agents.filter((a) => !a.isOvermind && !a.isAssistant);
 
   const onSelect = (id: ThemeId) => {
     setNote('');
@@ -195,7 +195,7 @@ function ThemeSwitchConfirmModal({
 }) {
   const n = agents.length;
   const working = agents.filter((a) => a.status && !['idle', 'success', 'error'].includes(a.status)).length;
-  const godName = useStore.getState().agents.find((a) => a.isGod)?.name ?? 'the orchestrator';
+  const godName = useStore.getState().agents.find((a) => a.isOvermind)?.name ?? 'the orchestrator';
 
   return (
     <div

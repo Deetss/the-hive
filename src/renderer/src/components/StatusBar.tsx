@@ -90,7 +90,7 @@ export function StatusBar() {
 
   // Selected agent (or god as fallback) for per-agent context chips.
   const focusAgent = useMemo(
-    () => agents.find((a) => a.id === selectedId) ?? agents.find((a) => a.isGod) ?? null,
+    () => agents.find((a) => a.id === selectedId) ?? agents.find((a) => a.isOvermind) ?? null,
     [agents, selectedId]
   );
 

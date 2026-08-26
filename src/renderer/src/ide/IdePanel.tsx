@@ -87,7 +87,7 @@ function pickIdeTarget(): IdeTarget {
   const byId = (id: string | null): Agent | null => (id ? s.agents.find((a) => a.id === id) ?? null : null);
   const named = byId(s.ideAgentId);
   if (named?.cwd) return { agent: named, root: named.cwd, inferred: false };
-  const guess = byId(s.selectedId) ?? s.agents.find((a) => a.isGod) ?? s.agents[0] ?? null;
+  const guess = byId(s.selectedId) ?? s.agents.find((a) => a.isOvermind) ?? s.agents[0] ?? null;
   if (guess?.cwd) return { agent: guess, root: guess.cwd, inferred: true };
   return { agent: null, root: null, inferred: false };
 }
@@ -393,7 +393,7 @@ export function IdePanel() {
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '22vw'
               }}
             >{target.agent.name}</span>
-            {target.agent.isGod && (
+            {target.agent.isOvermind && (
               <span style={{
                 fontFamily: 'var(--cth-font-display)', fontSize: 7, padding: '1px 3px',
                 background: 'var(--cth-lilac-light)', color: 'var(--cth-ink-900)'

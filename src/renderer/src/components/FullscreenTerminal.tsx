@@ -130,7 +130,7 @@ function useResolvedRepoNames(agents: Agent[]): number {
 /** The roster section an agent lives in — god agents share one ungrouped
  *  section, everyone else groups by repository. */
 function groupKey(agent: Agent): string {
-  return agent.isGod ? '__god__' : repoKeyOf(agent);
+  return agent.isOvermind ? '__god__' : repoKeyOf(agent);
 }
 
 /** Drag-reorder wiring handed down to each row. */
@@ -233,7 +233,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
     // two same-named repos stay two groups but still read by name.
     const byRepo = new Map<string, { label: string; members: Agent[] }>();
     for (const a of agents) {
-      if (a.isGod) { godList.push(a); continue; }
+      if (a.isOvermind) { godList.push(a); continue; }
       const key = repoKeyOf(a);
       const bucket = byRepo.get(key);
       if (bucket) bucket.members.push(a);
@@ -624,7 +624,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
           display: 'flex', flexDirection: 'column',
           padding: 12, gap: 10
         }}>
-          {agent.isGod ? (
+          {agent.isOvermind ? (
             // Abathur runs the floor from the command center — its tabs (tasks,
             // ask me, triggers, memory, graph…) are the whole point of selecting
             // him, and fullscreen used to drop them for a bare terminal.
@@ -1022,7 +1022,7 @@ function Header({ agent, onEdit }: { agent: Agent; onEdit: () => void }) {
           with the agent. Icon-only because it sits inside the identity line —
           the word "edit" there would push the path off. God is excluded, as
           everywhere else: his identity is the hive's, not the roster's. */}
-      {!agent.isGod && (
+      {!agent.isOvermind && (
         <PixelButton variant="secondary" size="sm" onClick={onEdit}>
           <span
             className="cth-tip cth-tip-left cth-tip-wrap"
@@ -1064,7 +1064,7 @@ function Header({ agent, onEdit }: { agent: Agent; onEdit: () => void }) {
             voice session even while a worker's terminal fills the screen. The cost
             HUD stays Abathur-only (it belongs to his card). */}
         <RealtimeAbathurToggle />
-        {agent.isGod && <CostHud compact />}
+        {agent.isOvermind && <CostHud compact />}
         <PixelButton variant="secondary" size="sm" onClick={openTerminal} disabled={openState === 'opening'}>
           <span
             className="cth-tip cth-tip-wrap"
@@ -1086,7 +1086,7 @@ function Header({ agent, onEdit }: { agent: Agent; onEdit: () => void }) {
           status={typing ? 'typing' : agent.status}
           style={{ height: 24, padding: '0 8px', lineHeight: '24px' }}
         />
-        {!agent.isGod && (
+        {!agent.isOvermind && (
           <PixelButton variant="destructive" size="sm" onClick={onKill}>
             {/* inline-flex + center: the other buttons hold TEXT, whose line box
                 the button centres for free. A bare <Icon> is replaced-content

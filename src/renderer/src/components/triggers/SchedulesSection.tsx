@@ -136,7 +136,7 @@ export function SchedulesSection({ onSummary }: { onSummary?: (s: string) => voi
             <Select value={mTo} onChange={setMTo} style={{ width: '100%' }}>
               <option value="broadcast">everyone</option>
               <option value="god">Abathur</option>
-              {agents.filter((a) => !a.isGod).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {agents.filter((a) => !a.isOvermind).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </Select>
           </Field>
           <Field label="WHEN">
@@ -172,7 +172,7 @@ export function SchedulesSection({ onSummary }: { onSummary?: (s: string) => voi
 
 /* ─────────────────────────────── one mission ─────────────────────────────── */
 
-interface RosterAgent { id: string; name: string; isGod?: boolean }
+interface RosterAgent { id: string; name: string; isOvermind?: boolean }
 
 function MissionRow({ mission, targetName, agents, onPatch, onDelete }: {
   mission: ScheduledMission;
@@ -274,7 +274,7 @@ function MissionRow({ mission, targetName, agents, onPatch, onDelete }: {
             <Select value={to} onChange={setTo} style={{ width: '100%' }}>
               <option value="broadcast">everyone</option>
               <option value="god">Abathur</option>
-              {agents.filter((a) => !a.isGod).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {agents.filter((a) => !a.isOvermind).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </Select>
           </Field>
           <Field label="WHEN">

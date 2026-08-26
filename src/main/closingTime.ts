@@ -99,7 +99,7 @@ export class ClosingTimeController {
     this.workers = new Set(
       [...live].filter((id) => {
         const a = reg.agents[id];
-        return id !== this.godId && !!a && !a.isGod;
+        return id !== this.godId && !!a && !a.isOvermind;
       })
     );
     this.acked = new Set();

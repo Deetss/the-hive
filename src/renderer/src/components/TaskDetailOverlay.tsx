@@ -59,7 +59,7 @@ export function TaskDetailOverlay() {
     // Route through the Command Center's dispatch box (which mails the god —
     // the human never writes into a worker's inbox directly).
     const st = useStore.getState();
-    const god = st.agents.find((a) => a.isGod);
+    const god = st.agents.find((a) => a.isOvermind);
     if (god) st.select(god.id);
     const desc = task.description?.trim() ? task.description.trim() : '(no description)';
     st.requestDispatchSeed(`Task: ${task.title}\nContext: ${desc}\n`);

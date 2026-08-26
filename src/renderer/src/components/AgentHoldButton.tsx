@@ -42,7 +42,7 @@ export function AgentHoldButton({ agentId }: { agentId: string }) {
     return () => { alive = false; };
   }, [agentId]);
 
-  if (!agent || agent.isGod) return null;
+  if (!agent || agent.isOvermind) return null;
   const on = !!agent.onHold;
 
   return (

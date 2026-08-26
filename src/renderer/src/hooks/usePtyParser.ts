@@ -151,8 +151,8 @@ export function usePtyParser(agentId: string) {
       // Only the god agent talks to the human, so only it is truly "blocked"
       // (needs you). A sub-agent sitting at a prompt is autonomous — it reads as
       // "waiting" and we don't raise a human-approval card for it.
-      const isGod = !!useStore.getState().agents.find((a) => a.id === agentId)?.isGod;
-      if (isGod) {
+      const isOvermind = !!useStore.getState().agents.find((a) => a.id === agentId)?.isOvermind;
+      if (isOvermind) {
         updateAgent(agentId, {
           status: 'blocked',
           action: 'waiting on you',

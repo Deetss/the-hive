@@ -53,7 +53,7 @@ export interface HiveAgentMeta {
   role?: string;
   capabilities?: string[];
   cwd: string;
-  isGod?: boolean;
+  isOvermind?: boolean;
   /** Abathur's prep assistant — send-only; enriches prompts and forwards them. */
   isAssistant?: boolean;
 }
@@ -119,7 +119,7 @@ export interface AgentDirectoryEntry {
   /** Whether `cwd` is an absolute, existing directory (spawn-usable). */
   cwdValid: boolean | null;
   archived: boolean;
-  isGod: boolean;
+  isOvermind: boolean;
   isAssistant: boolean;
   sessionId: string | null;
   /** Whether the agent has recorded non-trivial memory beyond the seed header. */
@@ -274,9 +274,13 @@ export interface HarnessConfig {
   autoMode: boolean;
   defaultCommand: string;
   defaultModel?: string;
-  /** Which provider+model powers the GOD orchestrator ("Abathur"). Default
+  /** Which provider+model powers the Overmind orchestrator ("Abathur"). Default
    *  'claude' / 'claude-opus-4-8'. Mirrors src/main/config.ts. */
+  overmindProvider?: AgentProvider;
+  overmindModel?: string;
+  /** @deprecated back-compat for existing config.json pre-v0.5.0 */
   godProvider?: AgentProvider;
+  /** @deprecated back-compat for existing config.json pre-v0.5.0 */
   godModel?: string;
   /** Per-server consent for the default MCP bundle, keyed by catalog id. Mirrors
    *  src/main/config.ts. */

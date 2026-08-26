@@ -1225,9 +1225,9 @@ function writeFleetSnapshot(): void {
         return {
           id,
           name: a.name,
-          role: a.role ?? (a.isGod ? 'orchestrator' : 'agent'),
+          role: a.role ?? (a.isOvermind ? 'orchestrator' : 'agent'),
           cwd: a.cwd,
-          isGod: !!a.isGod,
+          isOvermind: !!a.isOvermind,
           breaker: breaker.levelFor(id),
           tokens,
           usd: lifetime === null ? sessionUsd : Number(lifetime.toFixed(4)),
@@ -2733,10 +2733,10 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     const args = argsWithAutoModeFlag(opts.args ?? [], cfg.autoMode, provider);
     // Model precedence: an explicit per-agent --model (from the renderer) wins;
     // else the user's global defaultModel; else the role-based default tier. The
-    // GOD is special-cased: it has its own engine config (godProvider/godModel), so
+    // GOD is special-cased: it has its own engine config (overmindProvider/overmindModel), so
     // modelForRole resolves it and that wins over the worker-oriented defaultModel.
     if (!args.includes('--model')) {
-      const m = opts.hive.isGod
+      const m = opts.hive.isOvermind
         ? modelForRole(opts.hive, cfg)
         : cfg.defaultModel ?? modelForRole(opts.hive, cfg);
       if (m) args.push('--model', m);
@@ -3756,7 +3756,7 @@ ipcMain.handle('hive:agentContext', (_evt, agentId: unknown) => {
 // A consolidated, NON-SENSITIVE per-agent directory for the voice read-layer
 // (Realtime Abathur's get_agent_detail / list_agents). One read that joins
 // everything the office-floor sidebar + telemetry know per agent: the registry
-// record (name/role/provider/cwd/status/archived/isGod/isAssistant/sessionId/
+// record (name/role/provider/cwd/status/archived/isOvermind/isAssistant/sessionId/
 // cwdValid), live token + breaker + last-tool telemetry, and the current context
 // window fill. Includes ARCHIVED agents (unlike the heartbeat's fleet.json, which
 // is live-only) so Abathur can speak to inactive agents — their cwd and memory
@@ -3776,14 +3776,14 @@ ipcMain.handle('hive:agentDirectory', () => {
     return {
       id,
       name: a.name,
-      role: a.role ?? (a.isGod ? 'orchestrator' : 'agent'),
+      role: a.role ?? (a.isOvermind ? 'orchestrator' : 'agent'),
       provider: a.provider ?? 'claude',
       model: u?.model ?? null,
       status: a.status ?? 'idle',
       cwd: a.cwd ?? null,
       cwdValid: a.cwdValid ?? null,
       archived: !!a.archived,
-      isGod: !!a.isGod,
+      isOvermind: !!a.isOvermind,
       isAssistant: !!a.isAssistant,
       sessionId: a.sessionId ?? null,
       hasMemory: hive.hasMemory(id),
@@ -5090,7 +5090,7 @@ function runWorkerWakeBeat(): void {
     const snap = control.snapshot(agentId);
     facts.push({
       agentId,
-      isGod: agentId === reg.godId,
+      isOvermind: agentId === reg.godId,
       ptyId,
       lastOutputAt: ptyManager.lastOutputAt(ptyId) ?? 0,
       inboxCount: hive.inbox(agentId).length,

@@ -297,10 +297,10 @@ export function MemoryGraphPanel({
                     x={-half} y={-half} width={s} height={s}
                     fill={nodeFill(n)}
                     stroke="var(--cth-ink-900)"
-                    strokeWidth={n.kind === 'agent' && n.isGod ? 2 : 1.5}
+                    strokeWidth={n.kind === 'agent' && n.isOvermind ? 2 : 1.5}
                   />
                   {/* double border for god + human */}
-                  {((n.kind === 'agent' && n.isGod) || (n.kind === 'pseudo' && n.id === 'human')) && (
+                  {((n.kind === 'agent' && n.isOvermind) || (n.kind === 'pseudo' && n.id === 'human')) && (
                     <rect x={-half + 3} y={-half + 3} width={s - 6} height={s - 6}
                       fill="none" stroke="var(--cth-ink-900)" strokeWidth={1} />
                   )}
@@ -488,7 +488,7 @@ function actColor(act?: MessageAct): string {
 }
 
 function nodeSize(n: GraphNode): number {
-  if (n.kind === 'agent') return (n.isGod ? 30 : 22) + Math.min(n.degree, 10) * 1.0;
+  if (n.kind === 'agent') return (n.isOvermind ? 30 : 22) + Math.min(n.degree, 10) * 1.0;
   if (n.kind === 'topic') return 12 + Math.min(n.weight, 6) * 1.4;
   return 17; // pseudo
 }
