@@ -1254,6 +1254,15 @@ const api = {
   /** Whether a remote URL passes the same isSafeGitUrl guard the backend enforces. */
   isSafeRemoteUrl: (url: string): Promise<boolean> => ipcRenderer.invoke('sync:isSafeRemote', url),
 
+  // ─── Local delegate agents ──────────────────────────────────────────────────
+  ldaList: (): Promise<unknown[]> => ipcRenderer.invoke('lda:list'),
+  ldaUpsert: (cfg: unknown): Promise<unknown> => ipcRenderer.invoke('lda:upsert', cfg),
+  ldaRemove: (id: string): Promise<unknown> => ipcRenderer.invoke('lda:remove', id),
+  ldaHealth: (id: string): Promise<{ ok: boolean; latencyMs: number; error?: string }> =>
+    ipcRenderer.invoke('lda:health', id),
+  ldaInvoke: (req: unknown): Promise<{ ok: boolean; output: string; exitCode: number; durationMs: number }> =>
+    ipcRenderer.invoke('lda:invoke', req),
+
   // ─── Active-shell telemetry ─────────────────────────────────────────────────
   /** Pull the current active-shell count on mount (cold-start backfill). */
   shellsSnapshot: (): Promise<{ activeShells: number }> => ipcRenderer.invoke('fleet:shellsSnapshot'),

@@ -12,6 +12,7 @@ import {
 import { defaultMcpDefaults } from '../shared/mcpCatalog';
 import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
 import { type RuntimeProfile, normalizeRuntimeProfile, normalizeRuntimeProfiles } from '../shared/runtimeProfile';
+import type { LocalDelegateConfig } from '../shared/localDelegate';
 import { expandTilde, normalizeHiveHome } from './fs';
 import type { IntegrationRecord } from '../shared/integrations';
 import {
@@ -329,6 +330,10 @@ export interface HarnessConfig {
    *  METADATA only: a profile's `claudeConfigDir` is a PATH pointer to a login dir
    *  outside the synced hive repo — no credential is ever stored here. Default []. */
   runtimeProfiles?: RuntimeProfile[];
+  /** User-configured local delegate agents — ephemeral per-request capability boxes
+   *  (e.g. a Jetson/DGX running a local model) that the orchestrator can route bulk
+   *  read/summarize/draft work to natively. Phase 1: wsl-exec transport only. */
+  localDelegates?: LocalDelegateConfig[];
   /** Runtime-derived WORK / PERSONAL badge from CLAUDE_CONFIG_DIR basename. Not persisted. */
   accountBadge?: 'WORK' | 'PERSONAL';
   /** Master toggle for the Slack → Abathur's-queue integration. */
@@ -440,6 +445,7 @@ const DEFAULTS: HarnessConfig = {
   // (incl. god) default to Fable 5. A per-agent model choice still overrides it.
   defaultModel: 'claude-fable-5',
   runtimeProfiles: [],
+  localDelegates: [],
   // Seeded from the MCP catalog so the consent defaults never drift from it
   // (safe-readonly ON, write/secret OFF).
   mcpDefaults: defaultMcpDefaults(),
@@ -752,6 +758,27 @@ export function removeRuntimeProfile(id: unknown): HarnessConfig {
   const current = readConfig();
   const list = normalizeRuntimeProfiles(current.runtimeProfiles).filter((p) => p.id !== id.trim());
   return persistConfig({ ...current, runtimeProfiles: list });
+}
+
+// — Local delegate agents —
+
+export function listLocalDelegates(): LocalDelegateConfig[] {
+  return (readConfig().localDelegates ?? []) as LocalDelegateConfig[];
+}
+
+export function upsertLocalDelegate(cfg: unknown): HarnessConfig {
+  if (!cfg || typeof cfg !== 'object') throw new Error('invalid delegate config');
+  const d = cfg as LocalDelegateConfig;
+  if (typeof d.id !== 'string' || !d.id.trim()) throw new Error('delegate id required');
+  const current = readConfig();
+  const list = listLocalDelegates().filter((e) => e.id !== d.id.trim());
+  return persistConfig({ ...current, localDelegates: [...list, d] });
+}
+
+export function removeLocalDelegate(id: unknown): HarnessConfig {
+  if (typeof id !== 'string' || !id.trim()) throw new Error('invalid delegate id');
+  const current = readConfig();
+  return persistConfig({ ...current, localDelegates: listLocalDelegates().filter((e) => e.id !== (id as string).trim()) });
 }
 
 /** Wipe the persisted config back to first-run defaults so the app boots into

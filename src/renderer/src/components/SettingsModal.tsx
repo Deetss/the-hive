@@ -19,6 +19,7 @@ import { Icon } from './Icon';
 import { OfficeThemePicker } from './OfficeThemePicker';
 import { McpDefaultsSettings } from './McpDefaultsSettings';
 import { IntegrationsRegistry } from './IntegrationsRegistry';
+import { LocalDelegateSettings } from './LocalDelegateSettings';
 import { AiEnginesSettings } from './AiEnginesSettings';
 import { REALTIME_MODEL } from '@shared/realtimePricing';
 import { RealtimeDevicePicker } from '@/realtime/DevicePicker';
@@ -1311,10 +1312,12 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                     </>
                   )}
 
-                  {/* CONNECTIONS — everything external (MCP + Slack + webhook + REST) */}
+                  {/* CONNECTIONS — everything external (MCP + Slack + webhook + REST + local delegates) */}
                   {activeSection === 'Connections' && (
                     <>
                       <McpDefaultsSettings config={config} />
+                      <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
+                      <LocalDelegateSettings />
                       <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
                     </>
                   )}
