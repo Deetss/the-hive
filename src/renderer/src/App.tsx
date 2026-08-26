@@ -126,6 +126,25 @@ export function App() {
   // (solo-hold threshold, aborts on any other key). See freeflow/holdOption.ts.
   useHoldOptionToTalk();
 
+  // Always-on hive message subscription for the Ask Me direct-message stream.
+  // Lives here (App root) so it fires regardless of which agent or tab is selected.
+  // Discriminator: skip messages whose conversation id is in quickAskConversations
+  // (those are god's replies to the human's own Quick-Ask queries, handled by
+  // QuickAskPanel). Surface ALL other needsHuman messages regardless of act.
+  useEffect(() => {
+    if (!window.cth?.onHiveMessage) return;
+    return window.cth.onHiveMessage((e) => {
+      if (!e.needsHuman || !e.body || !e.id) return;
+      const { quickAskConversations, addHumanMessage } = useStore.getState();
+      if (e.conversation && quickAskConversations.includes(e.conversation)) return;
+      addHumanMessage({
+        id: e.id, from: e.from, subject: e.subject ?? '',
+        body: e.body!, act: e.act,
+        arrivedAt: Date.now(), resolved: false, replyDraft: ''
+      });
+    });
+  }, []);
+
   // Quit warning subscription
   useEffect(() => window.cth.onCloseRequested((info) => setQuitWarn(info)), []);
 

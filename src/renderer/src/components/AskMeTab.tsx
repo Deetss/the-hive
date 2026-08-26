@@ -73,12 +73,11 @@ export function AskMeTab() {
     return () => { if (timer.current) clearInterval(timer.current); };
   }, [refresh]);
 
-  // Keep the store task-badge count current (message part updated in CommandCenterPanel).
+  // Keep the task pending count in the store current.
+  // Message count is derived live in AskMeTabButton from humanMessages selector.
   useEffect(() => {
-    const taskPending = tasks.filter(waitsOnHuman).length;
-    const msgPending = messages.filter((m) => !m.resolved).length;
-    setAskMePending(taskPending + msgPending);
-  }, [tasks, messages, setAskMePending]);
+    setAskMePending(tasks.filter(waitsOnHuman).length);
+  }, [tasks, setAskMePending]);
 
   const nameFor = (id?: string): string | undefined =>
     id ? (agents.find((a) => a.id === id)?.name ?? restorable.find((a) => a.id === id)?.name ?? id) : undefined;

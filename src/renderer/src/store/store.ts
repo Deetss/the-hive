@@ -261,10 +261,14 @@ interface State {
   dispatchSeedRequest: { text: string; seq: number } | null;
   requestDispatchSeed: (text: string) => void;
   clearDispatchSeedRequest: () => void;
-  /** Count of unresolved items in the Ask Me tab (humanQA pending + direct
-   *  queries to human). Drives the tab badge. Updated by AskMeTab + CommandCenterPanel. */
+  /** Task-pending count for Ask Me tab (humanQA only). Badge adds live
+   *  humanMessages.filter(!resolved).length on top of this via selector. */
   askMePending: number;
   setAskMePending: (n: number) => void;
+  /** Conversation IDs the human sent as Quick-Ask queries. Used to exclude
+   *  god's replies from the Ask Me direct-message stream. */
+  quickAskConversations: string[];
+  trackQuickAskConversation: (id: string) => void;
   /** Direct hive messages from god/agents addressed to the human.
    *  Persisted in the store so they survive AskMeTab unmount/tab switches. */
   humanMessages: HumanMessage[];
@@ -866,6 +870,12 @@ export const useStore = create<State>((set, get) => ({
   clearDispatchSeedRequest: () => set({ dispatchSeedRequest: null }),
   askMePending: 0,
   setAskMePending: (n) => set({ askMePending: n }),
+  quickAskConversations: [],
+  trackQuickAskConversation: (id) => set((s) => ({
+    quickAskConversations: s.quickAskConversations.includes(id)
+      ? s.quickAskConversations
+      : [...s.quickAskConversations, id]
+  })),
   humanMessages: [],
   addHumanMessage: (msg) => set((s) => {
     if (s.humanMessages.some((m) => m.id === msg.id)) return s; // dedupe

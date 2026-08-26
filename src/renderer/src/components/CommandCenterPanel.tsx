@@ -19,7 +19,7 @@ import { MemoryGraphPanel } from './MemoryGraphPanel';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
 import { COMMAND_GROUPS } from '@shared/claudeCommands';
 import { roleForHiveSpawn } from '@shared/agentRole';
-import { useStore, triggerHistoryVisible, type Agent, type HumanMessage } from '@/store/store';
+import { useStore, triggerHistoryVisible, type Agent } from '@/store/store';
 import { usePtyParser } from '@/hooks/usePtyParser';
 import {
   buildSpawnCommand,
@@ -81,7 +81,9 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
 type TabDef = { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] };
 
 function AskMeTabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean; accent: string; onClick: () => void }) {
-  const pending = useStore((s) => s.askMePending);
+  const taskPending = useStore((s) => s.askMePending);
+  const msgPending = useStore((s) => s.humanMessages.filter((m) => !m.resolved).length);
+  const pending = taskPending + msgPending;
   const showBadge = t.key === 'human' && pending > 0 && !active;
   return (
     <button
@@ -121,24 +123,6 @@ function AskMeTabButton({ t, active, accent, onClick }: { t: TabDef; active: boo
  *  cols/rows and corrupt the display. */
 export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent; fullscreen?: boolean }) {
   const [tab, setTab] = useState<CCTab>('terminal');
-
-  // Always-on hive message subscription — must live here (not in AskMeTab) so
-  // messages are captured even when the ask-me tab is not active (Fix #2).
-  // Fix #1: only surface act:'query'/'request' — not 'inform' replies that belong
-  // to QuickAskPanel's own god-replies-to-human stream.
-  const addHumanMessage = useStore((s) => s.addHumanMessage);
-  useEffect(() => {
-    if (!window.cth?.onHiveMessage) return;
-    return window.cth.onHiveMessage((e) => {
-      if (!e.needsHuman || !e.body || !e.id) return;
-      if (e.act !== 'query' && e.act !== 'request') return; // skip inform replies (QuickAskPanel handles those)
-      addHumanMessage({
-        id: e.id, from: e.from, subject: e.subject ?? '',
-        body: e.body!, act: e.act,
-        arrivedAt: Date.now(), resolved: false, replyDraft: ''
-      } satisfies HumanMessage);
-    });
-  }, [addHumanMessage]);
 
   // The trigger-history ledger has nothing to say until an outside party can
   // reach us, so its tab appears only once an org key or a webhook exists. This
