@@ -1270,13 +1270,14 @@ const BADGE_COLORS: Record<ActivityEntry['badge'], string> = {
 interface LogEntry { ts?: number; kind?: string; [k: string]: unknown }
 
 function ActivityTab() {
-  // Feed entries live in the store (populated by App.tsx's always-mounted
-  // subscription) so they survive tab switches and accumulate off-tab.
   const feed = useStore((s) => s.activityFeed);
+  const agents = useStore((s) => s.agents);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showRaw, setShowRaw] = useState(false);
   const [log, setLog] = useState<LogEntry[]>([]);
   const clearActivityUnread = useStore((s) => s.clearActivityUnread);
+
+  const nameFor = (id: string) => agents.find((a) => a.id === id)?.name ?? id;
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Clear unread badge when this tab mounts.
@@ -1296,7 +1297,7 @@ function ActivityTab() {
   const fmtRaw = (e: LogEntry): string => {
     switch (e.kind) {
       case 'spawn': return `spawned ${String(e.name ?? e.agentId ?? '')}`;
-      case 'message': return `${String(e.from ?? '')} → ${String(e.to ?? '')}: ${String(e.subject || e.act || '')}`;
+      case 'message': return `${nameFor(String(e.from ?? ''))} → ${nameFor(String(e.to ?? ''))}: ${String(e.subject || e.act || '')}`;
       case 'drain': return `${String(e.agentId ?? '')} drained ${String(e.count ?? '')} msg(s)`;
       case 'escalate': return `escalated to human: ${String(e.subject ?? '')}`;
       case 'approval': return `approval ${e.approve ? 'granted' : 'denied'}`;
@@ -1329,7 +1330,7 @@ function ActivityTab() {
                   {entry.headline}
                 </span>
                 <span style={{ fontSize: 10, color: 'var(--cth-ink-300)', flexShrink: 0 }}>
-                  {entry.from} · {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {nameFor(entry.from)} · {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
               {expanded && (
