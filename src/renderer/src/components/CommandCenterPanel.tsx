@@ -81,11 +81,10 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
 type TabDef = { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] };
 
 function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean; accent: string; onClick: () => void }) {
-  const taskPending = useStore((s) => s.askMePending);
   const msgPending = useStore((s) => s.humanMessages.filter((m) => !m.resolved).length);
   const activityUnread = useStore((s) => s.activityUnread);
   const assignedPending = useStore((s) => s.assignedPending);
-  const badge = t.key === 'human' ? taskPending + msgPending
+  const badge = t.key === 'human' ? msgPending
     : t.key === 'activity' ? activityUnread
     : t.key === 'tasks' ? assignedPending
     : 0;
