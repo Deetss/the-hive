@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '@/store/store';
 import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTelemetry';
 import { useActiveShells } from '@/hooks/useShells';
+import { useRateLimits, ratePaceColor, fmtReset } from '@/hooks/useRateLimits';
 
 /**
  * Persistent bottom status line: live hive+fleet state at a glance.
@@ -86,6 +87,13 @@ export function StatusBar() {
   const messageQueues = useStore((s) => s.messageQueues);
   const { samples, rate, breakers } = useFleetTelemetry();
   const shells = useActiveShells();
+  const rateLimits = useRateLimits();
+
+  // One-time read of accountBadge from config (WORK/PERSONAL from CLAUDE_CONFIG_DIR).
+  const [accountBadge, setAccountBadge] = useState<'WORK' | 'PERSONAL' | null>(null);
+  useEffect(() => {
+    window.cth?.getConfig?.().then((c) => setAccountBadge(c.accountBadge ?? null)).catch(() => {});
+  }, []);
 
   const live = useMemo(() => agents.filter((a) => a.ptyId && !a.archived), [agents]);
 
@@ -101,7 +109,7 @@ export function StatusBar() {
     const cwd = focusAgent?.worktreePath ?? focusAgent?.cwd;
     if (!cwd) { setBranch(null); return; }
     let cancelled = false;
-    window.cth.gitBranch?.(cwd).then((r) => {
+    window.cth?.gitBranch?.(cwd).then((r) => {
       if (cancelled) return;
       setBranch('current' in r && r.current ? r.current : null);
     }).catch(() => setBranch(null));
@@ -158,6 +166,17 @@ export function StatusBar() {
     [messageQueues]
   );
 
+  // Fleet-worst rate limits: pick the agent with the highest 5h/7d usage.
+  const { worstFiveHour, worstSevenDay } = useMemo(() => {
+    let fh: { pct: number; resetsAt: string } | null = null;
+    let sd: { pct: number; resetsAt: string } | null = null;
+    for (const entry of Object.values(rateLimits)) {
+      if (entry.fiveHour && (!fh || entry.fiveHour.pct > fh.pct)) fh = entry.fiveHour;
+      if (entry.sevenDay && (!sd || entry.sevenDay.pct > sd.pct)) sd = entry.sevenDay;
+    }
+    return { worstFiveHour: fh, worstSevenDay: sd };
+  }, [rateLimits]);
+
   const godColor = godStatus === 'ready' ? 'var(--cth-mint)'
     : godStatus === 'failed' ? 'var(--cth-coral)' : 'var(--cth-lemon)';
   const health: Health = worst?.level ?? 'healthy';
@@ -177,6 +196,18 @@ export function StatusBar() {
         overflow: 'hidden', minWidth: 0,
       }}
     >
+      {accountBadge && (
+        <>
+          <Chip title={`Account: ${accountBadge} (from CLAUDE_CONFIG_DIR)`}>
+            <Dot color={accountBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)'} />
+            <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 9, color: accountBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)' }}>
+              {accountBadge}
+            </span>
+          </Chip>
+          <Sep />
+        </>
+      )}
+
       <Chip title={`Orchestrator: ${godStatus}`}>
         <Dot color={godColor} />
         <span style={{ color: 'var(--cth-ink-500)' }}>hive</span>
@@ -245,6 +276,42 @@ export function StatusBar() {
           {fmtUsd(usd)}
         </span>
       </Chip>
+
+      {worstFiveHour && (
+        <>
+          <Sep />
+          <Chip title={`5h rate limit: ${worstFiveHour.pct}% used · resets ${fmtReset(worstFiveHour.resetsAt)}`}>
+            <span style={{ color: 'var(--cth-ink-500)' }}>5h</span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: ratePaceColor(worstFiveHour.pct, worstFiveHour.resetsAt, 300), letterSpacing: 1 }}>
+              {ctxBar(worstFiveHour.pct)}
+            </span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+              {worstFiveHour.pct}%
+            </span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+              {fmtReset(worstFiveHour.resetsAt)}
+            </span>
+          </Chip>
+        </>
+      )}
+
+      {worstSevenDay && (
+        <>
+          <Sep />
+          <Chip title={`7d rate limit: ${worstSevenDay.pct}% used · resets ${fmtReset(worstSevenDay.resetsAt)}`}>
+            <span style={{ color: 'var(--cth-ink-500)' }}>7d</span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: ratePaceColor(worstSevenDay.pct, worstSevenDay.resetsAt, 10080), letterSpacing: 1 }}>
+              {ctxBar(worstSevenDay.pct)}
+            </span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+              {worstSevenDay.pct}%
+            </span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+              {fmtReset(worstSevenDay.resetsAt)}
+            </span>
+          </Chip>
+        </>
+      )}
 
       {ctxPct >= 0 && (
         <>

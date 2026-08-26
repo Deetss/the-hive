@@ -131,6 +131,8 @@ export interface HarnessConfig {
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
   /** Agent runtime profiles — reusable engine+account+model bundles (v1). */
   runtimeProfiles?: RuntimeProfile[];
+  /** Runtime-derived WORK / PERSONAL badge from CLAUDE_CONFIG_DIR basename. */
+  accountBadge?: 'WORK' | 'PERSONAL';
   /** Legacy single-webhook fields (mirrors src/main/config.ts, where they are
    *  deprecated in favour of `webhookTriggers` but still read until the server is
    *  rewired). Declared here so the surfaces that show them can stop widening this

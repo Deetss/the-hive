@@ -333,6 +333,8 @@ export interface HarnessConfig {
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
   /** Agent runtime profiles — reusable engine+account+model bundles (v1). */
   runtimeProfiles?: RuntimeProfile[];
+  /** WORK / PERSONAL account badge derived from CLAUDE_CONFIG_DIR basename at runtime. */
+  accountBadge?: 'WORK' | 'PERSONAL';
 }
 
 export interface MemoryStatus {
@@ -1257,6 +1259,16 @@ const api = {
     const handler = (_evt: IpcRendererEvent, payload: { activeShells: number }): void => cb(payload);
     ipcRenderer.on('fleet:shells', handler);
     return () => ipcRenderer.off('fleet:shells', handler);
+  },
+  // ─── Rate-limit telemetry (5h / 7d windows from CC status JSON) ──────────
+  /** Cold-start backfill: all agents' last-seen rate-limit entries. */
+  rateLimitsSnapshot: (): Promise<Record<string, { fiveHour: { pct: number; resetsAt: string } | null; sevenDay: { pct: number; resetsAt: string } | null; ts: number }>> =>
+    ipcRenderer.invoke('fleet:rateLimitsSnapshot'),
+  /** Live push per-agent when a new Status tick includes rate_limits data. */
+  onRateLimitsUpdate: (cb: (payload: { agentId: string; fiveHour: { pct: number; resetsAt: string } | null; sevenDay: { pct: number; resetsAt: string } | null; ts: number }) => void): (() => void) => {
+    const handler = (_evt: IpcRendererEvent, payload: { agentId: string; fiveHour: { pct: number; resetsAt: string } | null; sevenDay: { pct: number; resetsAt: string } | null; ts: number }): void => cb(payload);
+    ipcRenderer.on('hive:rateLimitsUpdate', handler);
+    return () => ipcRenderer.off('hive:rateLimitsUpdate', handler);
   },
 
   // ─── Triggers: history ledger + approval gate ───────────────────────────────

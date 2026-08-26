@@ -26,6 +26,11 @@ interface HookPayload {
   transcript_path?: string;
   /** Status-line payloads only: the session's live context accounting. */
   context_window?: { total_input_tokens?: number; context_window_size?: number };
+  /** Status-line payloads only: per-account rate-limit windows from CC. */
+  rate_limits?: {
+    five_hour?: { used_percentage?: number; resets_at?: string };
+    seven_day?:  { used_percentage?: number; resets_at?: string };
+  };
   cwd?: string;
   tool_name?: string;
   tool_input?: unknown;
@@ -58,6 +63,11 @@ export class HookServer {
    *  get_agent_detail / list_agents) can report "how full is each agent's context"
    *  without depending on a renderer round-trip. */
   private contextById = new Map<string, { tokens: number; limit: number; ts: number }>();
+  private rateLimitsById = new Map<string, {
+    fiveHour: { pct: number; resetsAt: string } | null;
+    sevenDay:  { pct: number; resetsAt: string } | null;
+    ts: number;
+  }>();
 
   constructor(
     private hive: HiveManager,
@@ -119,6 +129,11 @@ export class HookServer {
     return this.contextById.get(agentId);
   }
 
+  /** All agents' most-recent rate-limit entries, keyed by agent id. */
+  allRateLimits(): Record<string, { fiveHour: { pct: number; resetsAt: string } | null; sevenDay: { pct: number; resetsAt: string } | null; ts: number }> {
+    return Object.fromEntries(this.rateLimitsById.entries());
+  }
+
   private handle(p: HookPayload): unknown {
     const agentId = p.agent_id ?? undefined;
     const event = p.hook_event_name ?? 'Unknown';
@@ -153,6 +168,17 @@ export class HookServer {
           tokens: cw.total_input_tokens,
           limit: cw.context_window_size
         });
+      }
+      // Persist rate_limits for the 5h/7d pace meters in the status bar.
+      const rl = p.rate_limits;
+      if (agentId && rl) {
+        const fiveHour = typeof rl.five_hour?.used_percentage === 'number' && typeof rl.five_hour?.resets_at === 'string'
+          ? { pct: rl.five_hour.used_percentage, resetsAt: rl.five_hour.resets_at } : null;
+        const sevenDay = typeof rl.seven_day?.used_percentage === 'number' && typeof rl.seven_day?.resets_at === 'string'
+          ? { pct: rl.seven_day.used_percentage, resetsAt: rl.seven_day.resets_at } : null;
+        const entry = { fiveHour, sevenDay, ts: Date.now() };
+        this.rateLimitsById.set(agentId, entry);
+        this.getWebContents()?.send('hive:rateLimitsUpdate', { agentId, ...entry });
       }
       return {};
     }

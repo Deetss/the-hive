@@ -3088,7 +3088,13 @@ ipcMain.handle('integrations:test', async (_evt, payload: unknown) => {
 });
 
 // ─── IPC: config ────────────────────────────────────────────────────────────
-ipcMain.handle('config:get', (): HarnessConfig => readConfig());
+ipcMain.handle('config:get', (): HarnessConfig => {
+  const c = readConfig();
+  const configDir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude');
+  const accountBadge: 'WORK' | 'PERSONAL' = basename(configDir) === '.claude-personal' ? 'PERSONAL' : 'WORK';
+  return { ...c, accountBadge };
+});
+ipcMain.handle('fleet:rateLimitsSnapshot', () => hookServer.allRateLimits());
 ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
   // FIRST RUN: every hive-bound service is started by bootstrapHiveServices(),
   // which runs once at app-ready and early-returns on `!hive.enabled()` — i.e.
