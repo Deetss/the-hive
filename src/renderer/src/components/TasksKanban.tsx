@@ -156,6 +156,7 @@ export function TasksKanban() {
   const [atmeCollapsed, setAtmeCollapsed] = useState(false);
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [acting, setActing] = useState<string | null>(null);
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
     try { setTasks(parseTasks(await window.cth.hiveTasks())); } catch { /* keep last good */ }
@@ -290,12 +291,22 @@ export function TasksKanban() {
                         {fmtAge(qa.askedAt)}
                       </span>
                     </div>
-                    {/* Ask text */}
-                    <div style={{
-                      fontFamily: 'var(--cth-font-mono)', fontSize: 11, lineHeight: '15px',
-                      color: 'var(--cth-ink-800)',
-                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-                    }}>
+                    {/* Ask text — click to expand/collapse when long */}
+                    <div
+                      onClick={() => setExpandedKeys((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(key)) next.delete(key); else next.add(key);
+                        return next;
+                      })}
+                      title={expandedKeys.has(key) ? 'Click to collapse' : 'Click to expand'}
+                      style={{
+                        fontFamily: 'var(--cth-font-mono)', fontSize: 11, lineHeight: '15px',
+                        color: 'var(--cth-ink-800)', cursor: 'pointer',
+                        ...(expandedKeys.has(key) ? {} : {
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                        })
+                      }}
+                    >
                       {kind === 'review' && qa.docPath ? qa.docPath : qa.q}
                     </div>
                     {/* Action row */}
