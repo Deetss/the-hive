@@ -14,6 +14,26 @@ import {
 } from '@shared/hireQueue';
 import { DEFAULT_ORG_TRIGGER, type OrgTriggerConfig, type WebhookTrigger } from '@shared/triggers';
 
+const ACTIVITY_LS_KEY = 'cth.activity.v1';
+const ACTIVITY_CAP = 50;
+
+/** One entry in the Activity/Updates feed — a tagged insight from god/agents. */
+export interface ActivityEntry {
+  id: string;
+  from: string;
+  headline: string;
+  body: string;
+  badge: 'INFO' | 'PASS' | 'SHIPPED' | 'FINDING' | 'FAIL' | 'BLOCK';
+  ts: number;
+}
+
+function loadActivityFeed(): ActivityEntry[] {
+  try {
+    const raw = localStorage.getItem(ACTIVITY_LS_KEY);
+    return raw ? JSON.parse(raw) as ActivityEntry[] : [];
+  } catch { return []; }
+}
+
 /** A direct hive message from god/agents addressed to the human (not via a task card).
  *  Lives in the store so it survives AskMeTab unmount / tab switches. */
 export interface HumanMessage {
@@ -261,6 +281,10 @@ interface State {
   dispatchSeedRequest: { text: string; seq: number } | null;
   requestDispatchSeed: (text: string) => void;
   clearDispatchSeedRequest: () => void;
+  /** Activity feed entries — tagged updates from god/agents. Populated by the
+   *  always-mounted App.tsx subscription; capped at 50; persisted to localStorage. */
+  activityFeed: ActivityEntry[];
+  addActivityEntry: (entry: ActivityEntry) => void;
   /** Count of unread Activity feed entries (clears when the Activity tab is focused). */
   activityUnread: number;
   bumpActivityUnread: () => void;
@@ -874,6 +898,13 @@ export const useStore = create<State>((set, get) => ({
   requestDispatchSeed: (text) =>
     set((s) => ({ dispatchSeedRequest: { text, seq: (s.dispatchSeedRequest?.seq ?? 0) + 1 } })),
   clearDispatchSeedRequest: () => set({ dispatchSeedRequest: null }),
+  activityFeed: loadActivityFeed(),
+  addActivityEntry: (entry) => set((s) => {
+    if (s.activityFeed.some((e) => e.id === entry.id)) return s; // dedupe
+    const next = [...s.activityFeed, entry].slice(-ACTIVITY_CAP); // cap in-memory too
+    try { localStorage.setItem(ACTIVITY_LS_KEY, JSON.stringify(next)); } catch { /* noop */ }
+    return { activityFeed: next };
+  }),
   activityUnread: 0,
   bumpActivityUnread: () => set((s) => ({ activityUnread: s.activityUnread + 1 })),
   clearActivityUnread: () => set({ activityUnread: 0 }),

@@ -130,8 +130,8 @@ export function App() {
   // fires regardless of which agent or tab is selected. Serves two streams:
   //   1. Ask Me (needsHuman): all messages directed at the human, except Quick-Ask
   //      replies (identified by their conversation id being in quickAskConversations).
-  //   2. Activity feed (surfaceActivity): bumps the unread badge; ActivityTab's own
-  //      subscription handles rendering.
+  //   2. Activity feed (surfaceActivity): stores entry in the store (survives tab
+  //      switches) and bumps the unread badge.
   useEffect(() => {
     if (!window.cth?.onHiveMessage) return;
     return window.cth.onHiveMessage((e) => {
@@ -146,8 +146,14 @@ export function App() {
           });
         }
       }
-      // Activity feed stream: bump unread count (ActivityTab renders the entry).
-      if (e.surfaceActivity) {
+      // Activity feed stream: capture entry in store + bump badge.
+      if (e.surfaceActivity && e.body && e.id) {
+        state.addActivityEntry({
+          id: e.id, from: e.from,
+          headline: e.activityHeadline ?? e.subject,
+          body: e.body!, badge: e.activityBadge ?? 'INFO',
+          ts: Date.now()
+        });
         state.bumpActivityUnread();
       }
     });

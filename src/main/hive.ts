@@ -18,7 +18,6 @@
  *
  * Everything here runs in the Electron main process.
  */
-import { Notification } from 'electron';
 import {
   existsSync, mkdirSync, readFileSync, writeFileSync, renameSync,
   readdirSync, statSync, rmSync, appendFileSync, symlinkSync, copyFileSync, chmodSync
@@ -1611,18 +1610,8 @@ export class HiveManager {
         conversation: msg.conversation
       } : {})
     });
-    // Electron toast for high-signal outcomes (FAIL/BLOCK). Gated on the
-    // notifications setting, same as breakerToast in index.ts.
-    if (surfaceActivity && (msg.activity_badge === 'FAIL' || msg.activity_badge === 'BLOCK')) {
-      try {
-        if (Notification.isSupported()) {
-          new Notification({
-            title: msg.activity_headline ?? msg.subject,
-            body: msg.body.slice(0, 200)
-          }).show();
-        }
-      } catch { /* notification unsupported or window torn down */ }
-    }
+    // FAIL/BLOCK toast is handled by index.ts's setRoutedObserver where
+    // readConfig().notifications can be checked. hive.ts has no config import.
   }
 
   /** Non-Claude providers cannot drain hive inbox; hand direct mail to the

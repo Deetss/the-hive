@@ -1253,31 +1253,7 @@ function TokenLimitEditor({ value, onSet }: { value?: number; onSet: (tokens: nu
 
 // ─── Activity feed — friendly insights + raw log ─────────────────────────────
 
-const ACTIVITY_LS_KEY = 'cth.activity.v1';
-const ACTIVITY_CAP = 50;
-
-interface ActivityEntry {
-  id: string;
-  from: string;
-  headline: string;
-  body: string;
-  badge: 'INFO' | 'PASS' | 'SHIPPED' | 'FINDING' | 'FAIL' | 'BLOCK';
-  ts: number;
-  taskId?: string;
-  expanded?: boolean;
-}
-
-function loadActivityEntries(): ActivityEntry[] {
-  try {
-    const raw = localStorage.getItem(ACTIVITY_LS_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as ActivityEntry[];
-  } catch { return []; }
-}
-
-function saveActivityEntries(entries: ActivityEntry[]): void {
-  try { localStorage.setItem(ACTIVITY_LS_KEY, JSON.stringify(entries.slice(-ACTIVITY_CAP))); } catch { /* noop */ }
-}
+import { type ActivityEntry } from '@/store/store';
 
 const BADGE_COLORS: Record<ActivityEntry['badge'], string> = {
   INFO: 'var(--cth-sky)',
@@ -1291,37 +1267,17 @@ const BADGE_COLORS: Record<ActivityEntry['badge'], string> = {
 interface LogEntry { ts?: number; kind?: string; [k: string]: unknown }
 
 function ActivityTab() {
-  const [feed, setFeed] = useState<ActivityEntry[]>(() => loadActivityEntries());
+  // Feed entries live in the store (populated by App.tsx's always-mounted
+  // subscription) so they survive tab switches and accumulate off-tab.
+  const feed = useStore((s) => s.activityFeed);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showRaw, setShowRaw] = useState(false);
   const [log, setLog] = useState<LogEntry[]>([]);
-  const openTaskDetail = useStore((s) => s.openTaskDetail);
   const clearActivityUnread = useStore((s) => s.clearActivityUnread);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Clear unread badge when this tab mounts.
   useEffect(() => { clearActivityUnread(); }, [clearActivityUnread]);
-
-  // Subscribe to tagged activity messages.
-  useEffect(() => {
-    if (!window.cth?.onHiveMessage) return;
-    return window.cth.onHiveMessage((e) => {
-      if (!e.surfaceActivity || !e.body) return;
-      const entry: ActivityEntry = {
-        id: e.id,
-        from: e.from,
-        headline: e.activityHeadline ?? e.subject,
-        body: e.body,
-        badge: e.activityBadge ?? 'INFO',
-        ts: Date.now()
-      };
-      setFeed((prev) => {
-        if (prev.some((p) => p.id === entry.id)) return prev;
-        const next = [...prev, entry];
-        saveActivityEntries(next);
-        return next;
-      });
-    });
-  }, []);
 
   // Raw log (lazy — only polls when the toggle is open).
   useEffect(() => {
@@ -1353,34 +1309,36 @@ function ActivityTab() {
         {reversedFeed.length === 0 && (
           <Muted>No tagged updates yet. God and agents surface insights here when they flag a message with surface_activity=true.</Muted>
         )}
-        {reversedFeed.map((entry) => (
-          <div key={entry.id} style={{ marginBottom: 8, background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', cursor: 'pointer' }}
-              onClick={() => setFeed((prev) => prev.map((e) => e.id === entry.id ? { ...e, expanded: !e.expanded } : e))}>
-              <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, padding: '1px 4px', background: BADGE_COLORS[entry.badge], color: 'var(--cth-ink-900)', flexShrink: 0 }}>
-                {entry.badge}
-              </span>
-              <span style={{ flex: 1, fontFamily: 'var(--cth-font-mono)', fontSize: 13, fontWeight: 600, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {entry.headline}
-              </span>
-              <span style={{ fontSize: 10, color: 'var(--cth-ink-300)', flexShrink: 0 }}>
-                {entry.from} · {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-            {entry.expanded && (
-              <div style={{ padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 12, color: 'var(--cth-ink-700)', whiteSpace: 'pre-wrap', lineHeight: '17px' }}>
-                  {entry.body}
-                </div>
-                {entry.taskId && (
-                  <button onClick={() => openTaskDetail(entry.taskId!)} style={{ alignSelf: 'flex-start', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--cth-font-display)', fontSize: 9, color: 'var(--cth-sky)', textDecoration: 'underline', padding: 0 }}>
-                    VIEW TASK
-                  </button>
-                )}
+        {reversedFeed.map((entry) => {
+          const expanded = expandedIds.has(entry.id);
+          return (
+            <div key={entry.id} style={{ marginBottom: 8, background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', cursor: 'pointer' }}
+                onClick={() => setExpandedIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id);
+                  return next;
+                })}>
+                <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, padding: '1px 4px', background: BADGE_COLORS[entry.badge], color: 'var(--cth-ink-900)', flexShrink: 0 }}>
+                  {entry.badge}
+                </span>
+                <span style={{ flex: 1, fontFamily: 'var(--cth-font-mono)', fontSize: 13, fontWeight: 600, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {entry.headline}
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--cth-ink-300)', flexShrink: 0 }}>
+                  {entry.from} · {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
-            )}
-          </div>
-        ))}
+              {expanded && (
+                <div style={{ padding: '0 8px 8px' }}>
+                  <div style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 12, color: 'var(--cth-ink-700)', whiteSpace: 'pre-wrap', lineHeight: '17px' }}>
+                    {entry.body}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </Section>
 
       <div style={{ padding: '0 8px 4px' }}>
