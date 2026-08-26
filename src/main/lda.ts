@@ -71,9 +71,11 @@ async function runWslExec(cfg: LocalDelegateConfig, cap: LdaCapability, capArgs:
   }
   const { distro, scriptPrefix } = cfg.transport;
   const script = `${scriptPrefix}/${scriptName(cap)}`;
-  // Pass `script` as positional $1 — never interpolated into the -c string.
+  // script is $1, capArgs are $2+. "$@" expands to $1..$N = script+capArgs,
+  // which is exactly the intended invocation. exec "$1" "$@" would duplicate
+  // the script path as arg[0] of the subprocess — use "$@" directly instead.
   // Validated at upsert time; safe even if validation somehow fails.
-  const remote = `PATH="$HOME/.local/scripts:$PATH" exec "$1" "$@"`;
+  const remote = `PATH="$HOME/.local/scripts:$PATH" exec "$@"`;
   const argv = ['-d', distro, '-e', 'bash', '-c', remote, '_', script, ...capArgs];
   const t0 = Date.now();
   try {
