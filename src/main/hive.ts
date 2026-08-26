@@ -550,10 +550,13 @@ export class HiveManager {
     //                     the .cjs shims). Device-sync would otherwise ship a
     //                     Windows exe path to a Mac/Linux clone and break its hooks.
     //   roster.json.tmp — the atomic-rename staging file for the (now in-repo) roster.
-    //   .sync/owner.json — the cross-device advisory lock; owned by the lock
-    //                     protocol (latest-heartbeat-wins), never git-merged.
+    //   *.tmp under .sync — staging for the advisory lock. NOTE: .sync/owner.json
+    //                     ITSELF is deliberately TRACKED so the lock travels
+    //                     across devices; only its temp is ignored. The lock is
+    //                     rewritten wholesale by the protocol (latest-heartbeat-
+    //                     wins), never git-auto-merged.
     const gitignore = join(root, '.gitignore');
-    const want = ['fleet.json', 'hooks.sock', 'cost-ledger.jsonl', '.DS_Store', 'bin/', 'roster.json.tmp', '.sync/owner.json'];
+    const want = ['fleet.json', 'hooks.sock', 'cost-ledger.jsonl', '.DS_Store', 'bin/', 'roster.json.tmp', '.sync/owner.json.tmp'];
     let lines: string[] = [];
     if (existsSync(gitignore)) { try { lines = readFileSync(gitignore, 'utf8').split('\n'); } catch { lines = []; } }
     const missing = want.filter((w) => !lines.includes(w));
