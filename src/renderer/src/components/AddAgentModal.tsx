@@ -646,6 +646,37 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
               </div>
             )}
 
+            {/* Profile picker — always visible, default = Default account (no profile). */}
+            {(config.runtimeProfiles?.length ?? 0) > 0 && (() => {
+              const selectedProfile = (config.runtimeProfiles ?? []).find((p) => p.id === profileId);
+              return (
+                <Row label="Account / profile">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <select
+                      value={profileId ?? ''}
+                      onChange={(e) => applyProfile(e.target.value)}
+                      title="A saved engine + account + model bundle. Picking one fills in the fields below; a Claude profile launches under its own account login."
+                      style={{
+                        padding: '4px 8px 2px', background: 'var(--cth-cream-100)', border: 'none',
+                        boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)',
+                        fontSize: 12, color: 'var(--cth-ink-900)', outline: 'none', cursor: 'pointer', maxWidth: 320
+                      }}
+                    >
+                      <option value="">Default account</option>
+                      {(config.runtimeProfiles ?? []).map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    {selectedProfile?.model && (
+                      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-mono)' }}>
+                        {selectedProfile.model}
+                      </span>
+                    )}
+                  </div>
+                </Row>
+              );
+            })()}
+
             {/* sidebar index + the active section's fields */}
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
               {/* LEFT — section index. Capabilities isn't a nav item: it isn't a
@@ -890,25 +921,6 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
 
                 {section === 'engine' && (
                   <>
-                    {(config.runtimeProfiles?.length ?? 0) > 0 && (
-                      <Row label="Runtime profile">
-                        <select
-                          value={profileId ?? ''}
-                          onChange={(e) => applyProfile(e.target.value)}
-                          title="A saved engine + account + model bundle. Picking one fills in the fields below; a Claude profile launches under its own account login."
-                          style={{
-                            padding: '4px 8px 2px', background: 'var(--cth-cream-100)', border: 'none',
-                            boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)',
-                            fontSize: 12, color: 'var(--cth-ink-900)', outline: 'none', cursor: 'pointer', maxWidth: 280
-                          }}
-                        >
-                          <option value="">None (pick engine manually)</option>
-                          {(config.runtimeProfiles ?? []).map((p) => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                        </select>
-                      </Row>
-                    )}
                     <Row label="Provider">
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {AGENT_PROVIDER_PRESETS.map((p) => {
