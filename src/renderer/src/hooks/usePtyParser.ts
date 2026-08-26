@@ -169,7 +169,7 @@ export function usePtyParser(agentId: string) {
       } else {
         updateAgent(agentId, {
           status: 'waiting',
-          action: 'waiting on god',
+          action: 'waiting on the Overmind',
           currentStation: 'desk',
           blockReason: undefined
         });

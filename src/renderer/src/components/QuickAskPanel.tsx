@@ -116,7 +116,7 @@ export function QuickAskPanel() {
       setEntries((prev) =>
         prev.map((e) =>
           e.id === wireId
-            ? { ...e, answer: '(send failed — check god is online)', waiting: false, timedOut: false }
+            ? { ...e, answer: '(send failed — check the Overmind is online)', waiting: false, timedOut: false }
             : e
         )
       );
@@ -161,12 +161,12 @@ export function QuickAskPanel() {
 
   const renderAnswer = (e: QAEntry) => {
     if (e.waiting) {
-      return <span style={{ color: 'var(--cth-ink-500)', fontStyle: 'italic' }}>waiting for god…</span>;
+      return <span style={{ color: 'var(--cth-ink-500)', fontStyle: 'italic' }}>waiting for the Overmind…</span>;
     }
     if (e.timedOut) {
       return (
         <span style={{ color: 'var(--cth-ink-500)' }}>
-          no answer yet (god may be busy){' '}
+          no answer yet (the Overmind may be busy){' '}
           <button
             onClick={() => retry(e)}
             style={{
@@ -197,7 +197,7 @@ export function QuickAskPanel() {
       >
         {entries.length === 0 && (
           <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--cth-ink-500)', fontSize: 12 }}>
-            Ask god anything about the hive — tasks, agents, status, decisions.
+            Ask the Overmind anything about the hive — tasks, agents, status, decisions.
             <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--cth-ink-300)' }}>
               Press Enter to send. Shift+Enter for a new line.
             </span>
@@ -239,7 +239,7 @@ export function QuickAskPanel() {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Ask god a question…"
+          placeholder="Ask the Overmind a question…"
           rows={2}
           style={{
             flex: 1, resize: 'none', background: 'transparent', border: 'none', outline: 'none',

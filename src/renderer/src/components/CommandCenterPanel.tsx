@@ -1311,7 +1311,7 @@ function ActivityTab() {
     <Scroll>
       <Section title="UPDATES">
         {reversedFeed.length === 0 && (
-          <Muted>No tagged updates yet. God and agents surface insights here when they flag a message with surface_activity=true.</Muted>
+          <Muted>No tagged updates yet. The Overmind and agents surface insights here when they flag a message with surface_activity=true.</Muted>
         )}
         {reversedFeed.map((entry) => {
           const expanded = expandedIds.has(entry.id);

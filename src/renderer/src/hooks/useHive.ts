@@ -406,7 +406,7 @@ export function useHive(config: HarnessConfig | null): void {
         name: 'Abathur',
         character: 'michael',
         accent: 'lemon',
-        description: 'god — runs the floor, triages requests, escalates only critical calls to you',
+        description: 'Overmind — runs the floor, triages requests, escalates only critical calls to you',
         project: 'hive',
         tmuxTarget: '',
         cwd: config.harnessHome!,
