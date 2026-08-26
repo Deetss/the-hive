@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
+import { useStore } from '@/store/store';
 
 // Derive the message shape from the preload-exposed API so the renderer never
 // reaches across project boundaries for a type (window.cth is globally typed).
@@ -50,6 +51,8 @@ export function ThreadsPanel({ agentId }: ThreadsPanelProps) {
   const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const agents = useStore((s) => s.agents);
+  const nameFor = (id: string) => agents.find((a) => a.id === id)?.name ?? id;
 
   useEffect(() => {
     let alive = true;
@@ -118,7 +121,7 @@ export function ThreadsPanel({ agentId }: ThreadsPanelProps) {
                   return (
                     <div key={m.id} style={{ borderLeft: '2px solid var(--cth-ink-100)', paddingLeft: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 700, color: 'var(--cth-ink-900)' }}>{m.from}</span>
+                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 700, color: 'var(--cth-ink-900)' }}>{nameFor(m.from)}</span>
                         <span style={{
                           fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '16px', padding: '0 6px',
                           background: 'var(--cth-cream-100)', boxShadow: `inset 0 0 0 1px ${ACT_COLOR[m.act] ?? 'var(--cth-ink-300)'}`,
@@ -145,7 +148,7 @@ export function ThreadsPanel({ agentId }: ThreadsPanelProps) {
                   <textarea
                     value={drafts[thread.conversation] ?? ''}
                     onChange={e => setDrafts(d => ({ ...d, [thread.conversation]: e.target.value }))}
-                    placeholder={`Reply to ${last.from}…`}
+                    placeholder={`Reply to ${nameFor(last.from)}…`}
                     rows={2}
                     style={{
                       resize: 'vertical', width: '100%', boxSizing: 'border-box', padding: '6px 8px',

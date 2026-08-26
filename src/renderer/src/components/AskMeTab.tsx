@@ -15,7 +15,10 @@ export function AskMeTab() {
   const messages = useStore((s) => s.humanMessages);
   const resolveHumanMessage = useStore((s) => s.resolveHumanMessage);
   const updateHumanMessageDraft = useStore((s) => s.updateHumanMessageDraft);
+  const agents = useStore((s) => s.agents);
   const [sending, setSending] = useState<string | null>(null);
+
+  const nameFor = (id: string) => agents.find((a) => a.id === id)?.name ?? id;
 
   const unresolvedMessages = messages.filter((m) => !m.resolved);
 
@@ -38,7 +41,7 @@ export function AskMeTab() {
               {msg.act === 'query' ? 'QUERY' : 'MESSAGE'}
             </span>
             <span style={{ flex: 1, fontFamily: 'var(--cth-font-mono)', fontSize: 14, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {msg.subject || `from ${msg.from}`}
+              {msg.subject || `from ${nameFor(msg.from)}`}
             </span>
             <span style={{ fontSize: 10, color: 'var(--cth-ink-700)', flexShrink: 0 }}>
               {new Date(msg.arrivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
