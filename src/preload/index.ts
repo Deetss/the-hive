@@ -340,6 +340,10 @@ export interface HarnessConfig {
   runtimeProfiles?: RuntimeProfile[];
   /** WORK / PERSONAL account badge derived from CLAUDE_CONFIG_DIR basename at runtime. */
   accountBadge?: 'WORK' | 'PERSONAL';
+  /** Whether this session bills per-token (api) or is a flat subscription.
+   *  Populated by main at startup from the agent's spawn environment.
+   *  Absent = subscription assumed (show estimated cost). */
+  billingMode?: 'subscription' | 'api';
 }
 
 export interface MemoryStatus {
@@ -1254,17 +1258,6 @@ const api = {
   /** Whether a remote URL passes the same isSafeGitUrl guard the backend enforces. */
   isSafeRemoteUrl: (url: string): Promise<boolean> => ipcRenderer.invoke('sync:isSafeRemote', url),
 
-  // ─── Active-shell telemetry ─────────────────────────────────────────────────
-  /** Pull the current active-shell count on mount (cold-start backfill). */
-  shellsSnapshot: (): Promise<{ activeShells: number }> => ipcRenderer.invoke('fleet:shellsSnapshot'),
-  /** Subscribe to live active-shell count pushes (`fleet:shells`). Returns an
-   *  unsubscribe function. An "active shell" is any live PtySession with an open
-   *  handle — 1:1 with spawned agents for their lifetime plus any extra terminals. */
-  onActiveShells: (cb: (payload: { activeShells: number }) => void): (() => void) => {
-    const handler = (_evt: IpcRendererEvent, payload: { activeShells: number }): void => cb(payload);
-    ipcRenderer.on('fleet:shells', handler);
-    return () => ipcRenderer.off('fleet:shells', handler);
-  },
   // ─── Rate-limit telemetry (5h / 7d windows from CC status JSON) ──────────
   /** Cold-start backfill: all agents' last-seen rate-limit entries. */
   rateLimitsSnapshot: (): Promise<Record<string, { fiveHour: { pct: number; resetsAt: string } | null; sevenDay: { pct: number; resetsAt: string } | null; ts: number }>> =>

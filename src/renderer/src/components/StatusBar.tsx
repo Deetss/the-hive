@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '@/store/store';
 import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTelemetry';
-import { useActiveShells } from '@/hooks/useShells';
 import { useRateLimits, ratePaceColor, fmtReset } from '@/hooks/useRateLimits';
 import type { RuntimeProfile } from '@/store/config';
 
@@ -42,13 +41,6 @@ function healthColor(level: Health): string {
   return 'var(--cth-mint)';
 }
 
-/** His exact thresholds: <50 green, 50-79 yellow, >=80 red. */
-function ctxBarColor(pct: number): string {
-  if (pct >= 80) return 'var(--cth-coral)';
-  if (pct >= 50) return 'var(--cth-lemon)';
-  return 'var(--cth-mint)';
-}
-
 /** 4-cell filled/empty glyph bar. */
 function ctxBar(pct: number): string {
   const filled = Math.min(4, Math.round(pct / 25));
@@ -72,12 +64,6 @@ function fmtUsd(n: number): string {
   return `$${n.toFixed(4)}`;
 }
 
-/** Truncate model id before any ' (' to match statusline-command.sh display. */
-function shortModel(m: string): string {
-  const cut = m.indexOf(' (');
-  return cut >= 0 ? m.slice(0, cut) : m;
-}
-
 const tail = (p: string) => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? p;
 
 export function StatusBar() {
@@ -86,15 +72,16 @@ export function StatusBar() {
   const godStatus = useStore((s) => s.godStatus);
   const messageQueues = useStore((s) => s.messageQueues);
   const { samples, rate, breakers } = useFleetTelemetry();
-  const shells = useActiveShells();
   const rateLimits = useRateLimits();
 
   // One-time read of app-wide badge + profiles for per-agent badge resolution.
   const [accountBadge, setAccountBadge] = useState<'WORK' | 'PERSONAL' | null>(null);
+  const [billingMode, setBillingMode] = useState<'subscription' | 'api' | null>(null);
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   useEffect(() => {
     window.cth?.getConfig?.().then((c) => {
       setAccountBadge(c.accountBadge ?? null);
+      setBillingMode(c.billingMode ?? null);
       setRuntimeProfiles(c.runtimeProfiles ?? []);
     }).catch(() => {});
   }, []);
@@ -148,20 +135,6 @@ export function StatusBar() {
       tokPerMin: Number.isFinite(r) ? r : 0,
     };
   }, [live, samples, rate]);
-
-  // Busiest agent's context fill is the risk signal: a near-full window is the
-  // one worth surfacing. Clamped to 100 — context can be briefly reported above
-  // the limit during a streaming response before the app updates the limit field.
-  const ctxPct = useMemo(() => {
-    let max = -1;
-    for (const a of live) {
-      if (a.contextTokens && a.contextLimit && a.contextLimit > 0) {
-        const pct = Math.round((a.contextTokens / a.contextLimit) * 100);
-        if (pct > max) max = pct;
-      }
-    }
-    return max < 0 ? -1 : Math.min(max, 100);
-  }, [live]);
 
   const worst = useMemo<BreakerState | null>(() => {
     let acc: BreakerState | null = null;
@@ -253,31 +226,12 @@ export function StatusBar() {
         </>
       )}
 
-      {focusAgent?.model && (
-        <>
-          <Sep />
-          <Chip title={`Model: ${focusAgent.model}`}>
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-sky)' }}>
-              {shortModel(focusAgent.model)}
-            </span>
-          </Chip>
-        </>
-      )}
-
       <Sep />
       <Chip title={`${live.length} agent(s) with a live terminal`}>
         <strong style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
           {live.length}
         </strong>
         <span style={{ color: 'var(--cth-ink-500)' }}>active</span>
-      </Chip>
-
-      <Sep />
-      <Chip title="Active shells / open PTY terminals">
-        <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
-          {shells === null ? '--' : shells}
-        </span>
-        <span style={{ color: 'var(--cth-ink-500)' }}>sh</span>
       </Chip>
 
       <Sep />
@@ -294,10 +248,13 @@ export function StatusBar() {
       </Chip>
 
       <Sep />
-      <Chip title="Estimated fleet cost so far (OTel cumulative)">
+      <Chip title={billingMode === 'api' ? 'Fleet cost so far (OTel · API billing)' : 'Estimated fleet cost (OTel · subscription — not actual billing)'}>
         <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
-          {fmtUsd(usd)}
+          {billingMode === 'api' ? fmtUsd(usd) : `~${fmtUsd(usd)}`}
         </span>
+        {billingMode !== 'api' && (
+          <span style={{ color: 'var(--cth-ink-500)', fontSize: 11 }}>est.</span>
+        )}
       </Chip>
 
       {worstFiveHour && (
@@ -331,21 +288,6 @@ export function StatusBar() {
             </span>
             <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
               {fmtReset(worstSevenDay.resetsAt)}
-            </span>
-          </Chip>
-        </>
-      )}
-
-      {ctxPct >= 0 && (
-        <>
-          <Sep />
-          <Chip title={`Fullest agent context window ${ctxPct}% (max across active agents)`}>
-            <span style={{ color: 'var(--cth-ink-500)' }}>ctx</span>
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: ctxBarColor(ctxPct), letterSpacing: 1 }}>
-              {ctxBar(ctxPct)}
-            </span>
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
-              {ctxPct}%
             </span>
           </Chip>
         </>

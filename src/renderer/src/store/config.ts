@@ -133,6 +133,10 @@ export interface HarnessConfig {
   runtimeProfiles?: RuntimeProfile[];
   /** Runtime-derived WORK / PERSONAL badge from CLAUDE_CONFIG_DIR basename. */
   accountBadge?: 'WORK' | 'PERSONAL';
+  /** Whether this session bills per-token (api) or is a flat subscription.
+   *  Populated by main at startup from the agent's spawn environment.
+   *  Absent = subscription assumed (show estimated cost). */
+  billingMode?: 'subscription' | 'api';
   /** Legacy single-webhook fields (mirrors src/main/config.ts, where they are
    *  deprecated in favour of `webhookTriggers` but still read until the server is
    *  rewired). Declared here so the surfaces that show them can stop widening this

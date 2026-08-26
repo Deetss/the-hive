@@ -331,6 +331,9 @@ export interface HarnessConfig {
   runtimeProfiles?: RuntimeProfile[];
   /** Runtime-derived WORK / PERSONAL badge from CLAUDE_CONFIG_DIR basename. Not persisted. */
   accountBadge?: 'WORK' | 'PERSONAL';
+  /** Runtime-derived billing mode. 'api' when ANTHROPIC_API_KEY is set (BYOK / direct API
+   *  billing); 'subscription' otherwise (Claude Pro/Teams flat plan). Not persisted. */
+  billingMode?: 'subscription' | 'api';
   /** Master toggle for the Slack → Abathur's-queue integration. */
   slackEnabled?: boolean;
   /** Slack app signing secret (Basic Information → Signing Secret). Never logged. */
