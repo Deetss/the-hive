@@ -24,6 +24,9 @@ import { type HiveTask, type HumanQA, openQuestion, waitsOnHuman } from './Tasks
 
 const POLL_MS = 5000;
 
+// Module-level cache: survives tab switches (component unmount/remount).
+let _cachedAskTasks: HiveTask[] = [];
+
 function parse(raw: unknown): HiveTask[] {
   const list = (raw && typeof raw === 'object' && Array.isArray((raw as { tasks?: unknown }).tasks))
     ? (raw as { tasks: HiveTask[] }).tasks
@@ -42,17 +45,26 @@ function dependentsTree(id: string, all: HiveTask[], seen = new Set<string>()): 
 export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
-  const [tasks, setTasks] = useState<HiveTask[]>([]);
+  const [tasks, setTasks] = useState<HiveTask[]>(_cachedAskTasks);
+  // Direct messages live in the store — survive unmount/tab switches.
+  const messages = useStore((s) => s.humanMessages);
+  const resolveHumanMessage = useStore((s) => s.resolveHumanMessage);
+  const updateHumanMessageDraft = useStore((s) => s.updateHumanMessageDraft);
   // Drafts live in the STORE (keyed by task id) — switching tabs unmounts this
   // view, and a half-typed answer must survive the round trip.
   const drafts = useStore((s) => s.answerDrafts);
   const setAnswerDraft = useStore((s) => s.setAnswerDraft);
   const openTaskDetail = useStore((s) => s.openTaskDetail);
+  const setAskMePending = useStore((s) => s.setAskMePending);
   const [sending, setSending] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
-    try { setTasks(parse(await window.cth.hiveTasks())); } catch { /* keep last good */ }
+    try {
+      const parsed = parse(await window.cth.hiveTasks());
+      _cachedAskTasks = parsed;
+      setTasks(parsed);
+    } catch { /* keep last good */ }
   }, []);
 
   useEffect(() => {
@@ -61,10 +73,31 @@ export function AskMeTab() {
     return () => { if (timer.current) clearInterval(timer.current); };
   }, [refresh]);
 
+  // Keep the task pending count in the store current.
+  // Message count is derived live in AskMeTabButton from humanMessages selector.
+  useEffect(() => {
+    setAskMePending(tasks.filter(waitsOnHuman).length);
+  }, [tasks, setAskMePending]);
+
   const nameFor = (id?: string): string | undefined =>
     id ? (agents.find((a) => a.id === id)?.name ?? restorable.find((a) => a.id === id)?.name ?? id) : undefined;
 
   const waiting = tasks.filter(waitsOnHuman);
+
+  // Tasks with at least one answered or dismissed Q&A entry that are no longer
+  // waiting on human (so they don't appear twice). Most-recently-resolved first.
+  const history = tasks
+    .filter((t) => !waitsOnHuman(t) && (t.humanQA ?? []).some((qa) => qa.a || qa.dismissedAt))
+    .flatMap((t) =>
+      (t.humanQA ?? [])
+        .filter((qa) => qa.a || qa.dismissedAt)
+        .map((qa) => ({ task: t, qa }))
+    )
+    .sort((a, b) => {
+      const ta = a.qa.answeredAt ?? a.qa.dismissedAt ?? a.qa.askedAt ?? '';
+      const tb = b.qa.answeredAt ?? b.qa.dismissedAt ?? b.qa.askedAt ?? '';
+      return tb.localeCompare(ta);
+    });
 
   /**
    * Apply `patch` to the OPEN humanQA entry of one card, on the RAW ledger.
@@ -99,6 +132,7 @@ export function AskMeTab() {
         ? await window.cth.hivePatchTask(task.id, { humanQA: updated.humanQA })
         : { ok: false };
       if (!result.ok) throw new Error('task changed before answer could be saved');
+      _cachedAskTasks = next;
       setTasks(next);
       // 2) Tell the god, so the card gets unblocked and work continues.
       await window.cth.hiveSend({
@@ -134,6 +168,7 @@ export function AskMeTab() {
       );
       return { ...t, humanQA: qa };
     });
+    _cachedAskTasks = next;
     setTasks(next); // optimistic — the card disappears immediately
     try {
       const updated = next.find((candidate) => candidate.id === task.id);
@@ -151,7 +186,7 @@ export function AskMeTab() {
     // memory viewer uses. Pixelify Sans (font-ui) is too chunky for prose like
     // questions and answers. Display/badge bits keep their explicit faces.
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--cth-paper-200)', padding: 10, display: 'flex', flexDirection: 'column', gap: 10, fontFamily: 'var(--cth-font-mono)' }}>
-      {waiting.length === 0 && (
+      {waiting.length === 0 && messages.filter((m) => !m.resolved).length === 0 && (
         <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--cth-ink-500)', fontSize: 12 }}>
           Nothing needs you right now. 🌿<br />
           <span style={{ fontSize: 11, color: 'var(--cth-ink-300)' }}>
@@ -160,6 +195,62 @@ export function AskMeTab() {
           </span>
         </div>
       )}
+
+      {/* Direct hive messages from god/agents addressed to the human */}
+      {messages.filter((m) => !m.resolved).map((msg) => (
+        <div key={msg.id} style={{ background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-sky)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px', background: 'var(--cth-sky)', boxShadow: 'inset 0 -1px 0 var(--cth-ink-700)' }}>
+            <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-900)', background: 'var(--cth-lemon)', padding: '1px 4px' }}>
+              {msg.act === 'query' ? 'QUERY' : 'MESSAGE'}
+            </span>
+            <span style={{ flex: 1, fontFamily: 'var(--cth-font-mono)', fontSize: 14, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {msg.subject || `from ${msg.from}`}
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--cth-ink-700)', flexShrink: 0 }}>
+              {new Date(msg.arrivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+          <div style={{ padding: 9, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 14, lineHeight: '19px', color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap' }}>{msg.body}</div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+              <textarea
+                value={msg.replyDraft}
+                onChange={(e) => updateHumanMessageDraft(msg.id, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    void (async () => {
+                      const text = msg.replyDraft.trim();
+                      if (!text) return;
+                      await window.cth.hiveSend({ to: msg.from, act: 'inform', subject: `Re: ${msg.subject}`, body: text }, 'human');
+                      resolveHumanMessage(msg.id);
+                    })();
+                  }
+                }}
+                rows={2}
+                placeholder="Reply… (Ctrl+Enter to send)"
+                style={{ flex: 1, boxSizing: 'border-box', padding: '5px 7px', resize: 'vertical', background: 'var(--cth-paper-100)', border: 'none', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-mono)', fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <PixelButton variant="primary" size="sm"
+                disabled={!msg.replyDraft.trim()}
+                onClick={() => void (async () => {
+                  const text = msg.replyDraft.trim();
+                  if (!text) return;
+                  await window.cth.hiveSend({ to: msg.from, act: 'inform', subject: `Re: ${msg.subject}`, body: text }, 'human');
+                  resolveHumanMessage(msg.id);
+                })()}>
+                reply &amp; resolve
+              </PixelButton>
+              <PixelButton variant="secondary" size="sm"
+                onClick={() => resolveHumanMessage(msg.id)}>
+                dismiss
+              </PixelButton>
+            </div>
+          </div>
+        </div>
+      ))}
+
       {waiting.map((t) => {
         const open = openQuestion(t)!;
         const stuck = dependentsTree(t.id, tasks);
@@ -168,11 +259,14 @@ export function AskMeTab() {
             background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
             display: 'flex', flexDirection: 'column'
           }}>
-            {/* header: title + assignee */}
+            {/* header: type badge + title + assignee */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px',
               background: 'var(--cth-lilac-light, #ece2f5)', boxShadow: 'inset 0 -1px 0 var(--cth-ink-700)'
             }}>
+              <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-700)', flexShrink: 0, padding: '1px 3px', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)' }}>
+                {open.q.trim().endsWith('?') ? 'QUESTION' : 'ACTION'}
+              </span>
               <button
                 onClick={() => openTaskDetail(t.id)}
                 title="open the full task detail"
@@ -276,6 +370,40 @@ export function AskMeTab() {
           </div>
         );
       })}
+
+      {history.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-300)', padding: '4px 2px 0' }}>
+            SESSION HISTORY
+          </div>
+          {history.map(({ task, qa }) => {
+            const ts = qa.answeredAt ?? qa.dismissedAt;
+            const dismissed = !qa.a && !!qa.dismissedAt;
+            return (
+              <div key={`${task.id}:${qa.askedAt ?? qa.q.slice(0, 20)}`}
+                style={{ background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', padding: '6px 9px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: dismissed ? 'var(--cth-ink-300)' : 'var(--cth-ink-500)', flexShrink: 0 }}>
+                    {dismissed ? 'DISMISSED' : 'ANSWERED'}
+                  </span>
+                  <button onClick={() => openTaskDetail(task.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'var(--cth-font-mono)', fontSize: 12, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, textAlign: 'left' }}>
+                    {task.title}
+                  </button>
+                  {ts && (
+                    <span style={{ flexShrink: 0, fontSize: 10, color: 'var(--cth-ink-300)' }}>
+                      {new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--cth-ink-700)', whiteSpace: 'pre-wrap' }}>{qa.q}</div>
+                {qa.a && (
+                  <div style={{ fontSize: 13, color: 'var(--cth-ink-500)', borderLeft: '2px solid var(--cth-ink-200)', paddingLeft: 7, whiteSpace: 'pre-wrap' }}>{qa.a}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

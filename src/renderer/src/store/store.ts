@@ -13,6 +13,19 @@ import {
   type HireReviewQueue
 } from '@shared/hireQueue';
 import { DEFAULT_ORG_TRIGGER, type OrgTriggerConfig, type WebhookTrigger } from '@shared/triggers';
+
+/** A direct hive message from god/agents addressed to the human (not via a task card).
+ *  Lives in the store so it survives AskMeTab unmount / tab switches. */
+export interface HumanMessage {
+  id: string;
+  from: string;
+  subject: string;
+  body: string;
+  act: string;
+  arrivedAt: number;
+  resolved: boolean;
+  replyDraft: string;
+}
 import { isCompactionCommand } from '@shared/providerAutomation';
 import { preferredAgentRole } from '@shared/agentRole';
 import { isInboxNudge } from '@shared/hiveNudge';
@@ -248,6 +261,26 @@ interface State {
   dispatchSeedRequest: { text: string; seq: number } | null;
   requestDispatchSeed: (text: string) => void;
   clearDispatchSeedRequest: () => void;
+  /** Count of unread Activity feed entries (clears when the Activity tab is focused). */
+  activityUnread: number;
+  bumpActivityUnread: () => void;
+  clearActivityUnread: () => void;
+  /** Task-pending count for Ask Me tab (humanQA only). Badge adds live
+   *  humanMessages.filter(!resolved).length on top of this via selector. */
+  askMePending: number;
+  setAskMePending: (n: number) => void;
+  /** Conversation IDs the human sent as Quick-Ask queries. Used to exclude
+   *  god's replies from the Ask Me direct-message stream.
+   *  TODO: evict stale ids (e.g. cap at 200 or clear on session reset) — fine at
+   *  string-array scale for typical usage but will grow unbounded over a long session. */
+  quickAskConversations: string[];
+  trackQuickAskConversation: (id: string) => void;
+  /** Direct hive messages from god/agents addressed to the human.
+   *  Persisted in the store so they survive AskMeTab unmount/tab switches. */
+  humanMessages: HumanMessage[];
+  addHumanMessage: (msg: HumanMessage) => void;
+  resolveHumanMessage: (id: string) => void;
+  updateHumanMessageDraft: (id: string, draft: string) => void;
   /** Unsent ASK ME answer drafts, keyed by task id — so switching tabs (which
    *  unmounts the ask-me view) doesn't eat a half-typed answer. */
   answerDrafts: Record<string, string>;
@@ -841,6 +874,28 @@ export const useStore = create<State>((set, get) => ({
   requestDispatchSeed: (text) =>
     set((s) => ({ dispatchSeedRequest: { text, seq: (s.dispatchSeedRequest?.seq ?? 0) + 1 } })),
   clearDispatchSeedRequest: () => set({ dispatchSeedRequest: null }),
+  activityUnread: 0,
+  bumpActivityUnread: () => set((s) => ({ activityUnread: s.activityUnread + 1 })),
+  clearActivityUnread: () => set({ activityUnread: 0 }),
+  askMePending: 0,
+  setAskMePending: (n) => set({ askMePending: n }),
+  quickAskConversations: [],
+  trackQuickAskConversation: (id) => set((s) => ({
+    quickAskConversations: s.quickAskConversations.includes(id)
+      ? s.quickAskConversations
+      : [...s.quickAskConversations, id]
+  })),
+  humanMessages: [],
+  addHumanMessage: (msg) => set((s) => {
+    if (s.humanMessages.some((m) => m.id === msg.id)) return s; // dedupe
+    return { humanMessages: [...s.humanMessages, msg] };
+  }),
+  resolveHumanMessage: (id) => set((s) => ({
+    humanMessages: s.humanMessages.map((m) => m.id === id ? { ...m, resolved: true } : m)
+  })),
+  updateHumanMessageDraft: (id, draft) => set((s) => ({
+    humanMessages: s.humanMessages.map((m) => m.id === id ? { ...m, replyDraft: draft } : m)
+  })),
   answerDrafts: {},
   setAnswerDraft: (taskId, text) =>
     set((s) => ({ answerDrafts: { ...s.answerDrafts, [taskId]: text } })),

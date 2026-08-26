@@ -78,12 +78,52 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
   { key: 'workers', label: 'workers', icon: 'gear' }
 ];
 
+type TabDef = { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] };
+
+function AskMeTabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean; accent: string; onClick: () => void }) {
+  const taskPending = useStore((s) => s.askMePending);
+  const msgPending = useStore((s) => s.humanMessages.filter((m) => !m.resolved).length);
+  const pending = taskPending + msgPending;
+  const showBadge = t.key === 'human' && pending > 0 && !active;
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        whiteSpace: 'nowrap',
+        flex: '1 0 auto',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+        padding: '4px 8px 3px', border: 'none', cursor: 'pointer',
+        background: active ? `var(--cth-${accent})` : 'var(--cth-cream-200)',
+        color: active ? 'var(--cth-on-accent)' : 'var(--cth-ink-900)',
+        boxShadow: active ? 'inset 0 0 0 1px var(--cth-ink-300)' : 'inset 0 0 0 1px var(--cth-ink-100)',
+        fontFamily: 'var(--cth-font-ui)', fontSize: 13,
+        position: 'relative'
+      }}
+    >
+      <Icon name={t.icon} /> {t.label}
+      {showBadge && (
+        <span style={{
+          position: 'absolute', top: 2, right: 2,
+          minWidth: 14, height: 14, borderRadius: 7,
+          background: 'var(--cth-coral)', color: '#fff',
+          fontFamily: 'var(--cth-font-display)', fontSize: 8,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 3px', boxSizing: 'border-box', lineHeight: 1
+        }}>
+          {pending > 9 ? '9+' : pending}
+        </span>
+      )}
+    </button>
+  );
+}
+
 /** @param fullscreen this instance IS the fullscreen overlay, so it owns the pty
  *  and renders the real terminal. The docked instance renders the "open in
  *  fullscreen" placeholder instead — two live xterms on one pty fight over its
  *  cols/rows and corrupt the display. */
 export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent; fullscreen?: boolean }) {
   const [tab, setTab] = useState<CCTab>('terminal');
+
   // The trigger-history ledger has nothing to say until an outside party can
   // reach us, so its tab appears only once an org key or a webhook exists. This
   // is the first config-gated tab in the panel: TABS stays the canonical order
@@ -259,31 +299,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
         borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
       }}>
         {visibleTabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            style={{
-              whiteSpace: 'nowrap',
-              // grow to share any spare width (so the strip still spans the panel
-              // exactly as the old grid did), never shrink below the label (a
-              // squashed tab is unreadable — overflow into the scroll instead).
-              flex: '1 0 auto',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-              padding: '4px 8px 3px', border: 'none', cursor: 'pointer',
-              background: tab === t.key ? `var(--cth-${agent.accent})` : 'var(--cth-cream-200)',
-              // The selected tab is filled with the agent's accent, which is a
-              // LIGHT colour in both themes. ink-900 flips to near-white in dark
-              // mode, so the active tab's label was pale-on-pale — the one tab
-              // you most need to read. On-accent text is dark in both themes.
-              color: tab === t.key ? 'var(--cth-on-accent)' : 'var(--cth-ink-900)',
-              boxShadow: tab === t.key
-                ? 'inset 0 0 0 1px var(--cth-ink-300)'
-                : 'inset 0 0 0 1px var(--cth-ink-100)',
-              fontFamily: 'var(--cth-font-ui)', fontSize: 13
-            }}
-          >
-            <Icon name={t.icon} /> {t.label}
-          </button>
+          <AskMeTabButton key={t.key} t={t} active={tab === t.key} accent={agent.accent} onClick={() => setTab(t.key)} />
         ))}
       </div>
 
@@ -543,6 +559,25 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
     }
   };
 
+  const handleDispatchPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const hasImage = Array.from(e.clipboardData.items).some((item) => item.type.startsWith('image/'));
+    if (!hasImage) return;
+    e.preventDefault();
+    // Capture caret position before the async save — the textarea DOM element
+    // holds the live positions; stale closure on dispatchText would overwrite
+    // any keystrokes typed while saveClipboardImage() is in flight.
+    const ta = e.currentTarget;
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
+    const res = await window.cth.saveClipboardImage();
+    if (res.ok) {
+      const ref = `[image: ${res.file.path}]`;
+      setDispatchText((prev) => prev.slice(0, start) + ref + prev.slice(end));
+    } else {
+      setDispatchText((prev) => prev + ` [image paste failed: ${res.error}]`);
+    }
+  };
+
   // ALL human dispatch flows through the god — never directly into a worker's
   // inbox. Direct dispatch bypassed the orchestrator's whole job: no 4-part
   // contract, no card in tasks.json, no board awareness — and the old
@@ -647,6 +682,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
         <textarea
           value={dispatchText}
           onChange={(e) => setDispatchText(e.target.value)}
+          onPaste={handleDispatchPaste}
           rows={2}
           placeholder="Describe the task… (Abathur decomposes, writes the card, and assigns)"
           style={textareaStyle}

@@ -126,6 +126,33 @@ export function App() {
   // (solo-hold threshold, aborts on any other key). See freeflow/holdOption.ts.
   useHoldOptionToTalk();
 
+  // Single always-on hive message subscription — lives here (App root) so it
+  // fires regardless of which agent or tab is selected. Serves two streams:
+  //   1. Ask Me (needsHuman): all messages directed at the human, except Quick-Ask
+  //      replies (identified by their conversation id being in quickAskConversations).
+  //   2. Activity feed (surfaceActivity): bumps the unread badge; ActivityTab's own
+  //      subscription handles rendering.
+  useEffect(() => {
+    if (!window.cth?.onHiveMessage) return;
+    return window.cth.onHiveMessage((e) => {
+      const state = useStore.getState();
+      // Ask Me stream: skip replies to human's own Quick-Ask queries.
+      if (e.needsHuman && e.body && e.id) {
+        if (!(e.conversation && state.quickAskConversations.includes(e.conversation))) {
+          state.addHumanMessage({
+            id: e.id, from: e.from, subject: e.subject ?? '',
+            body: e.body!, act: e.act,
+            arrivedAt: Date.now(), resolved: false, replyDraft: ''
+          });
+        }
+      }
+      // Activity feed stream: bump unread count (ActivityTab renders the entry).
+      if (e.surfaceActivity) {
+        state.bumpActivityUnread();
+      }
+    });
+  }, []);
+
   // Quit warning subscription
   useEffect(() => window.cth.onCloseRequested((info) => setQuitWarn(info)), []);
 

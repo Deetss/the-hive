@@ -59,9 +59,8 @@ function fmtUsd(n: number): string {
   if (!Number.isFinite(n) || n < 0) n = 0;
   if (n === 0) return '$0.00';
   if (n >= 100) return `$${n.toFixed(0)}`;
-  if (n >= 1) return `$${n.toFixed(2)}`;
-  if (n >= 0.01) return `$${n.toFixed(3)}`;
-  return `$${n.toFixed(4)}`;
+  if (n >= 0.01) return `$${n.toFixed(2)}`;
+  return '<$0.01';
 }
 
 const tail = (p: string) => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? p;

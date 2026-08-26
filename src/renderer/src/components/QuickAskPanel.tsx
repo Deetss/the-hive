@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { PixelButton } from './PixelButton';
+import { useStore } from '@/store/store';
 
 /**
  * QuickAskPanel — lightweight inline Q&A with god.
@@ -34,6 +35,7 @@ export function QuickAskPanel() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const trackQuickAskConversation = useStore((s) => s.trackQuickAskConversation);
   // Per-conversation timeout handles so we can cancel when the answer arrives.
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -106,6 +108,9 @@ export function QuickAskPanel() {
         { to: 'god', act: 'query', subject: 'Quick ask', body: q, conversation: wireId },
         'human'
       );
+      // Register this conversation id so App.tsx's ask-me subscription knows
+      // god's reply is a Quick-Ask answer, not a new human-directed message.
+      trackQuickAskConversation(wireId);
       armTimer(wireId);
     } catch {
       setEntries((prev) =>
@@ -134,7 +139,12 @@ export function QuickAskPanel() {
     void window.cth.hiveSend(
       { to: 'god', act: 'query', subject: 'Quick ask (retry)', body: entry.question, conversation: newWireId },
       'human'
-    ).then(() => armTimer(newWireId)).catch(() => {
+    ).then(() => {
+      // Register the new wire id so App.tsx's subscription doesn't mistake
+      // god's reply for a new human-directed ask-me message.
+      trackQuickAskConversation(newWireId);
+      armTimer(newWireId);
+    }).catch(() => {
       setEntries((prev) =>
         prev.map((e) =>
           e.id === entry.id
