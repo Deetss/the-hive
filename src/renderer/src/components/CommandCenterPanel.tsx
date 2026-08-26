@@ -113,10 +113,12 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
   // { seq } makes every assign distinct so identical text re-seeds.
   const [dispatchSeed, setDispatchSeed] = useState<{ text: string; seq: number }>({ text: '', seq: 0 });
   const dispatchSeedRequest = useStore((s) => s.dispatchSeedRequest);
+  const clearDispatchSeedRequest = useStore((s) => s.clearDispatchSeedRequest);
   useEffect(() => {
     if (!dispatchSeedRequest) return;
     setDispatchSeed({ text: dispatchSeedRequest.text, seq: dispatchSeedRequest.seq });
-  }, [dispatchSeedRequest]);
+    clearDispatchSeedRequest();
+  }, [dispatchSeedRequest, clearDispatchSeedRequest]);
   // Lifted so the memory-graph tab can jump to a specific agent's memory file.
   const [selectedMemoryAgent, setSelectedMemoryAgent] = useState<string | null>(null);
   const updateAgent = useStore((s) => s.updateAgent);
