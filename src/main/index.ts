@@ -4958,7 +4958,7 @@ function bootstrapHiveServices(): void {
   } catch (e) { console.error('[hive] sync lock acquire:', e); }
   // Tell the hive what it is running inside, BEFORE anything spawns: the prompt
   // builder reads this, so an agent spawned earlier would never learn it.
-  hive.setRuntimeInfo({ version: app.getVersion(), packaged: app.isPackaged, appPath: app.getAppPath() });
+  hive.setRuntimeInfo({ version: app.getVersion(), packaged: app.isPackaged, appPath: app.getAppPath(), userData: app.getPath('userData') });
   hive.setOrchestratorMaySpawn(readConfig().orchestratorMaySpawn === true);
   // An app-start marker in the event log. log.jsonl had twelve event kinds and
   // none of them meant "the app restarted", so a relaunch, and more importantly a

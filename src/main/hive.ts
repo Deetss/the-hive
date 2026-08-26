@@ -203,17 +203,16 @@ function shortRand(): string {
  *  cursor, raw inbox/outbox JSON). `mempalace mine` honors .gitignore, so we drop
  *  one in each agent dir; written on birth here and refreshed by the mine loop.
  *
- *  `.codex/` is here for a second reason as well, and it is the load-bearing one:
- *  a Codex worker's CODEX_HOME lives INSIDE its agent dir (see installCodexHooks —
- *  Codex can only be given hooks through a config.toml in its own home, so it
- *  cannot share the user's ~/.codex). Codex then fills that folder with full
- *  session transcripts, an 80MB+ logs sqlite and a plugin cache, and the hive's
- *  git repo was faithfully versioning every revision of all of it. Twenty Codex
- *  agents took the hive's .git to 7.5GB, at which point git's own auto-gc tried to
- *  repack it and took 22GB of RAM doing so — the machine swapped, the app stopped
- *  responding. None of it was ever wanted in history: it is Codex's private
- *  scratch state, and it stays on disk (so resume still works) either way. */
-const MINE_IGNORE_LINES = ['settings.json', 'cursor.json', 'inbox/', 'outbox/', '.codex/'];
+ *  The engine-home entries (`.codex/`, `.pi-agent/`, `.opencode/`, `.gemini-hive/`)
+ *  are a REGRESSION SAFETY NET. As of the device-sync secret-leak fix these dirs
+ *  are rooted in userData (see engineHomeDir), OUTSIDE this repo — because codex's
+ *  CODEX_HOME holds a copy of the user's real `auth.json` and must never be
+ *  committed/synced. They used to live inside the agent dir, where two problems
+ *  bit: (1) the credential leak above, and (2) Codex fills its home with session
+ *  transcripts + an 80MB+ logs sqlite; twenty Codex agents once took the hive's
+ *  .git to 7.5GB and git auto-gc took 22GB of RAM repacking it. Keeping these
+ *  names ignored means even a regressed in-repo path is never versioned. */
+const MINE_IGNORE_LINES = ['settings.json', 'cursor.json', 'inbox/', 'outbox/', '.codex/', '.pi-agent/', '.opencode/', '.gemini-hive/'];
 
 /** Idempotently ensure `<agentDir>/.gitignore` excludes the non-memory files.
  *  Append-only: writes only the missing lines, leaving any existing entries. */
@@ -318,11 +317,11 @@ export class HiveManager {
    *  022. No agent could observe that, several published conclusions had to be
    *  withdrawn, and log.jsonl carried no app-start marker to notice the switch
    *  from either. */
-  private _runtime: { version: string; packaged: boolean; appPath?: string } | null = null;
-  setRuntimeInfo(info: { version: string; packaged: boolean; appPath?: string } | null): void {
+  private _runtime: { version: string; packaged: boolean; appPath?: string; userData?: string } | null = null;
+  setRuntimeInfo(info: { version: string; packaged: boolean; appPath?: string; userData?: string } | null): void {
     this._runtime = info;
   }
-  runtimeInfo(): { version: string; packaged: boolean; appPath?: string } | null {
+  runtimeInfo(): { version: string; packaged: boolean; appPath?: string; userData?: string } | null {
     return this._runtime;
   }
 
@@ -348,6 +347,26 @@ export class HiveManager {
   }
   private agentDir(id: string): string {
     return join(this.root()!, 'agents', id);
+  }
+
+  /**
+   * A per-agent ENGINE HOME dir, rooted in `userData` — OUTSIDE the synced hive
+   * repo. Non-Claude engines (codex/pi/opencode/gemini) write their config dir
+   * here, and codex copies the user's real `auth.json` into it after login; if it
+   * lived under `agents/<id>/` (inside `hive/`) that credential could be committed
+   * and synced to another device. Rooting it in userData keeps it on the
+   * secrets-live-in-userData side of the device-sync boundary. Falls back to a
+   * stable home-dir path (still outside the repo) when runtime info isn't set yet
+   * (e.g. tests). Idempotent mkdir.
+   */
+  private engineHomeDir(id: string): string {
+    const userData = this.runtimeInfo()?.userData;
+    const base = userData
+      ? join(userData, 'engine-homes')
+      : join(homedir(), '.the-hive', 'engine-homes');
+    const dir = join(base, id);
+    try { mkdirSync(dir, { recursive: true }); } catch { /* best-effort; install fns re-mkdir their subdir */ }
+    return dir;
   }
   /** IPC endpoint the cth-hook shim talks to (Phase 1 autonomy).
    *  On POSIX this is a Unix-domain socket file under the hive root. On Windows,
@@ -555,8 +574,13 @@ export class HiveManager {
     //                     across devices; only its temp is ignored. The lock is
     //                     rewritten wholesale by the protocol (latest-heartbeat-
     //                     wins), never git-auto-merged.
+    // Engine config/home dirs (codex/pi/opencode/gemini) now live in userData, not
+    // under agents/<id>/ — but ignore their names anywhere in the repo as a hard
+    // safety net so a credential-bearing dir (codex's auth.json) can never be
+    // committed even if a path regresses.
     const gitignore = join(root, '.gitignore');
-    const want = ['fleet.json', 'hooks.sock', 'cost-ledger.jsonl', '.DS_Store', 'bin/', 'roster.json.tmp', '.sync/owner.json.tmp'];
+    const want = ['fleet.json', 'hooks.sock', 'cost-ledger.jsonl', '.DS_Store', 'bin/', 'roster.json.tmp', '.sync/owner.json.tmp',
+      '.codex/', '.pi-agent/', '.opencode/', '.gemini-hive/'];
     let lines: string[] = [];
     if (existsSync(gitignore)) { try { lines = readFileSync(gitignore, 'utf8').split('\n'); } catch { lines = []; } }
     const missing = want.filter((w) => !lines.includes(w));
@@ -766,13 +790,17 @@ export class HiveManager {
       //               LLM traffic and SYNTHESIZES the same HIVE_SOCK payloads.
       const desc = bridgeOf(meta.provider);
       const sock = this.sockPath();
+      // Engine config/home dirs live in userData, NOT under agents/<id>/ (inside
+      // the synced repo): codex copies the user's real auth.json into CODEX_HOME,
+      // so an in-repo engine dir would sync a credential to another device.
+      const engineDir = this.engineHomeDir(meta.id);
       if (desc && sock) {
         env.HIVE_SOCK = sock;
         try {
           if (desc.kind === 'hooks') {
             if (desc.shim === 'agy') this.installAgyHooks();
             else if (desc.shim === 'codex') {
-              env.CODEX_HOME = this.installCodexHooks(dir);
+              env.CODEX_HOME = this.installCodexHooks(engineDir);
               // Codex refuses to run hooks from a config dir without persisted
               // "hook trust" (normally an interactive gate). Our hooks.json is
               // hive-authored inside an isolated CODEX_HOME, so we bypass that gate
@@ -790,7 +818,7 @@ export class HiveManager {
               // config.autoMode) gates the auto-allow — Pam guardrail #5.
               // LIVE-UNVERIFIED: the exact extension API surface needs BYOK keys to
               // prove; the renderer idle inbox-wake nudge is the guaranteed drain.
-              env.PI_CODING_AGENT_DIR = this.installPiHooks(dir);
+              env.PI_CODING_AGENT_DIR = this.installPiHooks(engineDir);
             }
             else if (desc.shim === 'opencode') {
               // OpenCode (anomalyco/opencode) has no Claude-shaped Stop hook, but its
@@ -800,12 +828,12 @@ export class HiveManager {
               // same Stop→drain semantics, provider-agnostic, no traffic interception.
               // LIVE-UNVERIFIED (plugin auto-load + session.idle firing); the renderer
               // idle inbox-wake nudge is the guaranteed drain fallback.
-              env.OPENCODE_CONFIG_DIR = this.installOpenCodePlugin(dir, opts.theme);
+              env.OPENCODE_CONFIG_DIR = this.installOpenCodePlugin(engineDir, opts.theme);
             }
             else if (desc.shim === 'gemini') {
               // Point only this worker at a per-agent system settings file so
               // the bridge is trusted and ~/.gemini/settings.json stays untouched.
-              env.GEMINI_CLI_SYSTEM_SETTINGS_PATH = this.installGeminiHooks(dir);
+              env.GEMINI_CLI_SYSTEM_SETTINGS_PATH = this.installGeminiHooks(engineDir);
             }
             else if (desc.shim === 'grok') this.installGrokHooks();
           } else if (desc.kind === 'proxy') {
@@ -2342,8 +2370,8 @@ export class HiveManager {
     console.warn('[hive] untracked the cost ledger from the hive repo');
   }
 
-  /** Has the one-time Codex-home untrack pass run in this process yet? */
-  private untrackedCodexHomes = false;
+  /** Has the one-time engine-home untrack pass run in this process yet? */
+  private untrackedEngineHomes = false;
 
   /**
    * Stop versioning Codex worker homes that are ALREADY in the index.
@@ -2358,20 +2386,23 @@ export class HiveManager {
    * `.codex` path from the index. The files stay on disk, so `codex --resume`
    * is unaffected; only their history stops.
    */
-  private untrackCodexHomes(root: string): void {
-    if (this.untrackedCodexHomes) return;
-    this.untrackedCodexHomes = true;
+  private untrackEngineHomes(root: string): void {
+    if (this.untrackedEngineHomes) return;
+    this.untrackedEngineHomes = true;
     const agentsDir = join(root, 'agents');
     if (!existsSync(agentsDir)) return;
     try {
       for (const id of readdirSync(agentsDir)) ensureMineIgnore(join(agentsDir, id));
     } catch { /* best-effort */ }
+    // All four engine config dirs (codex holds a real auth.json). New spawns now
+    // root these in userData, but a hive from before that fix may still track them.
+    const globs = ['agents/*/.codex', 'agents/*/.pi-agent', 'agents/*/.opencode', 'agents/*/.gemini-hive'];
     // Probe before mutating: `rm --cached` on a clean repo would still rewrite
     // the index on every launch, and this runs inside the commit retry path.
-    const tracked = this.git(['ls-files', '--', 'agents/*/.codex'], root);
+    const tracked = this.git(['ls-files', '--', ...globs], root);
     if (!tracked.ok || !tracked.out.trim()) return;
-    this.git(['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', 'agents/*/.codex'], root);
-    console.warn('[hive] untracked previously-committed Codex homes from the hive repo');
+    this.git(['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', ...globs], root);
+    console.warn('[hive] untracked previously-committed engine homes (incl. codex auth) from the hive repo');
   }
 
   /** Has the one-time bin/ untrack pass run in this process yet? */
@@ -2402,7 +2433,7 @@ export class HiveManager {
     const root = this.root();
     if (!root || !existsSync(join(root, '.git'))) return;
     this.untrackCostLedger(root);
-    this.untrackCodexHomes(root);
+    this.untrackEngineHomes(root);
     this.untrackBinShims(root);
     for (let attempt = 0; attempt < 5; attempt++) {
       this.clearStaleLock(root);
