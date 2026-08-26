@@ -15,7 +15,8 @@ import { initAutoUpdater, abortPendingRestart } from './updater';
 import { RealtimeFloorWatcher } from './realtimeFloorWatcher';
 import {
   readConfig, writeConfig, setAgentTokenCap, resetConfig, ensureHarnessHome, ensureClaudePermissionsAccepted,
-  resolveHarnessHome, getRuntimeProfile, listLocalDelegates, upsertLocalDelegate, removeLocalDelegate,
+  resolveHarnessHome, getRuntimeProfile, listRuntimeProfiles, upsertRuntimeProfile, isSafeHttpUrl,
+  listLocalDelegates, upsertLocalDelegate, removeLocalDelegate,
   modelForRole, OPS_STANDUP_MISSION, HEARTBEAT_MISSION, COMPACT_MAINTENANCE_MISSION, type HarnessConfig, type ScheduledMission
 } from './config';
 import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde } from './fs';
@@ -2918,6 +2919,24 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     }
     opts.env = { ...(opts.env ?? {}), ...extra };
   }
+  // ── Profile cloud endpoint (v2): OPENAI_BASE_URL + OPENAI_API_KEY ─────────
+  // When a runtime profile pins a cloud OpenAI-compatible endpoint (e.g. Azure AI
+  // Foundry), inject the URL and the decrypted key into the spawn env so the CLI
+  // (e.g. codex) routes all API calls to that endpoint. MAIN-ONLY — key never
+  // crosses IPC; baseUrl is already validated by isSafeHttpUrl at profile save.
+  if (opts.hive?.profileId) {
+    const cloudProfile = getRuntimeProfile(opts.hive.profileId);
+    if (cloudProfile?.baseUrl && cloudProfile.apiKeyRef) {
+      const cloudKey = integrations.getSecret(cloudProfile.apiKeyRef);
+      if (cloudKey) {
+        opts.env = {
+          ...(opts.env ?? {}),
+          OPENAI_BASE_URL: cloudProfile.baseUrl,
+          OPENAI_API_KEY: cloudKey
+        };
+      }
+    }
+  }
   // Codex Remote is daemon-based (there is no `/remote-control` slash command).
   // Start/enable the daemon under this agent's isolated CODEX_HOME and connect
   // the TUI to it so the thread is visible in ChatGPT mobile. Best-effort: an
@@ -3109,6 +3128,20 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
   // relaunch, so bootstrap here on the null → set transition. Gated on the
   // transition so ordinary config writes never re-enter it.
   const hiveWasEnabled = hive.enabled();
+  // When runtimeProfiles is replaced, clean up safeStorage secrets for any removed
+  // profiles that had an apiKeyRef (same discipline as lda:remove deleteSecret).
+  if (patch.runtimeProfiles !== undefined) {
+    const prevProfiles = listRuntimeProfiles();
+    const nextIds = new Set<string>();
+    for (const p of patch.runtimeProfiles) {
+      if (p && typeof (p as { id?: unknown }).id === 'string') nextIds.add(((p as { id: string }).id).trim());
+    }
+    for (const prev of prevProfiles) {
+      if (!nextIds.has(prev.id) && prev.apiKeyRef) {
+        try { integrations.deleteSecret(prev.apiKeyRef); } catch { /* best-effort */ }
+      }
+    }
+  }
   const next = writeConfig(patch);
   // Live opt-in/out from Settings → Privacy (TELEMETRY.md).
   if (typeof patch?.telemetryEnabled === 'boolean') analytics.setEnabled(patch.telemetryEnabled);
@@ -4274,6 +4307,42 @@ ipcMain.handle('lda:hasApiKey', (_evt, arg: unknown) => {
   const cfg = listLocalDelegates().find((d) => d.id === id);
   return { hasKey: !!(cfg?.secretRef && integrations.getSecret(cfg.secretRef)) };
 });
+
+// ─── IPC: Runtime profile cloud endpoint keys ────────────────────────────────
+// API key for a profile's cloud OpenAI-compatible endpoint — MAIN-ONLY write/check,
+// never returned over IPC. Pattern mirrors lda:setApiKey/removeApiKey/hasApiKey.
+ipcMain.handle('profile:setApiKey', (_evt, id: unknown, key: unknown) => {
+  if (typeof id !== 'string' || !id.trim() || typeof key !== 'string' || !key) {
+    return { ok: false, error: 'id and key required' };
+  }
+  const ref = `profile:${id.trim()}:apikey`;
+  try {
+    integrations.setSecret(ref, key);
+    const profile = getRuntimeProfile(id.trim());
+    if (profile && !profile.apiKeyRef) upsertRuntimeProfile({ ...profile, apiKeyRef: ref });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+ipcMain.handle('profile:removeApiKey', (_evt, arg: unknown) => {
+  const id = typeof arg === 'string' ? arg.trim() : '';
+  if (!id) return { ok: false, error: 'id required' };
+  integrations.deleteSecret(`profile:${id}:apikey`);
+  const profile = getRuntimeProfile(id);
+  if (profile?.apiKeyRef) upsertRuntimeProfile({ ...profile, apiKeyRef: undefined });
+  return { ok: true };
+});
+ipcMain.handle('profile:hasApiKey', (_evt, arg: unknown) => {
+  const id = typeof arg === 'string' ? arg.trim() : '';
+  const profile = getRuntimeProfile(id);
+  return { hasKey: !!(profile?.apiKeyRef && integrations.getSecret(profile.apiKeyRef)) };
+});
+// Renderer-callable URL safety check — same guard as upsertRuntimeProfile uses at
+// save time, so the form can give immediate feedback without a separate regex.
+ipcMain.handle('profile:isSafeUrl', (_evt, url: unknown, allowPrivate: unknown) =>
+  typeof url === 'string' ? isSafeHttpUrl(url, allowPrivate === true) : false
+);
 
 // ─── IPC: Triggers — history ledger + the approval gate ─────────────────────
 ipcMain.handle('triggerHistory:list', () => listTriggerHistory());

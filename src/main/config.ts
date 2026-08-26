@@ -762,6 +762,9 @@ export function getRuntimeProfile(id: unknown): RuntimeProfile | null {
 export function upsertRuntimeProfile(profile: unknown): HarnessConfig {
   const normalized = normalizeRuntimeProfile(profile);
   if (!normalized) throw new Error('invalid runtime profile');
+  if (normalized.baseUrl && !isSafeHttpUrl(normalized.baseUrl, normalized.allowPrivate ?? false)) {
+    throw new Error('invalid or unsafe baseUrl');
+  }
   const current = readConfig();
   const list = normalizeRuntimeProfiles(current.runtimeProfiles).filter((p) => p.id !== normalized.id);
   list.push(normalized);
@@ -821,7 +824,7 @@ function parseIpv4(host: string): number | null {
  *  "Blocked unless allowPrivate=true":
  *    10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12   RFC 1918 private
  *    fc00::/7                                       IPv6 private */
-function isSafeHttpUrl(urlStr: string, allowPrivate = false): boolean {
+export function isSafeHttpUrl(urlStr: string, allowPrivate = false): boolean {
   let u: URL;
   try { u = new URL(urlStr); } catch { return false; }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
