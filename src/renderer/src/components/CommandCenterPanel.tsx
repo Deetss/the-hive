@@ -84,7 +84,11 @@ function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean;
   const taskPending = useStore((s) => s.askMePending);
   const msgPending = useStore((s) => s.humanMessages.filter((m) => !m.resolved).length);
   const activityUnread = useStore((s) => s.activityUnread);
-  const badge = t.key === 'human' ? taskPending + msgPending : t.key === 'activity' ? activityUnread : 0;
+  const assignedPending = useStore((s) => s.assignedPending);
+  const badge = t.key === 'human' ? taskPending + msgPending
+    : t.key === 'activity' ? activityUnread
+    : t.key === 'tasks' ? assignedPending
+    : 0;
   const showBadge = badge > 0 && !active;
   return (
     <button

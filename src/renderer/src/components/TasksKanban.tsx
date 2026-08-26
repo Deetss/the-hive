@@ -10,6 +10,9 @@ import { useStore } from '@/store/store';
  *  (same convention as store/config.ts). */
 export interface HumanQA {
   q: string;
+  /** Default 'question'. 'action' = human must DO something (sets doneAt when
+   *  complete). 'review' = human must approve a doc (sets approved). */
+  kind?: 'question' | 'action' | 'review';
   a?: string;
   askedAt?: string;
   answeredAt?: string;
@@ -17,6 +20,12 @@ export interface HumanQA {
    *  answering — the question stays on the card (history is preserved) but
    *  openQuestion() stops returning it, so the card leaves ASK ME. */
   dismissedAt?: string;
+  /** action entries: ISO timestamp when the human completed the action. */
+  doneAt?: string;
+  /** review entries: path to the document or report to review. */
+  docPath?: string;
+  /** review entries: true = approved, false = changes requested. undefined = pending. */
+  approved?: boolean;
 }
 
 export interface HiveTask {
@@ -34,14 +43,35 @@ export interface HiveTask {
 }
 
 /** The card's currently open question for the human, if any. An entry the human
- *  dismissed (dismissedAt) counts as resolved, same as an answered one. */
+ *  dismissed (dismissedAt) counts as resolved, same as an answered one.
+ *  Only returns 'question' kind entries (not action/review — those are in assignedToMe). */
 export function openQuestion(t: HiveTask): HumanQA | undefined {
   if (!Array.isArray(t.humanQA)) return undefined;
   for (let i = t.humanQA.length - 1; i >= 0; i--) {
     const e = t.humanQA[i];
-    if (e && typeof e.q === 'string' && !e.a && !e.dismissedAt) return e;
+    const kind = e?.kind ?? 'question';
+    if (e && typeof e.q === 'string' && kind === 'question' && !e.a && !e.dismissedAt) return e;
   }
   return undefined;
+}
+
+/** True if this humanQA entry is still pending the human's action. */
+function isPendingHumanQA(e: HumanQA): boolean {
+  if (e.dismissedAt) return false;
+  const kind = e.kind ?? 'question';
+  if (kind === 'question') return !e.a;
+  if (kind === 'action') return !e.doneAt;
+  if (kind === 'review') return e.approved === undefined;
+  return false;
+}
+
+function fmtAge(iso?: string): string {
+  if (!iso) return '';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return '<1m';
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
+  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h`;
+  return `${Math.floor(ms / 86_400_000)}d`;
 }
 
 /** Waiting on the human = blocked with an unanswered question on the card. */
@@ -97,12 +127,15 @@ export function parseTasks(raw: unknown): HiveTask[] {
           .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object' && typeof (e as { q?: unknown }).q === 'string')
           .map((e) => ({
             q: e.q as string,
+            kind: (e.kind === 'question' || e.kind === 'action' || e.kind === 'review')
+              ? e.kind : undefined,
             a: typeof e.a === 'string' ? e.a : undefined,
             askedAt: typeof e.askedAt === 'string' ? e.askedAt : undefined,
             answeredAt: typeof e.answeredAt === 'string' ? e.answeredAt : undefined,
-            // Preserve a dismissal across the 5s re-parse, else the card would
-            // resurface on the next poll (openQuestion would see it as open).
-            dismissedAt: typeof e.dismissedAt === 'string' ? e.dismissedAt : undefined
+            dismissedAt: typeof e.dismissedAt === 'string' ? e.dismissedAt : undefined,
+            doneAt: typeof e.doneAt === 'string' ? e.doneAt : undefined,
+            docPath: typeof e.docPath === 'string' ? e.docPath : undefined,
+            approved: typeof e.approved === 'boolean' ? e.approved : undefined
           }))
         : undefined
     }));
@@ -117,34 +150,77 @@ export function parseTasks(raw: unknown): HiveTask[] {
 export function TasksKanban() {
   const agents = useStore((s) => s.agents);
   const [tasks, setTasks] = useState<HiveTask[]>([]);
-  // Detail view: cards show just the title — clicking one opens the full
-  // breakdown as an APP-WIDE overlay over the office floor (see
-  // TaskDetailOverlay) — the content grows (contracts, deps, human Q&A), so it
-  // gets the big stage instead of the narrow side panel.
   const openTaskDetail = useStore((s) => s.openTaskDetail);
+  const setAssignedPending = useStore((s) => s.setAssignedPending);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [atmeCollapsed, setAtmeCollapsed] = useState(false);
+  const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
+  const [acting, setActing] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try { setTasks(parseTasks(await window.cth.hiveTasks())); } catch { /* keep last good */ }
   }, []);
 
-  // Dismiss a card off the board (human-initiated). The kanban is otherwise the
-  // god's to write, but a person can clear a card they no longer want tracked.
-  // Main removes the named id from its latest on-disk ledger, so a webhook or
-  // god card added since this renderer's last poll cannot be lost.
   const dismissTask = useCallback(async (id: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id)); // optimistic
+    setTasks((prev) => prev.filter((t) => t.id !== id));
     try {
       const result = await window.cth.hiveDeleteTask(id);
       if (!result.ok) void refresh();
-    } catch { /* keep last good; the next poll re-syncs from disk */ }
+    } catch { /* next poll re-syncs */ }
   }, [refresh]);
+
+  const patchQA = useCallback(async (taskId: string, qa: HumanQA[]) => {
+    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, humanQA: qa } : t));
+    await window.cth.hivePatchTask(taskId, { humanQA: qa });
+  }, []);
+
+  const sendAnswer = useCallback(async (task: HiveTask, e: HumanQA, draftKey: string) => {
+    const text = (answerDrafts[draftKey] ?? '').trim();
+    if (!text || acting) return;
+    setActing(draftKey);
+    try {
+      const qa = (task.humanQA ?? []).map((q) => q === e ? { ...q, a: text, answeredAt: new Date().toISOString() } : q);
+      await patchQA(task.id, qa);
+      await window.cth.hiveSend({ to: 'god', act: 'inform', subject: `HUMAN ANSWER on task "${task.title}"`, body: `Q: ${e.q}\nA: ${text}` }, 'human');
+      setAnswerDrafts((d) => { const n = { ...d }; delete n[draftKey]; return n; });
+    } catch { /* leave draft */ }
+    setActing(null);
+  }, [answerDrafts, acting, patchQA]);
+
+  const markDone = useCallback(async (task: HiveTask, e: HumanQA, draftKey: string) => {
+    if (acting) return;
+    setActing(draftKey);
+    try {
+      const qa = (task.humanQA ?? []).map((q) => q === e ? { ...q, doneAt: new Date().toISOString() } : q);
+      await patchQA(task.id, qa);
+    } catch { /* noop */ }
+    setActing(null);
+  }, [acting, patchQA]);
+
+  const reviewDecide = useCallback(async (task: HiveTask, e: HumanQA, approved: boolean, draftKey: string) => {
+    if (acting) return;
+    setActing(draftKey);
+    try {
+      const qa = (task.humanQA ?? []).map((q) => q === e ? { ...q, approved, answeredAt: new Date().toISOString() } : q);
+      await patchQA(task.id, qa);
+      await window.cth.hiveSend({ to: 'god', act: 'inform', subject: `REVIEW ${approved ? 'APPROVED' : 'CHANGES REQUESTED'} on task "${task.title}"`, body: `${approved ? 'Approved' : 'Changes requested'}: ${e.docPath ?? e.q}` }, 'human');
+    } catch { /* noop */ }
+    setActing(null);
+  }, [acting, patchQA]);
 
   useEffect(() => {
     refresh();
     timer.current = setInterval(refresh, POLL_MS);
     return () => { if (timer.current) clearInterval(timer.current); };
   }, [refresh]);
+
+  const pendingItems = tasks.flatMap((t) =>
+    (t.humanQA ?? [])
+      .map((qa, qi) => ({ task: t, qa, key: `${t.id}:${qi}` }))
+      .filter((item) => isPendingHumanQA(item.qa))
+  ).sort((a, b) => (a.qa.askedAt ?? '') < (b.qa.askedAt ?? '') ? -1 : 1);
+
+  useEffect(() => { setAssignedPending(pendingItems.length); }, [pendingItems.length, setAssignedPending]);
 
   const restorableAgents = useStore((s) => s.restorableAgents);
   /** Resolve an assignee id to a display name — falls back to the restorable
@@ -159,9 +235,162 @@ export function TasksKanban() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--cth-paper-200)', position: 'relative' }}>
-      {/* Toolbar — read-only: the god is the ledger's writer. New work enters
-          through the dispatch box (which mails the god), not by the human
-          inserting cards the orchestrator never heard about. */}
+      {/* Assigned to me — pending humanQA items across all tasks */}
+      {pendingItems.length > 0 && (
+        <div style={{ flexShrink: 0, borderBottom: '2px solid var(--cth-ink-300)' }}>
+          <button
+            onClick={() => setAtmeCollapsed((v) => !v)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+              padding: '5px 10px', border: 'none', cursor: 'pointer',
+              background: 'var(--cth-coral-light, #fde8e8)',
+              fontFamily: 'var(--cth-font-display)', fontSize: 9, color: 'var(--cth-ink-900)',
+              textAlign: 'left'
+            }}
+          >
+            <span>ASSIGNED TO ME</span>
+            <span style={{
+              minWidth: 16, height: 16, borderRadius: 8,
+              background: 'var(--cth-coral)', color: '#fff',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 8, padding: '0 4px', boxSizing: 'border-box'
+            }}>{pendingItems.length}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.6 }}>
+              {atmeCollapsed ? '▶' : '▼'}
+            </span>
+          </button>
+          {!atmeCollapsed && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {pendingItems.map(({ task, qa, key }) => {
+                const kind = qa.kind ?? 'question';
+                const chipColor = kind === 'question' ? 'var(--cth-lilac)'
+                  : kind === 'action' ? 'var(--cth-lemon)'
+                  : 'var(--cth-sky)';
+                const chipLabel = kind === 'question' ? 'QUESTION' : kind === 'action' ? 'ACTION' : 'REVIEW';
+                const isActing = acting === key;
+                return (
+                  <div key={key} style={{
+                    padding: '7px 10px',
+                    borderBottom: '1px solid var(--cth-ink-100)',
+                    background: 'var(--cth-cream-100)',
+                    display: 'flex', flexDirection: 'column', gap: 4
+                  }}>
+                    {/* Header row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{
+                        fontFamily: 'var(--cth-font-display)', fontSize: 7, padding: '1px 5px 0',
+                        background: chipColor, color: 'var(--cth-ink-900)',
+                        boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0
+                      }}>{chipLabel}</span>
+                      <span style={{
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-700)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1
+                      }}>{task.title}</span>
+                      <span style={{ flexShrink: 0, fontSize: 10, color: 'var(--cth-ink-400)', fontFamily: 'var(--cth-font-display)' }}>
+                        {fmtAge(qa.askedAt)}
+                      </span>
+                    </div>
+                    {/* Ask text */}
+                    <div style={{
+                      fontFamily: 'var(--cth-font-mono)', fontSize: 11, lineHeight: '15px',
+                      color: 'var(--cth-ink-800)',
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                    }}>
+                      {kind === 'review' && qa.docPath ? qa.docPath : qa.q}
+                    </div>
+                    {/* Action row */}
+                    {kind === 'question' && (
+                      <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                        <input
+                          type="text"
+                          value={answerDrafts[key] ?? ''}
+                          onChange={(e) => setAnswerDrafts((d) => ({ ...d, [key]: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') void sendAnswer(task, qa, key); }}
+                          placeholder="your answer…"
+                          disabled={isActing}
+                          style={{
+                            flex: 1, padding: '3px 6px', border: 'none', outline: 'none',
+                            background: 'var(--cth-paper-100)',
+                            boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)',
+                            fontFamily: 'var(--cth-font-mono)', fontSize: 11,
+                            color: 'var(--cth-ink-900)'
+                          }}
+                        />
+                        <button
+                          onClick={() => void sendAnswer(task, qa, key)}
+                          disabled={isActing || !(answerDrafts[key] ?? '').trim()}
+                          style={{
+                            padding: '3px 8px', border: 'none', cursor: 'pointer',
+                            background: 'var(--cth-mint)', color: 'var(--cth-ink-900)',
+                            boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                            fontFamily: 'var(--cth-font-display)', fontSize: 8,
+                            opacity: isActing ? 0.5 : 1
+                          }}
+                        >SEND</button>
+                      </div>
+                    )}
+                    {kind === 'action' && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 2 }}>
+                        <button
+                          onClick={() => void markDone(task, qa, key)}
+                          disabled={isActing}
+                          style={{
+                            padding: '3px 8px', border: 'none', cursor: 'pointer',
+                            background: 'var(--cth-mint)', color: 'var(--cth-ink-900)',
+                            boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                            fontFamily: 'var(--cth-font-display)', fontSize: 8,
+                            opacity: isActing ? 0.5 : 1
+                          }}
+                        >MARK DONE</button>
+                      </div>
+                    )}
+                    {kind === 'review' && (
+                      <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                        {qa.docPath && (
+                          <button
+                            onClick={() => window.cth.openExternal?.(qa.docPath!)}
+                            style={{
+                              padding: '3px 8px', border: 'none', cursor: 'pointer',
+                              background: 'var(--cth-paper-100)', color: 'var(--cth-ink-700)',
+                              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                              fontFamily: 'var(--cth-font-display)', fontSize: 8
+                            }}
+                          >OPEN</button>
+                        )}
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                          <button
+                            onClick={() => void reviewDecide(task, qa, false, key)}
+                            disabled={isActing}
+                            style={{
+                              padding: '3px 8px', border: 'none', cursor: 'pointer',
+                              background: 'var(--cth-coral-light, #fde8e8)', color: 'var(--cth-ink-900)',
+                              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                              fontFamily: 'var(--cth-font-display)', fontSize: 8,
+                              opacity: isActing ? 0.5 : 1
+                            }}
+                          >CHANGES</button>
+                          <button
+                            onClick={() => void reviewDecide(task, qa, true, key)}
+                            disabled={isActing}
+                            style={{
+                              padding: '3px 8px', border: 'none', cursor: 'pointer',
+                              background: 'var(--cth-mint)', color: 'var(--cth-ink-900)',
+                              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                              fontFamily: 'var(--cth-font-display)', fontSize: 8,
+                              opacity: isActing ? 0.5 : 1
+                            }}
+                          >APPROVE</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+      {/* Toolbar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', flexShrink: 0,
         borderBottom: '1px solid var(--cth-ink-300)'
