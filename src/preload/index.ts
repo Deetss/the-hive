@@ -1247,6 +1247,18 @@ const api = {
   /** Whether a remote URL passes the same isSafeGitUrl guard the backend enforces. */
   isSafeRemoteUrl: (url: string): Promise<boolean> => ipcRenderer.invoke('sync:isSafeRemote', url),
 
+  // ─── Active-shell telemetry ─────────────────────────────────────────────────
+  /** Pull the current active-shell count on mount (cold-start backfill). */
+  shellsSnapshot: (): Promise<{ activeShells: number }> => ipcRenderer.invoke('fleet:shellsSnapshot'),
+  /** Subscribe to live active-shell count pushes (`fleet:shells`). Returns an
+   *  unsubscribe function. An "active shell" is any live PtySession with an open
+   *  handle — 1:1 with spawned agents for their lifetime plus any extra terminals. */
+  onActiveShells: (cb: (payload: { activeShells: number }) => void): (() => void) => {
+    const handler = (_evt: IpcRendererEvent, payload: { activeShells: number }): void => cb(payload);
+    ipcRenderer.on('fleet:shells', handler);
+    return () => ipcRenderer.off('fleet:shells', handler);
+  },
+
   // ─── Triggers: history ledger + approval gate ───────────────────────────────
   /** The whole ledger, newest first (both directions, both sources). */
   listTriggerHistory: (): Promise<TriggerHistoryEntry[]> =>
