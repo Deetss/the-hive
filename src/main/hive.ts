@@ -557,7 +557,7 @@ export class HiveManager {
     }
     const board = join(root, 'board.md');
     if (!existsSync(board)) {
-      writeFileSync(board, '# Hive board\n\n_Shared plans live here. The god agent is the scribe._\n', 'utf8');
+      writeFileSync(board, '# Hive board\n\n_Shared plans live here. The Overmind is the scribe._\n', 'utf8');
     }
     const tasks = join(root, 'tasks.json');
     if (!existsSync(tasks)) this.writeJson(tasks, { tasks: [] });
@@ -2554,19 +2554,19 @@ The harness fills in \`id\`, \`from\`, \`hops\`, and timestamps.
 - Only \`request\`, \`query\`, and \`propose\` expect a reply. \`inform\` and \`done\` are terminal —
   don't reply to them, or two agents will loop forever.
 - For anything ambiguous, cross-cutting, or needing sign-off, message \`god\` — the
-  god agent clarifies answers for you so you rarely need the human directly.
+  Overmind clarifies answers for you so you rarely need the human directly.
 - There is NO separate human-approval queue. Human-in-the-loop is native to Claude
   Code: a tool you run that needs permission prompts in your own session (the human
   can approve it remotely from their phone via \`/remote-control\`). If you genuinely
   need a human decision, raise it with \`god\` (a message \`"to": "human"\` is routed to
-  the god/orchestrator, the human's proxy on the floor).
+  the Overmind, the human's proxy on the floor).
 - \`board.md\` is the shared plan. Don't edit it directly — \`propose\` changes to \`god\`,
   who is its sole scribe.
 - Re-reading a message you already moved to \`.done/\` is a no-op. Don't reprocess.
 
 ## The work: board.md vs tasks.json
 There are two shared surfaces, both in the hive root:
-- \`board.md\` — the freeform narrative plan. The god agent is its sole scribe; others \`propose\` edits.
+- \`board.md\` — the freeform narrative plan. The Overmind is its sole scribe; others \`propose\` edits.
 - \`tasks.json\` — the structured task ledger (a kanban: \`todo / doing / blocked / done\`, with title,
   assignee, priority, deps). Keep the task you're working reflected in its status.
 
@@ -2575,12 +2575,12 @@ A circuit breaker watches every agent for runaway behavior (looping on the same 
 overspending). It escalates gently: \`steer\` → \`constrain\` → \`stop\`. If a \`Circuit breaker: steer\`
 or \`Circuit breaker: constrain\` message lands in your inbox, you ARE the problem it caught — stop
 repeating, summarize what you've tried, and do exactly what the message says (constrain = go read-only
-and get god's sign-off before more tool calls). Be **token-frugal**: the floor has a token budget and
+and get the Overmind's sign-off before more tool calls). Be **token-frugal**: the floor has a token budget and
 each agent can have its own token limit; crossing it trips the breaker. Prefer references over pasted
 content, and \`/compact\` your own session when context gets heavy.
 
 ## Fleet monitoring (orchestrator)
-You (god) are responsible for situational awareness. To see the live state of every agent, read
+You (Overmind) are responsible for situational awareness. To see the live state of every agent, read
 \`fleet.json\` in the hive root — it is refreshed continuously with each agent's tokens, cost, status,
 breaker level, last tool, last-active time, and inbox backlog. Pair it with \`registry.json\` (the roster)
 and \`log.jsonl\` (the event feed). IMPORTANT: \`claude agents\` will NOT show your hive's sibling

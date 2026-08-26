@@ -611,10 +611,12 @@ export function readConfig(): HarnessConfig {
     const raw = readFileSync(p, 'utf8');
     const parsed = JSON.parse(raw);
     const merged: HarnessConfig = { ...DEFAULTS, ...parsed };
-    // Migrate legacy keys written by pre-v0.5.0 builds so callers that read
-    // overmindModel/overmindProvider directly get the user's real value.
-    if (!merged.overmindProvider && merged.godProvider) merged.overmindProvider = merged.godProvider;
-    if (!merged.overmindModel && merged.godModel) merged.overmindModel = merged.godModel;
+    // Migrate legacy keys written by pre-v0.5.0 builds. Guard on `parsed`
+    // (the raw file), not `merged`, because DEFAULTS already sets overmindProvider
+    // and overmindModel — checking `merged` would always be truthy and the
+    // migration would never fire.
+    if (parsed.overmindProvider == null && parsed.godProvider) merged.overmindProvider = parsed.godProvider;
+    if (parsed.overmindModel == null && parsed.godModel) merged.overmindModel = parsed.godModel;
     return normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults(merged)));
   } catch {
     return withTriggerDefaults({ ...DEFAULTS });

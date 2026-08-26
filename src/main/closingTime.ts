@@ -91,7 +91,7 @@ export class ClosingTimeController {
     this.godId = reg.godId ?? 'god';
     const live = new Set(this.getLiveAgentIds());
     if (!reg.agents[this.godId] || !live.has(this.godId)) {
-      return { ok: false, error: 'No orchestrator is running — closing time needs the god agent to collect the reports.' };
+      return { ok: false, error: 'No orchestrator is running — closing time needs the Overmind to collect the reports.' };
     }
 
     // Only agents with a live terminal are waited on — the registry is just
