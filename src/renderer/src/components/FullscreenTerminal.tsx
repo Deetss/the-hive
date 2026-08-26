@@ -881,6 +881,23 @@ function SidebarRow({
               {basename(agent.worktreePath || agent.cwd) || agent.project}
             </span>
           </div>
+          {/* Live activity: current tool/command from the pty stream. Quieter
+              than the animated office — just the text, no motion. Only shown
+              while the agent is actively doing something. */}
+          {(agent.status === 'working' || agent.status === 'thinking') && agent.action && (
+            <span
+              title={agent.action}
+              style={{
+                fontFamily: 'var(--cth-font-mono)',
+                fontSize: Math.max(8, scale.name - 4), lineHeight: 1.35,
+                color: 'var(--cth-ink-400, var(--cth-ink-500))',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                minWidth: 0
+              }}
+            >
+              {agent.action}
+            </span>
+          )}
           <ContextBar tokens={agent.contextTokens} limit={agent.contextLimit} accent={agent.accent} />
           {/* Every line of every agent, always on screen — the roster's job is
               to answer "who is on what" without a single interaction. */}
