@@ -61,8 +61,17 @@ asarUnpack:
   # better-sqlite3 is native (bindings/prebuild need the .node on the real FS).
   - "**/node_modules/better-sqlite3/**"
 
-# Rebuild native deps (node-pty) for the target during packaging.
-npmRebuild: true
+# Do NOT let electron-builder rebuild natives from source during packaging.
+# node-pty CANNOT be built from source on Windows from the npm tarball: its
+# binding.gyp pulls deps/winpty/src/winpty.gyp which shells out to
+# GetCommitHash.bat — a file NOT shipped in the tarball — so gyp configure
+# exits 1 before cl.exe ever runs. node-pty 1.1.0 uses node-addon-api (NAPI),
+# meaning its shipped prebuild (prebuilds/win32-x64/pty.node) is ABI-stable
+# across all Node and Electron versions and loads correctly under Electron 32.
+# better-sqlite3 IS pre-built for the Electron ABI separately before dist via
+# `electron-rebuild --only better-sqlite3`. With both natives correct already,
+# setting npmRebuild: true can only break node-pty again.
+npmRebuild: false
 
 # ---- macOS ----
 mac:
