@@ -30,10 +30,25 @@ import type { RuntimeProfile } from '@/store/config';
  */
 
 type Health = 'healthy' | 'steering' | 'constrained' | 'stopped';
+type GovernorMode = 'green' | 'yellow' | 'red';
+type GovernorPayload = { mode: GovernorMode; reason?: string };
 
 const HEALTH_RANK: Record<Health, number> = {
   healthy: 0, steering: 1, constrained: 2, stopped: 3
 };
+
+function govColor(mode: GovernorMode): string {
+  if (mode === 'red') return 'var(--cth-coral)';
+  if (mode === 'yellow') return 'var(--cth-lemon)';
+  return 'var(--cth-mint)';
+}
+
+function govWindow(reason?: string): string | null {
+  if (!reason) return null;
+  if (reason.startsWith('5h:')) return '5h';
+  if (reason.startsWith('7d:')) return '7d';
+  return null;
+}
 
 function healthColor(level: Health): string {
   if (level === 'constrained' || level === 'stopped') return 'var(--cth-coral)';
@@ -83,6 +98,17 @@ export function StatusBar() {
       setBillingMode(c.billingMode ?? null);
       setRuntimeProfiles(c.runtimeProfiles ?? []);
     }).catch(() => {});
+  }, []);
+
+  const [governor, setGovernor] = useState<GovernorPayload | null>(null);
+  useEffect(() => {
+    window.cth?.governorSnapshot?.().then((snap) => {
+      setGovernor({ mode: snap.mode });
+    }).catch(() => {});
+    const off = window.cth?.onGovernorMode?.((payload) => {
+      setGovernor({ mode: payload.mode, reason: payload.reason });
+    });
+    return () => { off?.(); };
   }, []);
 
   const live = useMemo(() => agents.filter((a) => a.ptyId && !a.archived), [agents]);
@@ -305,6 +331,25 @@ export function StatusBar() {
       )}
 
       <div style={{ marginLeft: 'auto' }} />
+      {governor && governor.mode !== 'green' && (
+        <>
+          <Chip
+            title={`Usage governor: ${governor.mode.toUpperCase()}${governor.reason ? ` — ${governor.reason}` : ''}${governor.mode === 'red' ? ' · click to force-green' : ''}`}
+            onClick={governor.mode === 'red' ? () => {
+              window.cth?.setGovernorOverride?.('force-green').then(() => setGovernor({ mode: 'green' })).catch(() => {});
+            } : undefined}
+          >
+            <Dot color={govColor(governor.mode)} />
+            <span style={{ color: govColor(governor.mode) }}>gov</span>
+            {governor.mode === 'red' && govWindow(governor.reason) && (
+              <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+                {govWindow(governor.reason)}
+              </span>
+            )}
+          </Chip>
+          <Sep />
+        </>
+      )}
       <Chip title={worst ? `${health}${worst.reason ? `: ${worst.reason}` : ''}` : 'All breakers healthy'}>
         <Dot color={healthColor(health)} />
         <span style={{ color: 'var(--cth-ink-700)' }}>{health}</span>
@@ -316,11 +361,12 @@ export function StatusBar() {
   );
 }
 
-function Chip({ children, title }: { children: React.ReactNode; title?: string }) {
+function Chip({ children, title, onClick }: { children: React.ReactNode; title?: string; onClick?: () => void }) {
   return (
     <span
       title={title}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 10px', whiteSpace: 'nowrap' }}
+      onClick={onClick}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 10px', whiteSpace: 'nowrap', cursor: onClick ? 'pointer' : undefined }}
     >
       {children}
     </span>
