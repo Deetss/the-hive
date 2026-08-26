@@ -93,6 +93,9 @@ export interface Agent {
   /** When git isolation is enabled, the dedicated worktree path the agent runs
    *  in (its own `agent/<id>` branch); undefined for shared-cwd agents. */
   worktreePath?: string;
+  /** Runtime-profiles v1: the saved profile id used to spawn this agent.
+   *  Drives the per-agent WORK/PERSONAL badge in the status bar. */
+  profileId?: string;
   /** Live context size of the agent's Claude session (tokens), polled from its
    *  transcript. Drives the context gauge on the agent card. */
   contextTokens?: number;

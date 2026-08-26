@@ -329,6 +329,8 @@ export interface HarnessConfig {
    *  METADATA only: a profile's `claudeConfigDir` is a PATH pointer to a login dir
    *  outside the synced hive repo — no credential is ever stored here. Default []. */
   runtimeProfiles?: RuntimeProfile[];
+  /** Runtime-derived WORK / PERSONAL badge from CLAUDE_CONFIG_DIR basename. Not persisted. */
+  accountBadge?: 'WORK' | 'PERSONAL';
   /** Master toggle for the Slack → Abathur's-queue integration. */
   slackEnabled?: boolean;
   /** Slack app signing secret (Basic Information → Signing Secret). Never logged. */

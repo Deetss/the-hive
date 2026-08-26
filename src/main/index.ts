@@ -492,6 +492,7 @@ function teardownPty(id: string): void {
     try { liveWebContents()?.send('hive:agentArchived', { id }); } catch { /* window torn down */ }
   }
   syncKeepAwake();
+  pushActiveShells(); // immediately reflect the closed shell in the renderer
 }
 
 /** Send an inform to the god agent (the human's proxy). The ephemeral-worker
@@ -1239,9 +1240,21 @@ function writeFleetSnapshot(): void {
         };
       });
     hive.writeFleetSnapshot({ ts: now, agents });
+    // Push the live active-shell count to the renderer. A "shell" is any live
+    // PtySession in PtyManager — agents are 1:1 with shells for their life, but
+    // this count also covers background/worktree terminals. Sessions are removed
+    // on exit so the count is always current with no separate reaping pass.
+    pushActiveShells();
   } catch (e) {
     console.error('[fleet] snapshot failed:', e);
   }
+}
+
+/** Push the current active-shell count to the renderer on `fleet:shells`. */
+function pushActiveShells(): void {
+  try {
+    liveWebContents()?.send('fleet:shells', { activeShells: ptyManager.list().length });
+  } catch { /* window torn down */ }
 }
 
 /** Arm the heartbeat with an adaptive, self-rescheduling cadence (recursive
@@ -2917,6 +2930,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   const res = ptyManager.spawn(opts, owner);
   if (res.ok) analytics.track('agent_spawned', { provider });
   syncKeepAwake(); // arm the power-save blocker while ≥1 agent PTY is alive (#18)
+  if (res.ok) pushActiveShells(); // immediately reflect the new shell in the renderer
   // Hand the resolved worktree path back to the renderer so it can persist it on
   // the agent (only set when isolation actually provisioned a worktree above).
   // The restore flow re-enters this exact worktree (cwd = worktreePath) so a
@@ -2948,6 +2962,8 @@ ipcMain.handle('pty:kill', (_evt, id: string) => {
   return res;
 });
 ipcMain.handle('pty:list', () => ptyManager.list());
+// Pull the current active-shell count (for the renderer's cold-start backfill).
+ipcMain.handle('fleet:shellsSnapshot', () => ({ activeShells: ptyManager.list().length }));
 
 // Resolve a pasted Claude session id to the cwd it originally ran in, so the Add
 // Agent dialog can auto-fill the folder for a resume (#2 zero-step resume). Reads
@@ -3072,7 +3088,13 @@ ipcMain.handle('integrations:test', async (_evt, payload: unknown) => {
 });
 
 // ─── IPC: config ────────────────────────────────────────────────────────────
-ipcMain.handle('config:get', (): HarnessConfig => readConfig());
+ipcMain.handle('config:get', (): HarnessConfig => {
+  const c = readConfig();
+  const configDir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude');
+  const accountBadge: 'WORK' | 'PERSONAL' = basename(configDir) === '.claude-personal' ? 'PERSONAL' : 'WORK';
+  return { ...c, accountBadge };
+});
+ipcMain.handle('fleet:rateLimitsSnapshot', () => hookServer.allRateLimits());
 ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
   // FIRST RUN: every hive-bound service is started by bootstrapHiveServices(),
   // which runs once at app-ready and early-returns on `!hive.enabled()` — i.e.

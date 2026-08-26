@@ -1,6 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '@/store/store';
 import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTelemetry';
+import { useActiveShells } from '@/hooks/useShells';
+import { useRateLimits, ratePaceColor, fmtReset } from '@/hooks/useRateLimits';
+import type { RuntimeProfile } from '@/store/config';
 
 /**
  * Persistent bottom status line: live hive+fleet state at a glance.
@@ -9,6 +12,23 @@ import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTe
  * (`agents`, `godStatus`, `messageQueues`) and the OTel telemetry hook
  * (`useFleetTelemetry`: per-agent usage samples + breaker state). No new IPC:
  * everything here is already streamed to the renderer.
+ *
+ * "pending" count = outgoing message queue (messages parked for busy agents),
+ * NOT the agents' on-disk hive inbox. Aggregate per-agent inbox reads would
+ * require N IPC calls per render; this is the cheapest live proxy and the
+ * tooltip says so.
+ *
+ * Parity with Dylan's CC statusline-command.sh (fleet-adapted):
+ *   ctx bar: 4-cell █/░ glyph, <50 green / 50-79 yellow / >=80 red (his thresholds)
+ *   model: selected agent's model id, truncated before any ' ('
+ *   dir:branch: selected agent's cwd basename + git branch (async)
+ *   5h/7d rate limits: NOT available — rate_limits.* flows through cth-hook but is
+ *     not yet stored/exposed by the main process. Report scope: main needs to persist
+ *     rate_limits from the Status hook payload and push via IPC.
+ *   WORK/PERSONAL badge: NOT available — CLAUDE_CONFIG_DIR not surfaced to renderer.
+ *   loc (edgentic savings): NOT available — edgentic runs on remote Jetson; usage.log
+ *     has no accessible local path.
+ *   vim mode: NOT available — .vim.mode from Status JSON not forwarded by main.
  */
 
 type Health = 'healthy' | 'steering' | 'constrained' | 'stopped';
@@ -17,14 +37,27 @@ const HEALTH_RANK: Record<Health, number> = {
   healthy: 0, steering: 1, constrained: 2, stopped: 3
 };
 
-/** Same thresholds/palette the Command Center token meter uses (mint→lemon→coral). */
 function healthColor(level: Health): string {
   if (level === 'constrained' || level === 'stopped') return 'var(--cth-coral)';
   if (level === 'steering') return 'var(--cth-lemon)';
   return 'var(--cth-mint)';
 }
 
+/** His exact thresholds: <50 green, 50-79 yellow, >=80 red. */
+function ctxBarColor(pct: number): string {
+  if (pct >= 80) return 'var(--cth-coral)';
+  if (pct >= 50) return 'var(--cth-lemon)';
+  return 'var(--cth-mint)';
+}
+
+/** 4-cell filled/empty glyph bar. */
+function ctxBar(pct: number): string {
+  const filled = Math.min(4, Math.round(pct / 25));
+  return '█'.repeat(filled) + '░'.repeat(4 - filled);
+}
+
 function fmtTokens(n: number): string {
+  if (!Number.isFinite(n) || n < 0) n = 0;
   if (n >= 1e9) return `${+(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `${+(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `${+(n / 1e3).toFixed(1)}K`;
@@ -32,24 +65,76 @@ function fmtTokens(n: number): string {
 }
 
 function fmtUsd(n: number): string {
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  if (n === 0) return '$0.00';
   if (n >= 100) return `$${n.toFixed(0)}`;
   if (n >= 1) return `$${n.toFixed(2)}`;
-  return `$${n.toFixed(3)}`;
+  if (n >= 0.01) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(4)}`;
 }
 
-function pctColor(pct: number): string {
-  if (pct >= 90) return 'var(--cth-coral)';
-  if (pct >= 60) return 'var(--cth-lemon)';
-  return 'var(--cth-mint)';
+/** Truncate model id before any ' (' to match statusline-command.sh display. */
+function shortModel(m: string): string {
+  const cut = m.indexOf(' (');
+  return cut >= 0 ? m.slice(0, cut) : m;
 }
+
+const tail = (p: string) => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? p;
 
 export function StatusBar() {
   const agents = useStore((s) => s.agents);
+  const selectedId = useStore((s) => s.selectedId);
   const godStatus = useStore((s) => s.godStatus);
   const messageQueues = useStore((s) => s.messageQueues);
   const { samples, rate, breakers } = useFleetTelemetry();
+  const shells = useActiveShells();
+  const rateLimits = useRateLimits();
+
+  // One-time read of app-wide badge + profiles for per-agent badge resolution.
+  const [accountBadge, setAccountBadge] = useState<'WORK' | 'PERSONAL' | null>(null);
+  const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
+  useEffect(() => {
+    window.cth?.getConfig?.().then((c) => {
+      setAccountBadge(c.accountBadge ?? null);
+      setRuntimeProfiles(c.runtimeProfiles ?? []);
+    }).catch(() => {});
+  }, []);
 
   const live = useMemo(() => agents.filter((a) => a.ptyId && !a.archived), [agents]);
+
+  // Selected agent (or god as fallback) for per-agent context chips.
+  const focusAgent = useMemo(
+    () => agents.find((a) => a.id === selectedId) ?? agents.find((a) => a.isGod) ?? null,
+    [agents, selectedId]
+  );
+
+  // Resolve the badge for the currently focused agent.
+  // Uses its profileId → runtimeProfiles.claudeConfigDir if available;
+  // falls back to the app-wide CLAUDE_CONFIG_DIR badge otherwise.
+  const displayBadge = useMemo<'WORK' | 'PERSONAL' | null>(() => {
+    if (!accountBadge) return null;
+    if (focusAgent?.profileId) {
+      const profile = runtimeProfiles.find((p) => p.id === focusAgent.profileId);
+      if (profile?.claudeConfigDir) {
+        const dir = profile.claudeConfigDir.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? '';
+        return dir === '.claude-personal' ? 'PERSONAL' : 'WORK';
+      }
+    }
+    return accountBadge;
+  }, [focusAgent?.profileId, runtimeProfiles, accountBadge]);
+
+  // Async git branch for the focused agent's cwd.
+  const [branch, setBranch] = useState<string | null>(null);
+  useEffect(() => {
+    const cwd = focusAgent?.worktreePath ?? focusAgent?.cwd;
+    if (!cwd) { setBranch(null); return; }
+    let cancelled = false;
+    window.cth?.gitBranch?.(cwd).then((r) => {
+      if (cancelled) return;
+      setBranch('current' in r && r.current ? r.current : null);
+    }).catch(() => setBranch(null));
+    return () => { cancelled = true; };
+  }, [focusAgent?.id, focusAgent?.cwd, focusAgent?.worktreePath]);
 
   const { tokens, usd, tokPerMin } = useMemo(() => {
     let t = 0, d = 0, r = 0;
@@ -58,19 +143,25 @@ export function StatusBar() {
       if (s) { t += totalTokens(s); d += s.usd; }
       r += rate[a.id] ?? 0;
     }
-    return { tokens: t, usd: d, tokPerMin: r };
+    return {
+      tokens: Number.isFinite(t) ? t : 0,
+      usd: Number.isFinite(d) ? d : 0,
+      tokPerMin: Number.isFinite(r) ? r : 0,
+    };
   }, [live, samples, rate]);
 
   // Busiest agent's context fill is the risk signal: a near-full window is the
-  // one worth surfacing, so we show the max rather than an average.
+  // one worth surfacing. Clamped to 100 — context can be briefly reported above
+  // the limit during a streaming response before the app updates the limit field.
   const ctxPct = useMemo(() => {
     let max = -1;
     for (const a of live) {
       if (a.contextTokens && a.contextLimit && a.contextLimit > 0) {
-        max = Math.max(max, Math.round((a.contextTokens / a.contextLimit) * 100));
+        const pct = Math.round((a.contextTokens / a.contextLimit) * 100);
+        if (pct > max) max = pct;
       }
     }
-    return max;
+    return max < 0 ? -1 : Math.min(max, 100);
   }, [live]);
 
   const worst = useMemo<BreakerState | null>(() => {
@@ -95,6 +186,21 @@ export function StatusBar() {
     [messageQueues]
   );
 
+  // Fleet-worst rate limits among LIVE agents only (same filter as ctxPct).
+  // rateLimitsById is never pruned, so dead agents would linger; scope to live
+  // to prevent a killed agent's stale high-% from inflating the meter forever.
+  const { worstFiveHour, worstSevenDay } = useMemo(() => {
+    const liveIds = new Set(live.map((a) => a.id));
+    let fh: { pct: number; resetsAt: string } | null = null;
+    let sd: { pct: number; resetsAt: string } | null = null;
+    for (const [agentId, entry] of Object.entries(rateLimits)) {
+      if (!liveIds.has(agentId)) continue;
+      if (entry.fiveHour && (!fh || entry.fiveHour.pct > fh.pct)) fh = entry.fiveHour;
+      if (entry.sevenDay && (!sd || entry.sevenDay.pct > sd.pct)) sd = entry.sevenDay;
+    }
+    return { worstFiveHour: fh, worstSevenDay: sd };
+  }, [rateLimits, live]);
+
   const godColor = godStatus === 'ready' ? 'var(--cth-mint)'
     : godStatus === 'failed' ? 'var(--cth-coral)' : 'var(--cth-lemon)';
   const health: Health = worst?.level ?? 'healthy';
@@ -110,13 +216,54 @@ export function StatusBar() {
         display: 'flex', alignItems: 'center', gap: 0,
         padding: '0 12px',
         fontFamily: 'var(--cth-font-ui)', fontSize: 12,
-        color: 'var(--cth-ink-700)', userSelect: 'none'
+        color: 'var(--cth-ink-700)', userSelect: 'none',
+        overflow: 'hidden', minWidth: 0,
       }}
     >
+      {displayBadge && (
+        <>
+          <Chip title={`Account: ${displayBadge} (from CLAUDE_CONFIG_DIR${focusAgent?.profileId ? ' via agent profile' : ''})`}>
+            <Dot color={displayBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)'} />
+            <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 9, color: displayBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)' }}>
+              {displayBadge}
+            </span>
+          </Chip>
+          <Sep />
+        </>
+      )}
+
       <Chip title={`Orchestrator: ${godStatus}`}>
         <Dot color={godColor} />
         <span style={{ color: 'var(--cth-ink-500)' }}>hive</span>
       </Chip>
+
+      {focusAgent && (
+        <>
+          <Sep />
+          <Chip title={`${focusAgent.name} · ${focusAgent.worktreePath ?? focusAgent.cwd}`}>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-sky)' }}>
+              {tail(focusAgent.worktreePath ?? focusAgent.cwd)}
+            </span>
+            {branch && (
+              <>
+                <span style={{ color: 'var(--cth-ink-300)' }}>:</span>
+                <span style={{ color: 'var(--cth-ink-700)', fontFamily: 'var(--cth-font-mono)' }}>{branch}</span>
+              </>
+            )}
+          </Chip>
+        </>
+      )}
+
+      {focusAgent?.model && (
+        <>
+          <Sep />
+          <Chip title={`Model: ${focusAgent.model}`}>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-sky)' }}>
+              {shortModel(focusAgent.model)}
+            </span>
+          </Chip>
+        </>
+      )}
 
       <Sep />
       <Chip title={`${live.length} agent(s) with a live terminal`}>
@@ -124,6 +271,14 @@ export function StatusBar() {
           {live.length}
         </strong>
         <span style={{ color: 'var(--cth-ink-500)' }}>active</span>
+      </Chip>
+
+      <Sep />
+      <Chip title="Active shells / open PTY terminals">
+        <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+          {shells === null ? '--' : shells}
+        </span>
+        <span style={{ color: 'var(--cth-ink-500)' }}>sh</span>
       </Chip>
 
       <Sep />
@@ -140,18 +295,56 @@ export function StatusBar() {
       </Chip>
 
       <Sep />
-      <Chip title="Estimated fleet cost so far">
+      <Chip title="Estimated fleet cost so far (OTel cumulative)">
         <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
           {fmtUsd(usd)}
         </span>
       </Chip>
 
+      {worstFiveHour && (
+        <>
+          <Sep />
+          <Chip title={`5h rate limit: ${worstFiveHour.pct}% used · resets ${fmtReset(worstFiveHour.resetsAt)}`}>
+            <span style={{ color: 'var(--cth-ink-500)' }}>5h</span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: ratePaceColor(worstFiveHour.pct, worstFiveHour.resetsAt, 300), letterSpacing: 1 }}>
+              {ctxBar(worstFiveHour.pct)}
+            </span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+              {worstFiveHour.pct}%
+            </span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+              {fmtReset(worstFiveHour.resetsAt)}
+            </span>
+          </Chip>
+        </>
+      )}
+
+      {worstSevenDay && (
+        <>
+          <Sep />
+          <Chip title={`7d rate limit: ${worstSevenDay.pct}% used · resets ${fmtReset(worstSevenDay.resetsAt)}`}>
+            <span style={{ color: 'var(--cth-ink-500)' }}>7d</span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: ratePaceColor(worstSevenDay.pct, worstSevenDay.resetsAt, 10080), letterSpacing: 1 }}>
+              {ctxBar(worstSevenDay.pct)}
+            </span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+              {worstSevenDay.pct}%
+            </span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+              {fmtReset(worstSevenDay.resetsAt)}
+            </span>
+          </Chip>
+        </>
+      )}
+
       {ctxPct >= 0 && (
         <>
           <Sep />
-          <Chip title="Fullest agent context window">
-            <Dot color={pctColor(ctxPct)} />
+          <Chip title={`Fullest agent context window ${ctxPct}% (max across active agents)`}>
             <span style={{ color: 'var(--cth-ink-500)' }}>ctx</span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: ctxBarColor(ctxPct), letterSpacing: 1 }}>
+              {ctxBar(ctxPct)}
+            </span>
             <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
               {ctxPct}%
             </span>
@@ -162,11 +355,11 @@ export function StatusBar() {
       {queued > 0 && (
         <>
           <Sep />
-          <Chip title="Messages queued for delivery to agents">
+          <Chip title="Messages parked for busy agents (outgoing queue, not hive inbox)">
             <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
               {queued}
             </span>
-            <span style={{ color: 'var(--cth-ink-500)' }}>queued</span>
+            <span style={{ color: 'var(--cth-ink-500)' }}>pending</span>
           </Chip>
         </>
       )}

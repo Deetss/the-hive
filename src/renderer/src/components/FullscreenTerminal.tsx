@@ -18,6 +18,9 @@ import { usePtyParser } from '@/hooks/usePtyParser';
 import { useRestoreTeam } from '@/hooks/useRestoreTeam';
 import { useTerminalFontSize } from './terminalFontSize';
 import { useHasTerminalDraft, disposeTerminal, reflowTerminal, notifyThemeChangeAll } from './terminalPool';
+import { StatusBar } from './StatusBar';
+import { GitTab } from './GitTab';
+import { FilesTab } from './FilesTab';
 import { useAppTheme, toggleAppTheme } from '@/design/theme';
 import type { HarnessConfig } from '@/store/config';
 
@@ -27,6 +30,8 @@ import type { HarnessConfig } from '@/store/config';
 const SIDEBAR_WIDTH = 'clamp(232px, 14vw, 340px)';
 /** Remembers the roster collapse across fullscreen sessions and app restarts. */
 const ROSTER_COLLAPSED_KEY = 'cth.fullscreen.rosterCollapsed';
+/** Remembers which left-panel mode the user last chose: agent roster or diff/IDE. */
+const SIDE_PANEL_KEY = 'cth.fullscreen.sidePanel';
 
 /** Roster type scale, derived from the shared terminal zoom so Cmd +/- resizes
  *  the whole roster along with the terminal — one knob for the whole view
@@ -190,6 +195,16 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
       return next;
     });
   };
+  // Left-panel mode: 'ide' shows the git/file panel for the focused agent; 'roster' shows the agent list.
+  const [sidePanel, setSidePanelRaw] = useState<'roster' | 'ide'>(() => {
+    try { return localStorage.getItem(SIDE_PANEL_KEY) === 'roster' ? 'roster' : 'ide'; } catch { return 'ide'; }
+  });
+  const setSidePanel = (m: 'roster' | 'ide'): void => {
+    setSidePanelRaw(m);
+    try { localStorage.setItem(SIDE_PANEL_KEY, m); } catch { /* private mode */ }
+  };
+  // Which sub-tab within the IDE left panel.
+  const [sideIdeTab, setSideIdeTab] = useState<'git' | 'files'>('git');
   const drag: RowDrag = {
     dragId,
     overId,
@@ -412,26 +427,72 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
           background: 'var(--cth-cream-200)',
           borderRight: '1px solid var(--cth-ink-300)'
         }}>
-          <div style={{ padding: 8, borderBottom: '1px solid var(--cth-ink-300)' }}>
-            <button
-              onClick={() => setAddAgentOpen(true)}
-              title="Add agent"
-              style={{
-                width: '100%', height: 32,
-                background: 'var(--cth-cream-100)',
-                border: 'none',
-                boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-                fontFamily: 'var(--cth-font-ui)',
-                fontSize: 'clamp(14px, 0.7vw, 15px)',
-                color: 'var(--cth-ink-900)',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                cursor: 'pointer'
-              }}
-            >
-              <Icon name="plus" /> agent
-            </button>
+          {/* Left-panel mode switcher: roster vs diff/IDE */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 2,
+            padding: '4px 6px', borderBottom: '1px solid var(--cth-ink-300)',
+            background: 'var(--cth-cream-200)', flexShrink: 0
+          }}>
+            {(['ide', 'roster'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setSidePanel(m)}
+                title={m === 'ide' ? 'Show diff/file panel for the focused agent' : 'Show the agent roster'}
+                style={{
+                  padding: '1px 7px', border: 'none', cursor: 'pointer',
+                  fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '14px', textTransform: 'uppercase',
+                  color: 'var(--cth-ink-700)',
+                  background: sidePanel === m ? 'var(--cth-sky-light)' : 'transparent',
+                  boxShadow: sidePanel === m ? 'inset 0 0 0 1px var(--cth-ink-300)' : 'none'
+                }}
+              >{m}</button>
+            ))}
+            {sidePanel === 'ide' && (
+              <>
+                <span style={{ flex: 1 }} />
+                {(['git', 'files'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setSideIdeTab(t)}
+                    style={{
+                      padding: '1px 6px', border: 'none', cursor: 'pointer',
+                      fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '14px', textTransform: 'uppercase',
+                      color: 'var(--cth-ink-500)',
+                      background: sideIdeTab === t ? 'var(--cth-lemon-light)' : 'transparent',
+                      boxShadow: sideIdeTab === t ? 'inset 0 0 0 1px var(--cth-ink-200)' : 'none'
+                    }}
+                  >{t}</button>
+                ))}
+              </>
+            )}
+            {sidePanel === 'roster' && (
+              <>
+                <span style={{ flex: 1 }} />
+                <button
+                  onClick={() => setAddAgentOpen(true)}
+                  title="Add agent"
+                  style={{
+                    width: 24, height: 24, padding: 0, border: 'none', cursor: 'pointer',
+                    background: 'var(--cth-cream-100)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--cth-ink-900)'
+                  }}
+                >
+                  <Icon name="plus" />
+                </button>
+              </>
+            )}
           </div>
 
+          {sidePanel === 'ide' ? (
+            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              {sideIdeTab === 'git'
+                ? <GitTab cwd={agent.worktreePath ?? agent.cwd} />
+                : <FilesTab cwd={agent.worktreePath ?? agent.cwd} />
+              }
+            </div>
+          ) : (<>
           <div className="cth-scroll-hidden" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 0' }}>
             {/* The god agent runs the floor rather than a checkout, so it gets no
                 repository header — it sits alone at the top of the roster. */}
@@ -554,6 +615,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
               )}
             </div>
           )}
+          </>)}
         </aside>
         )}
 
@@ -605,6 +667,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
           )}
         </div>
       </div>
+      <StatusBar />
     </div>
   );
 }

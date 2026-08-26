@@ -465,7 +465,10 @@ export function App() {
 
       <AgentStrip config={config} />
 
-      <StatusBar />
+      {/* Only mount StatusBar in normal view — FullscreenTerminal mounts its own copy
+          so we don't run two instances of useFleetTelemetry / useActiveShells / useRateLimits
+          / the gitBranch IPC in parallel when focus mode is open. */}
+      {!fullscreenAgentId && <StatusBar />}
 
       {addAgentOpen && (
         <AddAgentModal
