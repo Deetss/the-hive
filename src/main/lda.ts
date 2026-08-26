@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { isAbsolute, normalize } from 'node:path';
 import { listLocalDelegates } from './config';
 import { getSecret } from './integrations';
 import type {
@@ -242,24 +243,32 @@ function apiHeaders(cfg: LocalDelegateConfig, apiKey: string | undefined): Recor
   return headers;
 }
 
+/** Validate a file path from the renderer before reading it into a prompt.
+ *  Must be absolute and must not contain path-traversal sequences. */
+function safeReadFile(filePath: string): string | null {
+  if (!filePath || !isAbsolute(filePath)) return null;
+  const norm = normalize(filePath);
+  // Reject if normalization changes the path (indicates .. traversal was present)
+  if (norm !== filePath && norm !== filePath.replace(/[/\\]+$/, '')) return null;
+  try { return readFileSync(norm, 'utf8'); } catch { return null; }
+}
+
 function buildApiPrompt(cap: LdaApiCapability, req: LdaInvokeRequest['args']): string {
   if (req.prompt) return req.prompt;
   if (cap === 'complete') {
-    // Map script-style args to a prompt
     if (req.question) {
       if (req.file) {
-        try {
-          const content = readFileSync(req.file, 'utf8');
-          return `${req.question}\n\nFile: ${req.file}\n\`\`\`\n${content}\n\`\`\``;
-        } catch { return req.question; }
+        const content = safeReadFile(req.file);
+        if (content !== null) return `${req.question}\n\nFile: ${req.file}\n\`\`\`\n${content}\n\`\`\``;
       }
       return req.question;
     }
     if (req.claim && req.file) {
-      try {
-        const content = readFileSync(req.file, 'utf8');
+      const content = safeReadFile(req.file);
+      if (content !== null) {
         return `Verify the following claim about the file "${req.file}". Answer only "true" or "false" followed by a brief explanation.\nClaim: ${req.claim}\n\nFile:\n\`\`\`\n${content}\n\`\`\``;
-      } catch { return req.claim; }
+      }
+      return req.claim;
     }
   }
   return req.question ?? req.claim ?? req.instruction ?? '';
