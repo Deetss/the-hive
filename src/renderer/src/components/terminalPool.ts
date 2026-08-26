@@ -249,6 +249,32 @@ export function acquireTerminal(ptyId: string, theme?: ThemeMap, fontSize = 14):
   };
   term.attachCustomKeyEventHandler((ev) => {
     if (ev.type !== 'keydown') return true;
+    // Scrollback shortcuts: Shift+PageUp/Down, Shift+Home/End, Ctrl+Shift+Home/End.
+    // These must sit BEFORE the ctrlKey/metaKey guard because Shift+Page* has
+    // neither modifier. Returning false tells xterm not to forward the key to the
+    // terminal process so the TUI never sees these strokes.
+    if (ev.shiftKey && !ev.altKey) {
+      if (ev.key === 'PageUp') {
+        try { term.scrollPages(-1); } catch { /* noop */ }
+        ev.preventDefault();
+        return false;
+      }
+      if (ev.key === 'PageDown') {
+        try { term.scrollPages(1); } catch { /* noop */ }
+        ev.preventDefault();
+        return false;
+      }
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Home') {
+        try { term.scrollToTop(); } catch { /* noop */ }
+        ev.preventDefault();
+        return false;
+      }
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'End') {
+        try { term.scrollToBottom(); } catch { /* noop */ }
+        ev.preventDefault();
+        return false;
+      }
+    }
     if (!(ev.ctrlKey || ev.metaKey)) return true;
     const key = ev.key.toLowerCase();
     if (key === 'c' && (ev.shiftKey || term.hasSelection())) {
