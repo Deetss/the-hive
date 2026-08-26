@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { Icon } from './Icon';
+import { HiveProfiles } from './HiveProfiles';
 import type { HarnessConfig } from '@/store/config';
 
 export interface HivePickerProps {
@@ -69,11 +70,12 @@ export function HivePicker({ config, onOpenCurrent }: HivePickerProps) {
       background: 'var(--cth-cream-200)',
       backgroundImage:
         `repeating-linear-gradient(45deg, rgba(232, 217, 160, 0.4) 0 1px, transparent 1px 8px)`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      display: 'flex', alignItems: 'center', justifyContent: 'flex-start', flexDirection: 'column',
+      overflowY: 'auto',
       zIndex: 200,
-      padding: 32
+      padding: '5vh 32px 32px'
     }}>
-      <div style={{ width: 560, maxWidth: '94vw' }}>
+      <div style={{ width: 560, maxWidth: '94vw', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <PixelPanel variant="dialog" title="SELECT A HARNESS CONFIG" noPadding>
           <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <p style={{ margin: 0, fontSize: 12, lineHeight: '19px', color: 'var(--cth-ink-700)' }}>
@@ -178,6 +180,8 @@ export function HivePicker({ config, onOpenCurrent }: HivePickerProps) {
             </div>
           </div>
         </PixelPanel>
+
+        <HiveProfiles />
       </div>
     </div>
   );

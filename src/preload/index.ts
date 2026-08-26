@@ -1232,9 +1232,14 @@ const api = {
   /** Launch a profile as a new isolated instance (detached). */
   launchProfile: (id: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('profiles:launch', id),
+  /** Remove a profile from the registry (leaves its on-disk hive/userData intact). */
+  deleteProfile: (id: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('profiles:delete', id),
   /** Cross-device JOIN: clone a hive's remote into a new profile's home. */
   joinHive: (arg: { remoteUrl: string; name: string; harnessHome: string }): Promise<{ ok: boolean; error?: string; profile?: unknown }> =>
     ipcRenderer.invoke('sync:joinHive', arg),
+  /** Whether a remote URL passes the same isSafeGitUrl guard the backend enforces. */
+  isSafeRemoteUrl: (url: string): Promise<boolean> => ipcRenderer.invoke('sync:isSafeRemote', url),
 
   // ─── Triggers: history ledger + approval gate ───────────────────────────────
   /** The whole ledger, newest first (both directions, both sources). */

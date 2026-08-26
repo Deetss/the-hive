@@ -4152,6 +4152,12 @@ ipcMain.handle('profiles:launch', (_evt, arg: unknown) => {
 });
 // Cross-device JOIN: clone a hive's remote into a new profile's home, then the
 // renderer can launch it. Independent of every other hive (per-hive lock).
+ipcMain.handle('profiles:delete', (_evt, arg: unknown) => {
+  const id = typeof arg === 'string' ? arg : '';
+  if (!id) return { ok: false, error: 'profile id required' };
+  profiles.removeProfile(id); // removes the registry entry only; on-disk hive/userData are left for the user
+  return { ok: true };
+});
 ipcMain.handle('sync:joinHive', (_evt, arg: unknown) => {
   const a = (arg ?? {}) as { remoteUrl?: unknown; name?: unknown; harnessHome?: unknown };
   const url = typeof a.remoteUrl === 'string' ? a.remoteUrl : '';
@@ -4159,6 +4165,9 @@ ipcMain.handle('sync:joinHive', (_evt, arg: unknown) => {
   if (!home) return { ok: false, error: 'harnessHome (target dir) required' };
   return profiles.joinHive(url, typeof a.name === 'string' ? a.name : 'joined hive', home);
 });
+// Let the renderer's join form reuse the EXACT same URL guard the backend enforces
+// (no duplicated regex to drift), for immediate feedback before a submit.
+ipcMain.handle('sync:isSafeRemote', (_evt, arg: unknown) => sync.isSafeGitUrl(typeof arg === 'string' ? arg : ''));
 
 // ─── IPC: Triggers — history ledger + the approval gate ─────────────────────
 ipcMain.handle('triggerHistory:list', () => listTriggerHistory());
