@@ -417,7 +417,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
     void window.cth.skillsLocal()
       .then((skills) => setLocalSkills((skills ?? []).map((s) => ({ name: s.name, description: s.description ?? '' }))))
       .catch(() => {});
-  }, [agent.cwd]);
+  }, []);
 
   // Restart an agent's PTY in place. `resume:true` reattaches its prior Claude
   // conversation (`--resume <sessionId>`, resolved in the main process from the
