@@ -4212,9 +4212,9 @@ ipcMain.handle('lda:list', () => listLocalDelegates());
 ipcMain.handle('lda:upsert', (_evt, arg: unknown) => upsertLocalDelegate(arg));
 ipcMain.handle('lda:remove', (_evt, arg: unknown) => removeLocalDelegate(arg));
 ipcMain.handle('lda:health', (_evt, arg: unknown) => ldaRunner.health(typeof arg === 'string' ? arg : ''));
-ipcMain.handle('lda:invoke', (_evt, arg: unknown) => {
+ipcMain.handle('lda:invoke', async (_evt, arg: unknown) => {
   const req = arg as Parameters<typeof ldaRunner.invoke>[0];
-  const result = ldaRunner.invoke(req);
+  const result = await ldaRunner.invoke(req);
   hive.appendLog({
     kind: 'lda-call',
     delegateId: req.delegateId,

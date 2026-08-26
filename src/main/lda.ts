@@ -1,4 +1,5 @@
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { listLocalDelegates } from './config';
 import type {
   LdaCapability,
@@ -8,16 +9,19 @@ import type {
   LocalDelegateConfig
 } from '../shared/localDelegate';
 
+const execFileAsync = promisify(execFile);
+
+const HEALTH_TIMEOUT_MS = 8_000;
+const INVOKE_TIMEOUT_MS = 300_000;
+
 // Translate a Windows path arg to WSL /mnt form so the remote script can read it.
 function translatePath(a: string): string {
   if (/^[A-Za-z]:[\\/]/.test(a)) {
-    // C:/foo or C:\foo -> /mnt/c/foo
     const drive = a[0].toLowerCase();
     const rest = a.slice(2).replace(/\\/g, '/');
     return `/mnt/${drive}${rest}`;
   }
   if (/^\/[A-Za-z]\//.test(a)) {
-    // /c/foo -> /mnt/c/foo
     return `/mnt${a}`;
   }
   return a;
@@ -61,29 +65,37 @@ function scriptName(cap: LdaCapability): string {
   return names[cap];
 }
 
-function runWslExec(cfg: LocalDelegateConfig, cap: LdaCapability, capArgs: string[]): LdaResult {
+async function runWslExec(cfg: LocalDelegateConfig, cap: LdaCapability, capArgs: string[]): Promise<LdaResult> {
   if (cfg.transport.kind !== 'wsl-exec') {
     return { ok: false, output: 'unsupported transport', exitCode: 1, durationMs: 0 };
   }
   const { distro, scriptPrefix } = cfg.transport;
   const script = `${scriptPrefix}/${scriptName(cap)}`;
-  // Pass `script` as the positional $1 rather than interpolating it into the
-  // -c string, so shell metacharacters in a misconfigured scriptPrefix cannot
-  // execute. distro and scriptPrefix are validated at upsert time (config.ts).
+  // Pass `script` as positional $1 — never interpolated into the -c string.
+  // Validated at upsert time; safe even if validation somehow fails.
   const remote = `PATH="$HOME/.local/scripts:$PATH" exec "$1" "$@"`;
+  const argv = ['-d', distro, '-e', 'bash', '-c', remote, '_', script, ...capArgs];
   const t0 = Date.now();
-  const result = spawnSync('wsl.exe', ['-d', distro, '-e', 'bash', '-c', remote, '_', script, ...capArgs], {
-    encoding: 'utf8',
-    maxBuffer: 4 * 1024 * 1024
-  });
-  const durationMs = Date.now() - t0;
-  const ok = result.status === 0;
-  const output = (result.stdout ?? '') + (result.stderr ? `\n${result.stderr}` : '');
-  return { ok, output: output.trim(), exitCode: result.status ?? 1, durationMs };
+  try {
+    const { stdout, stderr } = await execFileAsync('wsl.exe', argv, {
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: INVOKE_TIMEOUT_MS
+    });
+    const durationMs = Date.now() - t0;
+    const output = stdout + (stderr ? `\n${stderr}` : '');
+    return { ok: true, output: output.trim(), exitCode: 0, durationMs };
+  } catch (err: unknown) {
+    const durationMs = Date.now() - t0;
+    const e = err as { stdout?: string; stderr?: string; code?: unknown; killed?: boolean; message?: string };
+    const output = ((e.stdout ?? '') + (e.stderr ? `\n${e.stderr}` : '')).trim();
+    const exitCode = typeof e.code === 'number' ? e.code : 1;
+    const msg = e.killed ? `timed out after ${INVOKE_TIMEOUT_MS}ms` : (output || (e.message ?? 'unknown error'));
+    return { ok: false, output: msg, exitCode, durationMs };
+  }
 }
 
 export const ldaRunner = {
-  invoke(req: LdaInvokeRequest): LdaResult {
+  async invoke(req: LdaInvokeRequest): Promise<LdaResult> {
     const delegates = listLocalDelegates();
     const cfg = delegates.find((d) => d.id === req.delegateId);
     if (!cfg) return { ok: false, output: `no delegate: ${req.delegateId}`, exitCode: 1, durationMs: 0 };
@@ -96,7 +108,7 @@ export const ldaRunner = {
     return runWslExec(cfg, cap, capArgs);
   },
 
-  health(id: string): LdaHealthResult {
+  async health(id: string): Promise<LdaHealthResult> {
     const delegates = listLocalDelegates();
     const cfg = delegates.find((d) => d.id === id);
     if (!cfg) return { ok: false, latencyMs: 0, error: `no delegate: ${id}` };
@@ -105,9 +117,18 @@ export const ldaRunner = {
     const healthScript = `${scriptPrefix}/edgentic`;
     const remote = `PATH="$HOME/.local/scripts:$PATH" exec "$1" --health`;
     const t0 = Date.now();
-    const result = spawnSync('wsl.exe', ['-d', distro, '-e', 'bash', '-c', remote, '_', healthScript], { encoding: 'utf8' });
-    const latencyMs = Date.now() - t0;
-    if (result.status === 0) return { ok: true, latencyMs };
-    return { ok: false, latencyMs, error: (result.stderr ?? result.stdout ?? '').trim().slice(0, 200) };
+    try {
+      await execFileAsync('wsl.exe', ['-d', distro, '-e', 'bash', '-c', remote, '_', healthScript], {
+        timeout: HEALTH_TIMEOUT_MS
+      });
+      return { ok: true, latencyMs: Date.now() - t0 };
+    } catch (err: unknown) {
+      const e = err as { stderr?: string; stdout?: string; killed?: boolean; message?: string };
+      const latencyMs = Date.now() - t0;
+      const msg = e.killed
+        ? `timed out after ${HEALTH_TIMEOUT_MS}ms`
+        : ((e.stderr ?? e.stdout ?? e.message ?? 'unknown').toString().trim().slice(0, 200));
+      return { ok: false, latencyMs, error: msg };
+    }
   }
 };

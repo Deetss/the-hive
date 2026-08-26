@@ -767,23 +767,34 @@ export function listLocalDelegates(): LocalDelegateConfig[] {
 }
 
 const SAFE_SLUG = /^[A-Za-z0-9._-]+$/;
-const SAFE_PATH = /^\/[A-Za-z0-9._\-/]+$/;
-const SHELL_UNSAFE = /["'`$;|&\r\n]/;
+const SAFE_PATH = /^\/[A-Za-z0-9._\-/~]+$/;
+const SHELL_UNSAFE = /["'`$;|&\r\n\s]/;
+const VALID_CAPS = new Set(['find', 'map', 'run', 'check', 'task', 'loop']);
 
 export function upsertLocalDelegate(cfg: unknown): HarnessConfig {
   if (!cfg || typeof cfg !== 'object') throw new Error('invalid delegate config');
   const d = cfg as LocalDelegateConfig;
   if (typeof d.id !== 'string' || !d.id.trim()) throw new Error('delegate id required');
-  if (d.transport?.kind === 'wsl-exec') {
-    const { distro, scriptPrefix } = d.transport;
-    if (!SAFE_SLUG.test(distro)) throw new Error('distro must match [A-Za-z0-9._-]');
-    if (!SAFE_PATH.test(scriptPrefix) || SHELL_UNSAFE.test(scriptPrefix)) {
-      throw new Error('scriptPrefix must be an absolute path with no shell metacharacters');
-    }
+  if (typeof d.label !== 'string' || !d.label.trim()) throw new Error('delegate label required');
+  if (typeof d.enabled !== 'boolean') throw new Error('delegate enabled must be boolean');
+  if (!Array.isArray(d.capabilities) || d.capabilities.length === 0) {
+    throw new Error('delegate capabilities must be a non-empty array');
+  }
+  for (const cap of d.capabilities) {
+    if (!VALID_CAPS.has(cap)) throw new Error(`unknown capability: ${cap}`);
+  }
+  if (!d.transport || typeof d.transport !== 'object') throw new Error('delegate transport required');
+  if (d.transport.kind !== 'wsl-exec') throw new Error('unsupported transport kind (Phase 1: wsl-exec only)');
+  const { distro, scriptPrefix } = d.transport;
+  if (typeof distro !== 'string' || !SAFE_SLUG.test(distro)) {
+    throw new Error('distro must match [A-Za-z0-9._-] with no spaces or special characters');
+  }
+  if (typeof scriptPrefix !== 'string' || !SAFE_PATH.test(scriptPrefix) || SHELL_UNSAFE.test(scriptPrefix)) {
+    throw new Error('scriptPrefix must be an absolute path with no shell metacharacters');
   }
   const current = readConfig();
   const list = listLocalDelegates().filter((e) => e.id !== d.id.trim());
-  return persistConfig({ ...current, localDelegates: [...list, d] });
+  return persistConfig({ ...current, localDelegates: [...list, { ...d, id: d.id.trim() }] });
 }
 
 export function removeLocalDelegate(id: unknown): HarnessConfig {
