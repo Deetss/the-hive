@@ -38,11 +38,15 @@ else
   # guarantee of pkill -f — it will NOT kill the packaged app ('Munder Difflin',
   # a different image name), a packaged 'The Hive.exe' that launched from a
   # different path, or any unrelated Electron app.
+  # Escape any single-quotes in the path (e.g. username O'Brien) before
+  # interpolating into the PowerShell single-quoted string literal.
+  ps_root="${win_root//\'/\'\'}"
   ps_script="
-\$rootPath = '$win_root'.Replace('/', '\\')
+\$rootPath = '$ps_root'.Replace('/', '\\')
 \$exes = @('electron.exe', 'The Hive.exe')
+\$pattern = [regex]::Escape(\$rootPath) + '\\\\'
 \$matched = Get-CimInstance Win32_Process |
-  Where-Object { \$_.Name -in \$exes -and \$_.CommandLine -like \"*\$rootPath*\" }
+  Where-Object { \$_.Name -in \$exes -and \$_.CommandLine -match \$pattern }
 \$count = (\$matched | Measure-Object).Count
 if (\$count -gt 0) {
   \$matched | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }
