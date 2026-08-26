@@ -33,9 +33,17 @@ export interface RuntimeProfile {
   /** Extra argv flags appended at spawn; unset = none. */
   extraArgs?: string[];
   /** v1 account isolation for Claude: the per-account CLAUDE_CONFIG_DIR (its own
-   *  login dir). A PATH pointer only — never a credential, and kept outside the
-   *  synced hive repo. Empty/unset = the operator's default `~/.claude` login. */
+   *  login dir). A PATH pointer only; never a credential, kept outside the synced repo. */
   claudeConfigDir?: string;
+  /** v2 cloud endpoint: an OpenAI-compatible base URL (e.g. Azure AI Foundry).
+   *  Injected as OPENAI_BASE_URL at spawn. Validated via isSafeHttpUrl. */
+  baseUrl?: string;
+  /** Pointer into safeStorage: "profile:<id>:apikey". Key injected as OPENAI_API_KEY
+   *  at spawn (MAIN-ONLY). Never stored in config.json or the synced hive repo. */
+  apiKeyRef?: string;
+  /** When true, isSafeHttpUrl allows RFC-1918 addresses in baseUrl (for local testing).
+   *  Defaults to false (cloud-only). */
+  allowPrivate?: boolean;
   createdAt: number;
 }
 
@@ -62,6 +70,9 @@ export function normalizeRuntimeProfile(x: unknown): RuntimeProfile | null {
     if (args.length) out.extraArgs = args;
   }
   if (typeof r.claudeConfigDir === 'string' && r.claudeConfigDir.trim()) out.claudeConfigDir = r.claudeConfigDir.trim();
+  if (typeof r.baseUrl === 'string' && r.baseUrl.trim()) out.baseUrl = r.baseUrl.trim();
+  if (typeof r.apiKeyRef === 'string' && r.apiKeyRef.trim()) out.apiKeyRef = r.apiKeyRef.trim();
+  if (r.allowPrivate === true) out.allowPrivate = true;
   return out;
 }
 

@@ -1292,6 +1292,20 @@ const api = {
   ldaHasApiKey: (id: string): Promise<{ hasKey: boolean }> =>
     ipcRenderer.invoke('lda:hasApiKey', id),
 
+  // ─── Runtime profile cloud endpoint keys ───────────────────────────────────
+  /** Store an API key for a profile's cloud endpoint (write-only; main encrypts). */
+  profileSetApiKey: (id: string, key: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('profile:setApiKey', id, key),
+  /** Remove the encrypted API key for a profile's cloud endpoint. */
+  profileRemoveApiKey: (id: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('profile:removeApiKey', id),
+  /** Whether a cloud endpoint key is stored for a profile (never returns the key). */
+  profileHasApiKey: (id: string): Promise<{ hasKey: boolean }> =>
+    ipcRenderer.invoke('profile:hasApiKey', id),
+  /** Validate a base URL against the same SSRF guard used at profile save time. */
+  profileIsSafeUrl: (url: string, allowPrivate?: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('profile:isSafeUrl', url, allowPrivate ?? false),
+
   // ─── Active-shell telemetry ─────────────────────────────────────────────────
   /** Pull the current active-shell count on mount (cold-start backfill). */
   shellsSnapshot: (): Promise<{ activeShells: number }> => ipcRenderer.invoke('fleet:shellsSnapshot'),
