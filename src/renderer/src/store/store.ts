@@ -261,6 +261,10 @@ interface State {
   dispatchSeedRequest: { text: string; seq: number } | null;
   requestDispatchSeed: (text: string) => void;
   clearDispatchSeedRequest: () => void;
+  /** Count of unread Activity feed entries (clears when the Activity tab is focused). */
+  activityUnread: number;
+  bumpActivityUnread: () => void;
+  clearActivityUnread: () => void;
   /** Task-pending count for Ask Me tab (humanQA only). Badge adds live
    *  humanMessages.filter(!resolved).length on top of this via selector. */
   askMePending: number;
@@ -868,6 +872,9 @@ export const useStore = create<State>((set, get) => ({
   requestDispatchSeed: (text) =>
     set((s) => ({ dispatchSeedRequest: { text, seq: (s.dispatchSeedRequest?.seq ?? 0) + 1 } })),
   clearDispatchSeedRequest: () => set({ dispatchSeedRequest: null }),
+  activityUnread: 0,
+  bumpActivityUnread: () => set((s) => ({ activityUnread: s.activityUnread + 1 })),
+  clearActivityUnread: () => set({ activityUnread: 0 }),
   askMePending: 0,
   setAskMePending: (n) => set({ askMePending: n }),
   quickAskConversations: [],

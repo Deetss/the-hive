@@ -126,22 +126,30 @@ export function App() {
   // (solo-hold threshold, aborts on any other key). See freeflow/holdOption.ts.
   useHoldOptionToTalk();
 
-  // Always-on hive message subscription for the Ask Me direct-message stream.
-  // Lives here (App root) so it fires regardless of which agent or tab is selected.
-  // Discriminator: skip messages whose conversation id is in quickAskConversations
-  // (those are god's replies to the human's own Quick-Ask queries, handled by
-  // QuickAskPanel). Surface ALL other needsHuman messages regardless of act.
+  // Single always-on hive message subscription — lives here (App root) so it
+  // fires regardless of which agent or tab is selected. Serves two streams:
+  //   1. Ask Me (needsHuman): all messages directed at the human, except Quick-Ask
+  //      replies (identified by their conversation id being in quickAskConversations).
+  //   2. Activity feed (surfaceActivity): bumps the unread badge; ActivityTab's own
+  //      subscription handles rendering.
   useEffect(() => {
     if (!window.cth?.onHiveMessage) return;
     return window.cth.onHiveMessage((e) => {
-      if (!e.needsHuman || !e.body || !e.id) return;
-      const { quickAskConversations, addHumanMessage } = useStore.getState();
-      if (e.conversation && quickAskConversations.includes(e.conversation)) return;
-      addHumanMessage({
-        id: e.id, from: e.from, subject: e.subject ?? '',
-        body: e.body!, act: e.act,
-        arrivedAt: Date.now(), resolved: false, replyDraft: ''
-      });
+      const state = useStore.getState();
+      // Ask Me stream: skip replies to human's own Quick-Ask queries.
+      if (e.needsHuman && e.body && e.id) {
+        if (!(e.conversation && state.quickAskConversations.includes(e.conversation))) {
+          state.addHumanMessage({
+            id: e.id, from: e.from, subject: e.subject ?? '',
+            body: e.body!, act: e.act,
+            arrivedAt: Date.now(), resolved: false, replyDraft: ''
+          });
+        }
+      }
+      // Activity feed stream: bump unread count (ActivityTab renders the entry).
+      if (e.surfaceActivity) {
+        state.bumpActivityUnread();
+      }
     });
   }, []);
 
