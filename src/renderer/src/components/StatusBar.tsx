@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '@/store/store';
 import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTelemetry';
 import { useActiveShells } from '@/hooks/useShells';
@@ -15,6 +15,18 @@ import { useActiveShells } from '@/hooks/useShells';
  * NOT the agents' on-disk hive inbox. Aggregate per-agent inbox reads would
  * require N IPC calls per render; this is the cheapest live proxy and the
  * tooltip says so.
+ *
+ * Parity with Dylan's CC statusline-command.sh (fleet-adapted):
+ *   ctx bar: 4-cell █/░ glyph, <50 green / 50-79 yellow / >=80 red (his thresholds)
+ *   model: selected agent's model id, truncated before any ' ('
+ *   dir:branch: selected agent's cwd basename + git branch (async)
+ *   5h/7d rate limits: NOT available — rate_limits.* flows through cth-hook but is
+ *     not yet stored/exposed by the main process. Report scope: main needs to persist
+ *     rate_limits from the Status hook payload and push via IPC.
+ *   WORK/PERSONAL badge: NOT available — CLAUDE_CONFIG_DIR not surfaced to renderer.
+ *   loc (edgentic savings): NOT available — edgentic runs on remote Jetson; usage.log
+ *     has no accessible local path.
+ *   vim mode: NOT available — .vim.mode from Status JSON not forwarded by main.
  */
 
 type Health = 'healthy' | 'steering' | 'constrained' | 'stopped';
@@ -27,6 +39,19 @@ function healthColor(level: Health): string {
   if (level === 'constrained' || level === 'stopped') return 'var(--cth-coral)';
   if (level === 'steering') return 'var(--cth-lemon)';
   return 'var(--cth-mint)';
+}
+
+/** His exact thresholds: <50 green, 50-79 yellow, >=80 red. */
+function ctxBarColor(pct: number): string {
+  if (pct >= 80) return 'var(--cth-coral)';
+  if (pct >= 50) return 'var(--cth-lemon)';
+  return 'var(--cth-mint)';
+}
+
+/** 4-cell filled/empty glyph bar. */
+function ctxBar(pct: number): string {
+  const filled = Math.min(4, Math.round(pct / 25));
+  return '█'.repeat(filled) + '░'.repeat(4 - filled);
 }
 
 function fmtTokens(n: number): string {
@@ -46,20 +71,42 @@ function fmtUsd(n: number): string {
   return `$${n.toFixed(4)}`;
 }
 
-function pctColor(pct: number): string {
-  if (pct >= 90) return 'var(--cth-coral)';
-  if (pct >= 60) return 'var(--cth-lemon)';
-  return 'var(--cth-mint)';
+/** Truncate model id before any ' (' to match statusline-command.sh display. */
+function shortModel(m: string): string {
+  const cut = m.indexOf(' (');
+  return cut >= 0 ? m.slice(0, cut) : m;
 }
+
+const tail = (p: string) => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? p;
 
 export function StatusBar() {
   const agents = useStore((s) => s.agents);
+  const selectedId = useStore((s) => s.selectedId);
   const godStatus = useStore((s) => s.godStatus);
   const messageQueues = useStore((s) => s.messageQueues);
   const { samples, rate, breakers } = useFleetTelemetry();
   const shells = useActiveShells();
 
   const live = useMemo(() => agents.filter((a) => a.ptyId && !a.archived), [agents]);
+
+  // Selected agent (or god as fallback) for per-agent context chips.
+  const focusAgent = useMemo(
+    () => agents.find((a) => a.id === selectedId) ?? agents.find((a) => a.isGod) ?? null,
+    [agents, selectedId]
+  );
+
+  // Async git branch for the focused agent's cwd.
+  const [branch, setBranch] = useState<string | null>(null);
+  useEffect(() => {
+    const cwd = focusAgent?.worktreePath ?? focusAgent?.cwd;
+    if (!cwd) { setBranch(null); return; }
+    let cancelled = false;
+    window.cth.gitBranch?.(cwd).then((r) => {
+      if (cancelled) return;
+      setBranch('current' in r && r.current ? r.current : null);
+    }).catch(() => setBranch(null));
+    return () => { cancelled = true; };
+  }, [focusAgent?.id, focusAgent?.cwd, focusAgent?.worktreePath]);
 
   const { tokens, usd, tokPerMin } = useMemo(() => {
     let t = 0, d = 0, r = 0;
@@ -135,6 +182,34 @@ export function StatusBar() {
         <span style={{ color: 'var(--cth-ink-500)' }}>hive</span>
       </Chip>
 
+      {focusAgent && (
+        <>
+          <Sep />
+          <Chip title={`${focusAgent.name} · ${focusAgent.worktreePath ?? focusAgent.cwd}`}>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-sky)' }}>
+              {tail(focusAgent.worktreePath ?? focusAgent.cwd)}
+            </span>
+            {branch && (
+              <>
+                <span style={{ color: 'var(--cth-ink-300)' }}>:</span>
+                <span style={{ color: 'var(--cth-ink-700)', fontFamily: 'var(--cth-font-mono)' }}>{branch}</span>
+              </>
+            )}
+          </Chip>
+        </>
+      )}
+
+      {focusAgent?.model && (
+        <>
+          <Sep />
+          <Chip title={`Model: ${focusAgent.model}`}>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-sky)' }}>
+              {shortModel(focusAgent.model)}
+            </span>
+          </Chip>
+        </>
+      )}
+
       <Sep />
       <Chip title={`${live.length} agent(s) with a live terminal`}>
         <strong style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
@@ -174,9 +249,11 @@ export function StatusBar() {
       {ctxPct >= 0 && (
         <>
           <Sep />
-          <Chip title="Fullest agent context window (max across active agents)">
-            <Dot color={pctColor(ctxPct)} />
+          <Chip title={`Fullest agent context window ${ctxPct}% (max across active agents)`}>
             <span style={{ color: 'var(--cth-ink-500)' }}>ctx</span>
+            <span style={{ fontFamily: 'var(--cth-font-mono)', color: ctxBarColor(ctxPct), letterSpacing: 1 }}>
+              {ctxBar(ctxPct)}
+            </span>
             <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
               {ctxPct}%
             </span>
