@@ -789,23 +789,42 @@ const VALID_CAPS = new Set<string>(['find', 'map', 'run', 'check', 'task', 'loop
 const VALID_API_CAPS = new Set<string>(['complete', 'embed']);
 const VALID_PROVIDER_KINDS = new Set<string>(['edgentic-script', 'openai-compat', 'anthropic-compat', 'ollama']);
 
-/** SSRF guard: reject private/cloud-metadata IP ranges unless allowPrivate=true.
- *  Only the host is checked; port and path are not evaluated here. */
+/** SSRF guard: reject cloud-metadata and loopback ranges always; reject private
+ *  LAN ranges unless allowPrivate=true.
+ *
+ *  "Always blocked" (even with allowPrivate=true):
+ *    169.254.*   link-local / AWS IMDS / Azure IMDS / GCP metadata
+ *    127.*       loopback (not just localhost — 127.0.0.1 is distinct from it)
+ *    0.0.0.0     POSIX wildcard — resolves unpredictably
+ *    ::1         IPv6 loopback
+ *    100.64.*    CGNAT range (AWS, Tailscale etc. metadata endpoints)
+ *    fd00::/8    IPv6 Unique Local (cloud-metadata equivalent)
+ *
+ *  "Blocked unless allowPrivate=true":
+ *    10.*, 192.168.*, 172.16-31.*   RFC 1918 private ranges
+ *    fc00::/7                        IPv6 private (fc/fd prefix) */
 function isSafeHttpUrl(urlStr: string, allowPrivate = false): boolean {
   let u: URL;
   try { u = new URL(urlStr); } catch { return false; }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
   if (SHELL_UNSAFE.test(urlStr)) return false;
-  if (allowPrivate) return true;
   const host = u.hostname.toLowerCase();
-  // Cloud metadata / link-local / loopback — always blocked even with allowPrivate=false
-  if (/^169\.254\./.test(host)) return false;
-  if (/^fd[0-9a-f]{2}:/i.test(host)) return false;
-  // Private ranges — blocked unless allowPrivate
-  if (/^10\./.test(host)) return false;
-  if (/^192\.168\./.test(host)) return false;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
-  if (host === '::1' || host === 'localhost') return false;
+  // Always blocked — cloud metadata, loopback, and link-local regardless of allowPrivate
+  if (/^169\.254\./.test(host)) return false;       // link-local / IMDS
+  if (/^127\./.test(host)) return false;             // 127.0.0.0/8 loopback
+  if (host === '0.0.0.0') return false;
+  if (host === '::1' || host === '[::1]') return false;
+  if (/^100\.64\./.test(host)) return false;         // CGNAT / AWS alternate metadata
+  if (/^fd[0-9a-f]{2}:/i.test(host)) return false;  // IPv6 unique local (fd00::/8)
+  // localhost resolves to loopback; block by name to cover future /etc/hosts tricks
+  if (host === 'localhost') return false;
+  // Private LAN ranges — blocked unless allowPrivate (for Jetson/DGX etc.)
+  if (!allowPrivate) {
+    if (/^10\./.test(host)) return false;
+    if (/^192\.168\./.test(host)) return false;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+    if (/^fc[0-9a-f]{2}:/i.test(host)) return false; // IPv6 private fc00::/7
+  }
   return true;
 }
 

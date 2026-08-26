@@ -1282,6 +1282,9 @@ const api = {
   /** Remove the encrypted API key for a delegate. */
   ldaRemoveApiKey: (id: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('lda:removeApiKey', id),
+  /** Whether a key is stored for a delegate (never returns the key itself). */
+  ldaHasApiKey: (id: string): Promise<{ hasKey: boolean }> =>
+    ipcRenderer.invoke('lda:hasApiKey', id),
 
   // ─── Active-shell telemetry ─────────────────────────────────────────────────
   /** Pull the current active-shell count on mount (cold-start backfill). */

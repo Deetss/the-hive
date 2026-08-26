@@ -50,7 +50,7 @@ export interface LocalDelegateConfig {
 }
 
 export interface LdaInvokeArgs {
-  capability: LdaCapability;
+  capability: LdaCapability | LdaApiCapability;
   question?: string;
   claim?: string;
   file?: string;
@@ -62,6 +62,10 @@ export interface LdaInvokeArgs {
   outputFile?: string;
   verifyCmd?: string;
   apply?: boolean;
+  /** For model-API 'complete': the user prompt (overrides question/claim/instruction). */
+  prompt?: string;
+  /** Max tokens for model-API completions (default 4096). */
+  maxTokens?: number;
 }
 
 export interface LdaInvokeRequest {
