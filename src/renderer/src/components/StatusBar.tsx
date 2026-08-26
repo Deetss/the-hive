@@ -9,6 +9,11 @@ import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTe
  * (`agents`, `godStatus`, `messageQueues`) and the OTel telemetry hook
  * (`useFleetTelemetry`: per-agent usage samples + breaker state). No new IPC:
  * everything here is already streamed to the renderer.
+ *
+ * "pending" count = outgoing message queue (messages parked for busy agents),
+ * NOT the agents' on-disk hive inbox. Aggregate per-agent inbox reads would
+ * require N IPC calls per render; this is the cheapest live proxy and the
+ * tooltip says so.
  */
 
 type Health = 'healthy' | 'steering' | 'constrained' | 'stopped';
@@ -17,7 +22,6 @@ const HEALTH_RANK: Record<Health, number> = {
   healthy: 0, steering: 1, constrained: 2, stopped: 3
 };
 
-/** Same thresholds/palette the Command Center token meter uses (mint→lemon→coral). */
 function healthColor(level: Health): string {
   if (level === 'constrained' || level === 'stopped') return 'var(--cth-coral)';
   if (level === 'steering') return 'var(--cth-lemon)';
@@ -25,6 +29,7 @@ function healthColor(level: Health): string {
 }
 
 function fmtTokens(n: number): string {
+  if (!Number.isFinite(n) || n < 0) n = 0;
   if (n >= 1e9) return `${+(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `${+(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `${+(n / 1e3).toFixed(1)}K`;
@@ -32,9 +37,12 @@ function fmtTokens(n: number): string {
 }
 
 function fmtUsd(n: number): string {
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  if (n === 0) return '$0.00';
   if (n >= 100) return `$${n.toFixed(0)}`;
   if (n >= 1) return `$${n.toFixed(2)}`;
-  return `$${n.toFixed(3)}`;
+  if (n >= 0.01) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(4)}`;
 }
 
 function pctColor(pct: number): string {
@@ -58,19 +66,25 @@ export function StatusBar() {
       if (s) { t += totalTokens(s); d += s.usd; }
       r += rate[a.id] ?? 0;
     }
-    return { tokens: t, usd: d, tokPerMin: r };
+    return {
+      tokens: Number.isFinite(t) ? t : 0,
+      usd: Number.isFinite(d) ? d : 0,
+      tokPerMin: Number.isFinite(r) ? r : 0,
+    };
   }, [live, samples, rate]);
 
   // Busiest agent's context fill is the risk signal: a near-full window is the
-  // one worth surfacing, so we show the max rather than an average.
+  // one worth surfacing. Clamped to 100 — context can be briefly reported above
+  // the limit during a streaming response before the app updates the limit field.
   const ctxPct = useMemo(() => {
     let max = -1;
     for (const a of live) {
       if (a.contextTokens && a.contextLimit && a.contextLimit > 0) {
-        max = Math.max(max, Math.round((a.contextTokens / a.contextLimit) * 100));
+        const pct = Math.round((a.contextTokens / a.contextLimit) * 100);
+        if (pct > max) max = pct;
       }
     }
-    return max;
+    return max < 0 ? -1 : Math.min(max, 100);
   }, [live]);
 
   const worst = useMemo<BreakerState | null>(() => {
@@ -110,7 +124,8 @@ export function StatusBar() {
         display: 'flex', alignItems: 'center', gap: 0,
         padding: '0 12px',
         fontFamily: 'var(--cth-font-ui)', fontSize: 12,
-        color: 'var(--cth-ink-700)', userSelect: 'none'
+        color: 'var(--cth-ink-700)', userSelect: 'none',
+        overflow: 'hidden', minWidth: 0,
       }}
     >
       <Chip title={`Orchestrator: ${godStatus}`}>
@@ -140,7 +155,7 @@ export function StatusBar() {
       </Chip>
 
       <Sep />
-      <Chip title="Estimated fleet cost so far">
+      <Chip title="Estimated fleet cost so far (OTel cumulative)">
         <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
           {fmtUsd(usd)}
         </span>
@@ -149,7 +164,7 @@ export function StatusBar() {
       {ctxPct >= 0 && (
         <>
           <Sep />
-          <Chip title="Fullest agent context window">
+          <Chip title="Fullest agent context window (max across active agents)">
             <Dot color={pctColor(ctxPct)} />
             <span style={{ color: 'var(--cth-ink-500)' }}>ctx</span>
             <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
@@ -162,11 +177,11 @@ export function StatusBar() {
       {queued > 0 && (
         <>
           <Sep />
-          <Chip title="Messages queued for delivery to agents">
+          <Chip title="Messages parked for busy agents (outgoing queue, not hive inbox)">
             <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
               {queued}
             </span>
-            <span style={{ color: 'var(--cth-ink-500)' }}>queued</span>
+            <span style={{ color: 'var(--cth-ink-500)' }}>pending</span>
           </Chip>
         </>
       )}
