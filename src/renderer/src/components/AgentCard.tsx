@@ -44,6 +44,8 @@ export interface AgentCardProps {
   /** Opens the note editor (the strip owns the editing overlay). When set, the
    *  card shows a small ✎ affordance on its note row. */
   onEditNote?: () => void;
+  /** Human has this agent 1:1 — show a '1:1' chip so the floor knows it's on hold. */
+  onHold?: boolean;
 }
 
 const fmtK = (n: number): string => `${Math.round(n / 1000)}k`;
@@ -56,7 +58,7 @@ const fmtK = (n: number): string => `${Math.round(n / 1000)}k`;
 export function AgentCard({
   name, character, accent, status, ptyId, project, action, progress = 0,
   contextTokens, contextLimit, selected, isOvermind, onClick, onRename,
-  doingCount = 0, onTaskNoteClick, draggable, note, onEditNote
+  doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold
 }: AgentCardProps) {
   const [hover, setHover] = useState(false);
   const typing = useHasTerminalDraft(ptyId);
@@ -225,6 +227,15 @@ export function AgentCard({
                   eating the NAME instead. Truncation should land on the longest,
                   most redundant thing, not on the identity. */}
               <PixelBadge status={typing ? 'typing' : status} style={{ flexShrink: 0 }} />
+              {onHold && (
+                <span title="Human has this agent 1:1 — floor automation paused" style={{
+                  flexShrink: 0,
+                  fontFamily: 'var(--cth-font-display)', fontSize: 7, lineHeight: '11px',
+                  padding: '1px 4px 0',
+                  background: 'var(--cth-lemon)', color: 'var(--cth-ink-900)',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
+                }}>1:1</span>
+              )}
             </div>
 
             {/* Context line: action while working, repo while idle. */}

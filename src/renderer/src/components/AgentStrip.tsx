@@ -141,6 +141,7 @@ export function AgentStrip({ config }: AgentStripProps) {
             contextLimit={a.contextLimit}
             selected={a.id === selectedId}
             isOvermind={a.isOvermind}
+            onHold={a.onHold}
             onClick={() => select(a.id)}
             onRename={(name) => renameAgent(a.id, name)}
             doingCount={doingByAgent[a.id]?.length ?? 0}

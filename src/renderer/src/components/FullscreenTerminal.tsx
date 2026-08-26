@@ -827,6 +827,15 @@ function SidebarRow({
                 agent with a draft on its prompt is not idle-and-free, it is
                 idle-and-held, and nothing else on screen said so. */}
             <PixelBadge status={typing ? 'typing' : agent.status} />
+            {agent.onHold && (
+              <span title="Human has this agent 1:1 — floor automation paused" style={{
+                flexShrink: 0,
+                fontFamily: 'var(--cth-font-display)', fontSize: 7, lineHeight: '11px',
+                padding: '1px 4px 0',
+                background: 'var(--cth-lemon)', color: 'var(--cth-ink-900)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
+              }}>1:1</span>
+            )}
             {/* Explicit note edit — a real control instead of a hover surprise.
                 A span, not a <button>: we're inside the row's button element. */}
             <span
