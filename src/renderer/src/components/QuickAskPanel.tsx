@@ -139,7 +139,12 @@ export function QuickAskPanel() {
     void window.cth.hiveSend(
       { to: 'god', act: 'query', subject: 'Quick ask (retry)', body: entry.question, conversation: newWireId },
       'human'
-    ).then(() => armTimer(newWireId)).catch(() => {
+    ).then(() => {
+      // Register the new wire id so App.tsx's subscription doesn't mistake
+      // god's reply for a new human-directed ask-me message.
+      trackQuickAskConversation(newWireId);
+      armTimer(newWireId);
+    }).catch(() => {
       setEntries((prev) =>
         prev.map((e) =>
           e.id === entry.id

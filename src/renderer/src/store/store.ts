@@ -270,7 +270,9 @@ interface State {
   askMePending: number;
   setAskMePending: (n: number) => void;
   /** Conversation IDs the human sent as Quick-Ask queries. Used to exclude
-   *  god's replies from the Ask Me direct-message stream. */
+   *  god's replies from the Ask Me direct-message stream.
+   *  TODO: evict stale ids (e.g. cap at 200 or clear on session reset) — fine at
+   *  string-array scale for typical usage but will grow unbounded over a long session. */
   quickAskConversations: string[];
   trackQuickAskConversation: (id: string) => void;
   /** Direct hive messages from god/agents addressed to the human.
