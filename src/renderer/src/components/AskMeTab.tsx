@@ -24,6 +24,9 @@ import { type HiveTask, type HumanQA, openQuestion, waitsOnHuman } from './Tasks
 
 const POLL_MS = 5000;
 
+// Module-level cache: survives tab switches (component unmount/remount).
+let _cachedAskTasks: HiveTask[] = [];
+
 function parse(raw: unknown): HiveTask[] {
   const list = (raw && typeof raw === 'object' && Array.isArray((raw as { tasks?: unknown }).tasks))
     ? (raw as { tasks: HiveTask[] }).tasks
@@ -42,7 +45,7 @@ function dependentsTree(id: string, all: HiveTask[], seen = new Set<string>()): 
 export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
-  const [tasks, setTasks] = useState<HiveTask[]>([]);
+  const [tasks, setTasks] = useState<HiveTask[]>(_cachedAskTasks);
   // Drafts live in the STORE (keyed by task id) — switching tabs unmounts this
   // view, and a half-typed answer must survive the round trip.
   const drafts = useStore((s) => s.answerDrafts);
@@ -52,7 +55,11 @@ export function AskMeTab() {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
-    try { setTasks(parse(await window.cth.hiveTasks())); } catch { /* keep last good */ }
+    try {
+      const parsed = parse(await window.cth.hiveTasks());
+      _cachedAskTasks = parsed;
+      setTasks(parsed);
+    } catch { /* keep last good */ }
   }, []);
 
   useEffect(() => {
@@ -65,6 +72,21 @@ export function AskMeTab() {
     id ? (agents.find((a) => a.id === id)?.name ?? restorable.find((a) => a.id === id)?.name ?? id) : undefined;
 
   const waiting = tasks.filter(waitsOnHuman);
+
+  // Tasks with at least one answered or dismissed Q&A entry that are no longer
+  // waiting on human (so they don't appear twice). Most-recently-resolved first.
+  const history = tasks
+    .filter((t) => !waitsOnHuman(t) && (t.humanQA ?? []).some((qa) => qa.a || qa.dismissedAt))
+    .flatMap((t) =>
+      (t.humanQA ?? [])
+        .filter((qa) => qa.a || qa.dismissedAt)
+        .map((qa) => ({ task: t, qa }))
+    )
+    .sort((a, b) => {
+      const ta = a.qa.answeredAt ?? a.qa.dismissedAt ?? a.qa.askedAt ?? '';
+      const tb = b.qa.answeredAt ?? b.qa.dismissedAt ?? b.qa.askedAt ?? '';
+      return tb.localeCompare(ta);
+    });
 
   /**
    * Apply `patch` to the OPEN humanQA entry of one card, on the RAW ledger.
@@ -99,6 +121,7 @@ export function AskMeTab() {
         ? await window.cth.hivePatchTask(task.id, { humanQA: updated.humanQA })
         : { ok: false };
       if (!result.ok) throw new Error('task changed before answer could be saved');
+      _cachedAskTasks = next;
       setTasks(next);
       // 2) Tell the god, so the card gets unblocked and work continues.
       await window.cth.hiveSend({
@@ -134,6 +157,7 @@ export function AskMeTab() {
       );
       return { ...t, humanQA: qa };
     });
+    _cachedAskTasks = next;
     setTasks(next); // optimistic — the card disappears immediately
     try {
       const updated = next.find((candidate) => candidate.id === task.id);
@@ -276,6 +300,40 @@ export function AskMeTab() {
           </div>
         );
       })}
+
+      {history.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-300)', padding: '4px 2px 0' }}>
+            SESSION HISTORY
+          </div>
+          {history.map(({ task, qa }) => {
+            const ts = qa.answeredAt ?? qa.dismissedAt;
+            const dismissed = !qa.a && !!qa.dismissedAt;
+            return (
+              <div key={`${task.id}:${qa.askedAt ?? qa.q.slice(0, 20)}`}
+                style={{ background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', padding: '6px 9px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: dismissed ? 'var(--cth-ink-300)' : 'var(--cth-ink-500)', flexShrink: 0 }}>
+                    {dismissed ? 'DISMISSED' : 'ANSWERED'}
+                  </span>
+                  <button onClick={() => openTaskDetail(task.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'var(--cth-font-mono)', fontSize: 12, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, textAlign: 'left' }}>
+                    {task.title}
+                  </button>
+                  {ts && (
+                    <span style={{ flexShrink: 0, fontSize: 10, color: 'var(--cth-ink-300)' }}>
+                      {new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--cth-ink-700)', whiteSpace: 'pre-wrap' }}>{qa.q}</div>
+                {qa.a && (
+                  <div style={{ fontSize: 13, color: 'var(--cth-ink-500)', borderLeft: '2px solid var(--cth-ink-200)', paddingLeft: 7, whiteSpace: 'pre-wrap' }}>{qa.a}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

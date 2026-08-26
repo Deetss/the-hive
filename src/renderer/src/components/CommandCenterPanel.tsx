@@ -543,6 +543,20 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
     }
   };
 
+  const handleDispatchPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const hasImage = Array.from(e.clipboardData.items).some((item) => item.type.startsWith('image/'));
+    if (!hasImage) return;
+    e.preventDefault();
+    const res = await window.cth.saveClipboardImage();
+    if (res.ok) {
+      const ta = e.currentTarget;
+      const start = ta.selectionStart ?? dispatchText.length;
+      const end = ta.selectionEnd ?? dispatchText.length;
+      const ref = `[image: ${res.file.path}]`;
+      setDispatchText(dispatchText.slice(0, start) + ref + dispatchText.slice(end));
+    }
+  };
+
   // ALL human dispatch flows through the god — never directly into a worker's
   // inbox. Direct dispatch bypassed the orchestrator's whole job: no 4-part
   // contract, no card in tasks.json, no board awareness — and the old
@@ -647,6 +661,7 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
         <textarea
           value={dispatchText}
           onChange={(e) => setDispatchText(e.target.value)}
+          onPaste={handleDispatchPaste}
           rows={2}
           placeholder="Describe the task… (Abathur decomposes, writes the card, and assigns)"
           style={textareaStyle}
