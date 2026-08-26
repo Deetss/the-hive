@@ -2553,6 +2553,15 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   // returned to the caller so the renderer records the same absolute path.
   opts.cwd = expandTilde(opts.cwd);
   if (opts.hive) opts.hive = { ...opts.hive, cwd: expandTilde(opts.hive.cwd) };
+  // Profile command override (D2): if a profile pins a specific engine binary and
+  // the passed command is still the global default (user didn't override it), swap
+  // in the profile's command. Explicit modal/opts.command always wins.
+  if (opts.hive?.profileId) {
+    const profile = getRuntimeProfile(opts.hive.profileId);
+    if (profile?.command && opts.command === readConfig().defaultCommand) {
+      opts.command = profile.command;
+    }
+  }
   // Which CLI is this? Explicit wins; else inferred from the binary
   // (claude/codex/grok/agy). Non-Claude providers skip every Claude-only spawn step
   // below. Persist the resolved provider onto opts (+ hive meta) so the registry
@@ -2733,14 +2742,14 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     // cross-session message to it came back "held for the recipient user's
     // approval" with no surface for anyone to ever grant that approval.
     const args = argsWithAutoModeFlag(opts.args ?? [], cfg.autoMode, provider);
-    // Model precedence: an explicit per-agent --model (from the renderer) wins;
-    // else the user's global defaultModel; else the role-based default tier. The
-    // GOD is special-cased: it has its own engine config (overmindProvider/overmindModel), so
-    // modelForRole resolves it and that wins over the worker-oriented defaultModel.
+    // Model precedence: explicit --model in opts.args wins; else profile.model (D2);
+    // else cfg.defaultModel; else the role-based tier. Overmind always uses its own
+    // engine config (overmindProvider/overmindModel) via modelForRole.
     if (!args.includes('--model')) {
+      const profileModel = opts.hive?.profileId ? getRuntimeProfile(opts.hive.profileId)?.model : undefined;
       const m = opts.hive.isOvermind
         ? modelForRole(opts.hive, cfg)
-        : cfg.defaultModel ?? modelForRole(opts.hive, cfg);
+        : profileModel ?? cfg.defaultModel ?? modelForRole(opts.hive, cfg);
       if (m) args.push('--model', m);
     }
     // Name the Remote Control session after the agent (Abathur, Jim, Dev1…) so it
