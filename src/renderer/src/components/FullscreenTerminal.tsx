@@ -18,6 +18,7 @@ import { usePtyParser } from '@/hooks/usePtyParser';
 import { useRestoreTeam } from '@/hooks/useRestoreTeam';
 import { useTerminalFontSize } from './terminalFontSize';
 import { useHasTerminalDraft, disposeTerminal, reflowTerminal, notifyThemeChangeAll } from './terminalPool';
+import { StatusBar } from './StatusBar';
 import { useAppTheme, toggleAppTheme } from '@/design/theme';
 import type { HarnessConfig } from '@/store/config';
 
@@ -605,6 +606,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
           )}
         </div>
       </div>
+      <StatusBar />
     </div>
   );
 }
