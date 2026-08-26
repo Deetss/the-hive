@@ -1994,6 +1994,19 @@ export class HiveManager {
         try { symlinkSync(authSrc, authDest); }
         catch { try { copyFileSync(authSrc, authDest); } catch { /* best-effort */ } }
       }
+      // Copy the user's trust state so the per-agent codex skips the interactive
+      // "Do you trust the contents of this directory?" dialog. Codex stores
+      // approved directories in state_5.sqlite; without a pre-seeded copy every
+      // fresh agent dies at ~1.4s because the blocking dialog has no one to
+      // answer it. Copy (not symlink) so per-agent writes don't pollute the
+      // personal state. Idempotent — skip if already present.
+      for (const f of ['state_5.sqlite', 'state_5.sqlite-wal', 'state_5.sqlite-shm']) {
+        const src = join(userHome, f);
+        const dest = join(home, f);
+        if (existsSync(src) && !existsSync(dest)) {
+          try { copyFileSync(src, dest); } catch { /* best-effort */ }
+        }
+      }
       // The managed app-server daemon used by Codex Remote Control is launched
       // from the standalone install rooted at $CODEX_HOME/packages. Share the
       // user's installed binaries without duplicating them into every agent.
