@@ -55,7 +55,7 @@ export const CODEX_COMMAND_GROUPS: CmdGroup[] = [
     title: 'AUTOMATION (HEADLESS)',
     items: [
       { cmd: 'codex -p "your prompt"', kind: 'cli', desc: 'Non-interactive print mode: run one prompt and exit.', usage: 'codex -p "summarise this file"' },
-      { cmd: 'CODEX_NON_INTERACTIVE=1 codex', kind: 'cli', desc: 'Suppress all interactive installer / first-run prompts. Set automatically by The Hive in auto mode.' }
+      { cmd: 'codex --skip-git-repo-check', kind: 'cli', desc: 'Skip the git-repo detection prompt on startup. The Hive passes this automatically (alongside --dangerously-bypass-approvals-and-sandbox) in auto mode.' }
     ]
   },
   {
