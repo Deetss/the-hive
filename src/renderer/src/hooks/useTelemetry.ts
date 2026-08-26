@@ -59,11 +59,11 @@ export function cacheFraction(s: AgentUsageSample): number {
   return total > 0 ? s.cacheRead / total : 0;
 }
 
-/** Per-agent rolling token deltas (for the sparkline) plus a simple tokens/min. */
+/** Per-agent rolling token deltas (sparkline) plus a rolling-window tok/min. */
 interface Rate {
-  deltas: number[]; // most recent first-N token deltas between pushes
-  firstTs: number;
-  firstTotal: number;
+  deltas: number[];    // most recent SPARK_LEN token deltas
+  pushTimes: number[]; // push timestamp for each delta (parallel to deltas)
+  firstTs: number;     // session start — used as fallback window for first push
   lastTs: number;
   lastTotal: number;
 }
@@ -102,14 +102,27 @@ export function useFleetTelemetry(): FleetTelemetry {
       const total = totalTokens(s);
       const r = rates.current[s.agentId];
       if (!r) {
-        rates.current[s.agentId] = { deltas: [], firstTs: s.ts, firstTotal: total, lastTs: s.ts, lastTotal: total };
+        rates.current[s.agentId] = { deltas: [], pushTimes: [], firstTs: s.ts, lastTs: s.ts, lastTotal: total };
       } else {
         const delta = Math.max(0, total - r.lastTotal);
         r.deltas = [...r.deltas, delta].slice(-SPARK_LEN);
+        r.pushTimes = [...r.pushTimes, s.ts].slice(-SPARK_LEN);
         r.lastTs = s.ts;
         r.lastTotal = total;
-        const minutes = Math.max(1 / 60, (r.lastTs - r.firstTs) / 60000);
-        const perMin = (r.lastTotal - r.firstTotal) / minutes;
+
+        // Rolling-window rate: sum of recent deltas over the span they cover.
+        // Uses the same SPARK_LEN window as the sparkline so both stay in sync.
+        // Falls back to the first-push interval when only one delta has arrived.
+        let perMin = 0;
+        if (r.pushTimes.length >= 2) {
+          const spanMs = Math.max(1000, r.pushTimes[r.pushTimes.length - 1] - r.pushTimes[0]);
+          const windowTokens = r.deltas.reduce((acc, d) => acc + d, 0);
+          perMin = windowTokens / (spanMs / 60000);
+        } else {
+          const spanMs = Math.max(1000, s.ts - r.firstTs);
+          perMin = delta / (spanMs / 60000);
+        }
+
         setSpark((prev) => ({ ...prev, [s.agentId]: r.deltas }));
         setRate((prev) => ({ ...prev, [s.agentId]: perMin }));
       }
