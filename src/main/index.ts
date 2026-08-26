@@ -21,6 +21,7 @@ import {
 import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde } from './fs';
 import * as syncLock from './syncLock';
 import * as sync from './sync';
+import * as profiles from './profiles';
 import { normalizeWeekly, weeklyDelayMs } from '../shared/weeklySchedule';
 import {
   getBranch, getStatus, getLog, getBranches, getAheadBehind, isRepo, getDiff, mainRepoRoot,
@@ -4122,6 +4123,41 @@ ipcMain.handle('sync:now', () => {
     () => control.replaceAutoDeliveryPauses(ids),
     () => control.replaceAutoDeliveryPauses(prior)
   );
+});
+
+// ─── IPC: Hive profiles (multiple isolated hives) + cross-device join ────────
+// A profile = a named {harnessHome, userData}. Both axes must differ for two
+// hives to run at once (userData carries the single-instance lock + harness.db).
+ipcMain.handle('profiles:list', () => profiles.listProfiles());
+ipcMain.handle('profiles:current', () => profiles.currentProfile(resolveHarnessHome(), app.getPath('userData')));
+ipcMain.handle('profiles:create', (_evt, arg: unknown) => {
+  const a = (arg ?? {}) as { name?: unknown; harnessHome?: unknown; userData?: unknown };
+  const home = typeof a.harnessHome === 'string' ? expandTilde(a.harnessHome.trim()) : '';
+  if (!home) return { ok: false, error: 'harnessHome required' };
+  const userData = typeof a.userData === 'string' && a.userData.trim() ? expandTilde(a.userData.trim()) : undefined;
+  return { ok: true, profile: profiles.createProfile(typeof a.name === 'string' ? a.name : 'hive', home, { userData }) };
+});
+// Launch a profile as a NEW isolated instance (detached child). Best-effort — the
+// child is a full second app; runtime validation of the launch UX is Dylan's.
+ipcMain.handle('profiles:launch', (_evt, arg: unknown) => {
+  const id = typeof arg === 'string' ? arg : '';
+  const profile = profiles.getProfile(id);
+  if (!profile) return { ok: false, error: 'unknown profile' };
+  try {
+    const spec = profiles.launchSpec(profile, app.isPackaged, app.getAppPath(), process.execPath);
+    const child = spawn(spec.exec, spec.args, { detached: true, stdio: 'ignore', env: spec.env });
+    child.unref();
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+});
+// Cross-device JOIN: clone a hive's remote into a new profile's home, then the
+// renderer can launch it. Independent of every other hive (per-hive lock).
+ipcMain.handle('sync:joinHive', (_evt, arg: unknown) => {
+  const a = (arg ?? {}) as { remoteUrl?: unknown; name?: unknown; harnessHome?: unknown };
+  const url = typeof a.remoteUrl === 'string' ? a.remoteUrl : '';
+  const home = typeof a.harnessHome === 'string' ? expandTilde(a.harnessHome.trim()) : '';
+  if (!home) return { ok: false, error: 'harnessHome (target dir) required' };
+  return profiles.joinHive(url, typeof a.name === 'string' ? a.name : 'joined hive', home);
 });
 
 // ─── IPC: Triggers — history ledger + the approval gate ─────────────────────

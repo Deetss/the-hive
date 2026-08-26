@@ -1221,6 +1221,21 @@ const api = {
   /** Manual "Sync now": quiesce → commit → ff-only pull → push → resume. */
   syncNow: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('sync:now'),
 
+  // ─── Hive profiles (multiple isolated hives) + cross-device join ────────────
+  /** All registered hive profiles (named {harnessHome, userData}). */
+  listProfiles: (): Promise<unknown> => ipcRenderer.invoke('profiles:list'),
+  /** The profile matching THIS running instance, or null. */
+  currentProfile: (): Promise<unknown> => ipcRenderer.invoke('profiles:current'),
+  /** Register a new isolated profile (does not launch it). */
+  createProfile: (arg: { name: string; harnessHome: string; userData?: string }): Promise<{ ok: boolean; error?: string; profile?: unknown }> =>
+    ipcRenderer.invoke('profiles:create', arg),
+  /** Launch a profile as a new isolated instance (detached). */
+  launchProfile: (id: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('profiles:launch', id),
+  /** Cross-device JOIN: clone a hive's remote into a new profile's home. */
+  joinHive: (arg: { remoteUrl: string; name: string; harnessHome: string }): Promise<{ ok: boolean; error?: string; profile?: unknown }> =>
+    ipcRenderer.invoke('sync:joinHive', arg),
+
   // ─── Triggers: history ledger + approval gate ───────────────────────────────
   /** The whole ledger, newest first (both directions, both sources). */
   listTriggerHistory: (): Promise<TriggerHistoryEntry[]> =>
