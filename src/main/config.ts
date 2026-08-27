@@ -142,6 +142,24 @@ export const COMPACT_MAINTENANCE_MISSION: ScheduledMission = {
  *  so an interval the user tuned by hand is left exactly where they put it. */
 const LEGACY_COMPACT_MAINTENANCE_INTERVAL_MS = 3_600_000;
 
+/** Configuration for routing new work to alternate providers when the governor
+ *  is RED. All fields are optional; defaults keep the feature dark unless the
+ *  operator explicitly opts in. */
+export interface AutoOffloadConfig {
+  /** Master switch. Default false (feature OFF). */
+  enabled?: boolean;
+  /** Override path to the offload targets manifest. */
+  targetsFile?: string;
+  /** Ordered list of target ids to try when RED. */
+  tryOrder?: string[];
+  /** Maximum concurrent offload spawn requests. Default 2. */
+  maxConcurrent?: number;
+  /** Health-check timeout in milliseconds. Default 2000. */
+  healthCheckTimeoutMs?: number;
+  /** Dry-run: emit logs but skip queueing spawn requests. */
+  dryRun?: boolean;
+}
+
 /** Usage-cap governor policy. The governor runs on a 60s beat and paces Claude
  *  usage against the 5h rolling and 7d rolling windows reported by Claude Code
  *  via the Status hook's rate_limits field. Trigger is TIME-RELATIVE: RED when
@@ -164,6 +182,8 @@ export interface GovernorPolicy {
   recentAgentWindowMs?: number;
   /** Manual override: 'force-green' bypasses computed mode until cleared. */
   manualOverride?: 'force-green';
+  /** Auto offload targets + limits (default OFF). */
+  autoOffload?: AutoOffloadConfig;
 }
 
 /** Circuit-breaker thresholds (Lane A #6.6b). The breaker runs inside the
@@ -528,6 +548,8 @@ const DEFAULTS: HarnessConfig = {
   reflectSectionTrigger: 50,
   reflectRecentKeep: 12,
   reflectMinBytes: 16_384,
+  // Usage governor auto-offload — dark until the operator opts in.
+  governorPolicy: { autoOffload: { enabled: false } },
   // Enterprise Knowledge Graph — opt-in; dark until the user enables it.
   // v0.3.4 fix: default OFF, matching the field's own documentation ("Default
   // OFF / dark until enabled") — the true default contradicted it. Existing
