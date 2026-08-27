@@ -187,16 +187,32 @@ export function StatusBar() {
   // rateLimitsById is never pruned, so dead agents would linger; scope to live
   // to prevent a killed agent's stale high-% from inflating the meter forever.
   const { worstFiveHour, worstSevenDay } = useMemo(() => {
-    const liveIds = new Set(live.map((a) => a.id));
+    // Which Claude account an agent belongs to, by the same rule as displayBadge.
+    const accountOf = (profileId?: string): 'WORK' | 'PERSONAL' | null => {
+      if (profileId) {
+        const profile = runtimeProfiles.find((p) => p.id === profileId);
+        if (profile?.claudeConfigDir) {
+          const dir = profile.claudeConfigDir.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? '';
+          return dir === '.claude-personal' ? 'PERSONAL' : 'WORK';
+        }
+      }
+      return accountBadge;
+    };
+    const byId = new Map(live.map((a) => [a.id, a]));
     let fh: { pct: number; resetsAt: string } | null = null;
     let sd: { pct: number; resetsAt: string } | null = null;
     for (const [agentId, entry] of Object.entries(rateLimits)) {
-      if (!liveIds.has(agentId)) continue;
+      const a = byId.get(agentId);
+      if (!a) continue;
+      // Scope the meters to the focused account so a WORK badge never shows
+      // PERSONAL's 5h/7d usage (and vice-versa). Without a resolvable badge,
+      // fall back to fleet-worst.
+      if (displayBadge && accountOf(a.profileId) !== displayBadge) continue;
       if (entry.fiveHour && (!fh || entry.fiveHour.pct > fh.pct)) fh = entry.fiveHour;
       if (entry.sevenDay && (!sd || entry.sevenDay.pct > sd.pct)) sd = entry.sevenDay;
     }
     return { worstFiveHour: fh, worstSevenDay: sd };
-  }, [rateLimits, live]);
+  }, [rateLimits, live, displayBadge, runtimeProfiles, accountBadge]);
 
   const godColor = godStatus === 'ready' ? 'var(--cth-mint)'
     : godStatus === 'failed' ? 'var(--cth-coral)' : 'var(--cth-lemon)';
