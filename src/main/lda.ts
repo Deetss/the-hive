@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, normalize } from 'node:path';
 import { listLocalDelegates } from './config';
 import { getSecret } from './integrations';
@@ -19,6 +19,7 @@ const execFileAsync = promisify(execFile);
 
 const DEFAULT_HEALTH_MS = 8_000;
 const DEFAULT_INVOKE_MS = 300_000;
+const MAX_SAFE_FILE_BYTES = 2 * 1024 * 1024; // 2 MiB cap for prompt files
 
 function timeouts(cfg: LocalDelegateConfig): { health: number; invoke: number } {
   return {
@@ -262,7 +263,17 @@ function safeReadFile(filePath: string): string | null {
   const norm = normalize(filePath);
   // Reject if normalization changes the path (indicates .. traversal was present)
   if (norm !== filePath && norm !== filePath.replace(/[/\\]+$/, '')) return null;
-  try { return readFileSync(norm, 'utf8'); } catch { return null; }
+  try {
+    const stat = statSync(norm);
+    if (!stat.isFile()) return null;
+    if (stat.size > MAX_SAFE_FILE_BYTES) {
+      console.warn(`[lda] refusing to read file larger than ${MAX_SAFE_FILE_BYTES} bytes: ${norm}`);
+      return null;
+    }
+    return readFileSync(norm, 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 function buildApiPrompt(cap: LdaApiCapability, req: LdaInvokeRequest['args']): string {
