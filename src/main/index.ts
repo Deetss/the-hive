@@ -2984,14 +2984,19 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   if (provider === 'codex' && opts.hive?.id) {
     await enableCodexRemoteForSpawn(opts, opts.hive.id);
   }
-  // Codex 0.149.1 shows an interactive "Do you trust the contents of this directory?"
-  // dialog on every NEW directory, even with --dangerously-bypass-approvals-and-sandbox.
-  // UI codex works because a human presses 1/Enter; headless spawns die at ~1.4s with
-  // no one to answer. Auto-answer by detecting the prompt in PTY output and writing the
-  // affirmative choice. One-shot per spawn — never fires again after the first answer.
+  // Codex 0.149.1 shows two first-run gates in headless/ephemeral spawns:
+  //   (a) Directory trust — "Do you trust the contents of this directory?"
+  //   (b) Sandbox setup — "Set up the Codex agent sandbox to protect your files"
+  // Primary fix: installCodexHooks seeds state_5.sqlite (trust) and .sandbox_migration
+  // (sandbox) into the per-agent CODEX_HOME so neither prompt fires.
+  // Belt-and-suspenders: autoWriteOnPattern auto-answers both in the PTY if the
+  // seed somehow fails (e.g. first spawn before installCodexHooks runs, or race).
+  // Choice '1' trusts the directory; choice '2' picks non-admin sandbox (works
+  // without Administrator privileges, matching --dangerously-bypass-approvals-and-sandbox intent).
   if (provider === 'codex') {
     opts.autoWriteOnPattern = [
-      { needle: 'Do you trust the contents of this directory', response: '1\r' }
+      { needle: 'Do you trust the contents of this directory', response: '1\r' },
+      { needle: 'Set up the Codex agent sandbox', response: '2\r' }
     ];
   }
   const res = ptyManager.spawn(opts, owner);

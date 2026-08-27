@@ -2009,6 +2009,20 @@ export class HiveManager {
           try { copyFileSync(src, dest); } catch { /* best-effort */ }
         }
       }
+      // Seed the Windows sandbox-setup sentinel so codex's second first-run gate
+      // ("Set up the Codex agent sandbox … 1. Default  2. Non-admin  3. Quit")
+      // never blocks a headless worker. Codex checks for <CODEX_HOME>/.sandbox_migration;
+      // when present (content "v1\n") it skips the setup prompt entirely. Copy from
+      // the user's personal home (preserves their version string if codex ever bumps
+      // it), or write the v1 sentinel if the user hasn't run sandbox setup themselves.
+      const sandboxSrc = join(userHome, '.sandbox_migration');
+      const sandboxDest = join(home, '.sandbox_migration');
+      if (!existsSync(sandboxDest)) {
+        try {
+          if (existsSync(sandboxSrc)) copyFileSync(sandboxSrc, sandboxDest);
+          else writeFileSync(sandboxDest, 'v1\n', 'utf8');
+        } catch { /* best-effort */ }
+      }
       // Ensure the agent's OWN cwd is trusted so the "Do you trust this directory?"
       // dialog is NEVER shown for this agent's workspace. Codex checks the threads
       // table for a prior session with approval_mode='never' in the same cwd. We
