@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 import { useStore, type Agent } from '@/store/store';
 import { type HarnessConfig } from '@/store/config';
 import { useRestoreTeam } from '@/hooks/useRestoreTeam';
+import { useFleetTelemetry } from '@/hooks/useTelemetry';
 
 export interface AgentStripProps {
   /** Needed to rebuild a spawn command when a restorable agent predates the
@@ -22,6 +23,7 @@ export function AgentStrip({ config }: AgentStripProps) {
   const reorderAgents = useStore(s => s.reorderAgents);
   const renameAgent = useStore(s => s.renameAgent);
   const setAgentNote = useStore(s => s.setAgentNote);
+  const { samples: telemetrySamples, lastTool } = useFleetTelemetry();
   // Shared with the fullscreen roster so both show one restore in progress.
   const { restoring, autoRestoring, restoreTeam } = useRestoreTeam(config);
   // ONE restore control (bottom-right): a button whose dropdown OPENS UPWARD and
@@ -153,6 +155,10 @@ export function AgentStrip({ config }: AgentStripProps) {
             }}
             note={a.note}
             onEditNote={a.isOvermind ? undefined : () => setNoteEditId(a.id)}
+            lastTool={lastTool[a.id]}
+            lastActivityTs={(telemetrySamples[a.id]?.ts) ?? a.recentTextTs ?? null}
+            cwd={a.cwd}
+            worktreePath={a.worktreePath}
           />
           {/* The note itself lives INSIDE the card (its own row above the gauge).
               This is the transient EDITOR: a fixed popover ABOVE the card —

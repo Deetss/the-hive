@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelBadge, StatusKind } from './PixelBadge';
 import { useHasTerminalDraft } from './terminalPool';
@@ -8,6 +8,7 @@ import { CostHud } from '@/realtime/CostHud';
 import { AccentColorName } from '@/design/tokens';
 import { OfficeCharacterName } from '@/scene/office/cast';
 import { AgentNameEditor } from './AgentNameEditor';
+import { Icon } from './Icon';
 
 export interface AgentCardProps {
   name: string;
@@ -46,9 +47,44 @@ export interface AgentCardProps {
   onEditNote?: () => void;
   /** Human has this agent 1:1 — show a '1:1' chip so the floor knows it's on hold. */
   onHold?: boolean;
+  /** Most recent telemetry tool summary (last command). */
+  lastTool?: string;
+  /** Epoch ms of the most recent activity (telemetry or transcript). */
+  lastActivityTs?: number | null;
+  /** Base working directory for this agent. */
+  cwd?: string;
+  /** Isolated worktree path, when present. */
+  worktreePath?: string;
 }
 
 const fmtK = (n: number): string => `${Math.round(n / 1000)}k`;
+
+function formatAgo(ts: number | null | undefined, now: number): string | null {
+  if (!ts) return null;
+  const diff = Math.max(0, now - ts);
+  if (diff < 45_000) return 'just now';
+  if (diff < 90_000) return '1 min ago';
+  const minutes = Math.round(diff / 60_000);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(diff / 3_600_000);
+  if (hours < 48) return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(diff / 86_400_000);
+  return `${days} d ago`;
+}
+
+function shortenPath(path: string | undefined, keepSegments = 2): { display: string; title: string } | null {
+  if (!path) return null;
+  const normalized = path.replace(/\\+/g, '/');
+  if (normalized.length <= 36) return { display: normalized, title: path };
+  const segments = normalized.split('/').filter(Boolean);
+  if (segments.length <= keepSegments + 1) {
+    return { display: normalized.slice(-36), title: path };
+  }
+  const root = normalized.startsWith('/') ? '/' : segments[0].includes(':') ? segments[0] : '';
+  const tail = segments.slice(-keepSegments).join('/');
+  const prefix = root ? `${root}/` : '';
+  return { display: `${prefix}…/${tail}`, title: path };
+}
 
 /**
  * v0.3.4 compact redesign: one identity row (name + status), one context line
@@ -58,7 +94,8 @@ const fmtK = (n: number): string => `${Math.round(n / 1000)}k`;
 export function AgentCard({
   name, character, accent, status, ptyId, project, action, progress = 0,
   contextTokens, contextLimit, selected, isOvermind, onClick, onRename,
-  doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold
+  doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold,
+  lastTool, lastActivityTs, cwd, worktreePath
 }: AgentCardProps) {
   const [hover, setHover] = useState(false);
   const typing = useHasTerminalDraft(ptyId);
@@ -127,6 +164,14 @@ export function AgentCard({
   // One context line: what it's DOING while working, WHERE it lives while idle.
   const infoLine = (status !== 'idle' && action) ? action : project;
   const noteFirstLine = (note ?? '').split('\n').find((l) => l.trim()) ?? '';
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const activityLabel = formatAgo(lastActivityTs, now);
+  const location = shortenPath(worktreePath ?? cwd);
+  const toolLabel = lastTool ?? ((status !== 'idle' && action) ? action : undefined);
 
   return (
     <div
@@ -247,6 +292,41 @@ export function AgentCard({
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
               }}
             >{infoLine}</div>
+
+            {(toolLabel || activityLabel || location) && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  fontSize: 10.5,
+                  lineHeight: '14px',
+                  color: 'var(--cth-ink-500)',
+                  opacity: 0.85,
+                  marginTop: 2
+                }}
+              >
+                {toolLabel && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }} title={`Last tool: ${toolLabel}`}>
+                    <Icon name="terminal" size={1} style={{ color: 'var(--cth-ink-500)' }} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>{toolLabel}</span>
+                  </span>
+                )}
+                {activityLabel && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={lastActivityTs ? new Date(lastActivityTs).toLocaleString() : undefined}>
+                    <Icon name="clock" size={1} style={{ color: 'var(--cth-ink-500)' }} />
+                    <span>{activityLabel}</span>
+                  </span>
+                )}
+                {location && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }} title={location.title}>
+                    <Icon name="folder" size={1} style={{ color: 'var(--cth-ink-500)' }} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>{location.display}</span>
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* God: voice on its own compact row. Workers: the private note row.
                 Both sit ABOVE the gauge, so it is never covered. */}
