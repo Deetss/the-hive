@@ -5508,6 +5508,30 @@ function governorProfileState(profileId?: string | null): { mode: GovernorLevel;
   return governorProfileStates.get(claudeAccountKey(profileId)) ?? { mode: 'green' };
 }
 
+/** Rate-limit usage is fed by LIVE Claude request hooks and is in-memory only, so
+ *  a fresh app restart boots the governor GREEN until an agent makes a request —
+ *  which never happens while everything is paused, leaving offload unable to fire.
+ *  We persist the last-known window usage and reload it on a beat that has no live
+ *  data, discarding any window already past its reset. */
+type GovernorUsage = { fiveHour: { pct: number; resetsAt: string } | null; sevenDay: { pct: number; resetsAt: string } | null };
+function governorUsagePath(): string | null {
+  const home = resolveHarnessHome();
+  return home ? join(home, 'governor-usage.json') : null;
+}
+function persistGovernorUsage(u: GovernorUsage): void {
+  const p = governorUsagePath();
+  if (!p) return;
+  try { writeFileSync(p, JSON.stringify(u)); } catch { /* best-effort */ }
+}
+function loadGovernorUsage(): GovernorUsage | null {
+  const p = governorUsagePath();
+  if (!p || !existsSync(p)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(p, 'utf8')) as GovernorUsage;
+    return { fiveHour: raw.fiveHour ?? null, sevenDay: raw.sevenDay ?? null };
+  } catch { return null; }
+}
+
 /** One governor beat: evaluate pace vs usage for both rate-limit windows, set the
  *  floor mode (GREEN/YELLOW/RED), pause/unblock Claude agents, and push the mode
  *  to the renderer for the StatusBar chip. 60s cadence (always-on). */
@@ -5552,7 +5576,17 @@ function runGovernorBeat(): void {
     if (entry.fiveHour && (!maxFiveHour || entry.fiveHour.pct > maxFiveHour.pct)) maxFiveHour = entry.fiveHour;
     if (entry.sevenDay && (!maxSevenDay || entry.sevenDay.pct > maxSevenDay.pct)) maxSevenDay = entry.sevenDay;
   }
-  if (!maxFiveHour && !maxSevenDay) return; // no live rate-limit data — stay in current mode
+  // Persist live usage; on a beat with no live data, fall back to the last-known
+  // usage (so a post-restart governor still knows an account is over cap). A window
+  // already past its reset is dropped as stale.
+  if (maxFiveHour || maxSevenDay) {
+    persistGovernorUsage({ fiveHour: maxFiveHour, sevenDay: maxSevenDay });
+  } else {
+    const saved = loadGovernorUsage();
+    if (saved?.fiveHour && new Date(saved.fiveHour.resetsAt).getTime() > now) maxFiveHour = saved.fiveHour;
+    if (saved?.sevenDay && new Date(saved.sevenDay.resetsAt).getTime() > now) maxSevenDay = saved.sevenDay;
+    if (!maxFiveHour && !maxSevenDay) return; // no live OR persisted data — stay put
+  }
 
   /** Evaluate one window: returns 'red', 'yellow', or 'green' + the margin. */
   function evalWindow(pct: number, resetsAt: string, windowMs: number, backstopPct = backstop): { level: 'green' | 'yellow' | 'red'; ahead: number; reason: string } {
