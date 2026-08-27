@@ -62,6 +62,8 @@ export interface BlockReason {
   summary: string;                 // short headline shown on banner
   detail: string;                  // longer explanation
   command?: string;                // verbatim command awaiting confirmation, if any
+  /** 'prompt' = interactive terminal prompt needing human input; 'circuit' = breaker/approval */
+  kind?: 'prompt' | 'circuit';
   actions: Array<{
     label: string;
     kind: 'approve' | 'deny' | 'neutral';

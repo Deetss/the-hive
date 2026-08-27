@@ -9,7 +9,10 @@ export type StatusKind =
   // prompt, which holds its queue. Never stored on the agent (the pty parser
   // would overwrite it); derived at render, see `hasTerminalDraft`. Without it
   // a held queue looked identical to an idle agent doing nothing.
-  | 'typing';
+  | 'typing'
+  // Agent is alive but stuck on an interactive terminal prompt (e.g. a codex
+  // trust dialog or sandbox setup) that requires human input to unblock it.
+  | 'prompt';
 
 export interface PixelBadgeProps {
   status: StatusKind;
@@ -27,7 +30,8 @@ const colorByStatus: Record<StatusKind, string> = {
   ghost:    'var(--cth-status-ghost)',
   compacting: 'var(--cth-status-compacting)',
   looping:    'var(--cth-status-looping)',
-  typing:     'var(--cth-status-typing)'
+  typing:     'var(--cth-status-typing)',
+  prompt:     'var(--cth-status-blocked)'
 };
 
 // Human-readable labels. "blocked" is reserved for the god agent waiting on YOU,
@@ -45,7 +49,8 @@ const labelByStatus: Record<StatusKind, string> = {
   looping:    'looping',
   // Reads as "you are typing", not "the agent is typing" — it is your text
   // sitting on the prompt, and it is why nothing is being delivered.
-  typing:     'your draft'
+  typing:     'your draft',
+  prompt:     'needs input'
 };
 
 export function PixelBadge({ status, label, style }: PixelBadgeProps) {

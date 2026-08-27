@@ -34,6 +34,16 @@ const BLOCK_HINTS = [
   /\[y\/n\]/i,
 ];
 
+// Interactive terminal prompts that only a human can answer: codex trust dialogs,
+// sandbox setup wizards, and generic "press enter to confirm" gates. When a
+// sub-agent is stuck here the human needs to open the terminal and respond.
+const INTERACTIVE_PROMPT_HINTS = [
+  /Press enter to confirm/i,
+  /Do you trust the contents of this directory/i,
+  /Set up the Codex agent sandbox/i,
+  /continue\?.*\[y\/n\]/i,
+];
+
 // The /context output prints "235.3k/1m tokens (24%)" — sniff the DENOMINATOR
 // to learn the session's true context-window size. This is the only reliable
 // source for sessions on the CLI-default model: the "[1m]" alias exists only
@@ -51,6 +61,9 @@ export function usePtyParser(agentId: string) {
   const updateAgent = useStore(s => s.updateAgent);
   const pushFeed = useStore(s => s.pushFeed);
   const idleTimerRef = useRef<number | null>(null);
+  // Tracks whether we've raised an ASK-ME entry for an interactive prompt; used
+  // to avoid duplicate entries and to resolve the entry when the prompt clears.
+  const promptBlockedRef = useRef(false);
   // One stripper per agent: it carries an escape split across pty chunks.
   const stripRef = useRef(createAnsiStripper());
 
@@ -141,17 +154,23 @@ export function usePtyParser(agentId: string) {
     // prose) → keep the agent working at its desk, don't let it drift to idle.
     if (running) {
       cancelIdle();
+      if (promptBlockedRef.current) {
+        promptBlockedRef.current = false;
+        useStore.getState().resolveHumanMessage(`prompt:${agentId}`);
+      }
       updateAgent(agentId, { status: 'working' });
       return;
     }
 
-    // Not running → a genuine approval/question prompt is on screen.
+    // Not running → check for interactive prompts or approval menus.
     const recent = text.slice(-400);
-    if (BLOCK_HINTS.some(re => re.test(recent))) {
-      // Only the god agent talks to the human, so only it is truly "blocked"
-      // (needs you). A sub-agent sitting at a prompt is autonomous — it reads as
-      // "waiting" and we don't raise a human-approval card for it.
-      const isOvermind = !!useStore.getState().agents.find((a) => a.id === agentId)?.isOvermind;
+    const isInteractive = INTERACTIVE_PROMPT_HINTS.some(re => re.test(recent));
+    const isBlocked = isInteractive || BLOCK_HINTS.some(re => re.test(recent));
+
+    if (isBlocked) {
+      const storeState = useStore.getState();
+      const isOvermind = !!storeState.agents.find((a) => a.id === agentId)?.isOvermind;
+
       if (isOvermind) {
         updateAgent(agentId, {
           status: 'blocked',
@@ -166,7 +185,36 @@ export function usePtyParser(agentId: string) {
             ]
           }
         });
+      } else if (isInteractive) {
+        // Sub-agent stuck on an interactive terminal prompt (codex trust dialog,
+        // sandbox setup, etc.) — only a human can answer it.
+        const promptText = recent.trim().split('\n').filter(l => l.trim()).slice(-6).join('\n');
+        const agentName = storeState.agents.find((a) => a.id === agentId)?.name ?? agentId;
+
+        updateAgent(agentId, {
+          status: 'prompt',
+          action: 'needs input',
+          blockReason: { kind: 'prompt', summary: 'Waiting for terminal input', detail: promptText, actions: [] }
+        });
+
+        if (!promptBlockedRef.current) {
+          promptBlockedRef.current = true;
+          storeState.addHumanMessage({
+            id: `prompt:${agentId}`,
+            from: agentId,
+            subject: `${agentName} needs terminal input`,
+            body: promptText,
+            act: 'prompt',
+            arrivedAt: Date.now(),
+            resolved: false,
+            replyDraft: '',
+          });
+        }
       } else {
+        if (promptBlockedRef.current) {
+          promptBlockedRef.current = false;
+          useStore.getState().resolveHumanMessage(`prompt:${agentId}`);
+        }
         updateAgent(agentId, {
           status: 'waiting',
           action: 'waiting on the Overmind',
@@ -177,7 +225,11 @@ export function usePtyParser(agentId: string) {
       return;
     }
 
-    // Turn finished, no prompt on screen → let it drift to idle.
+    // Turn finished, no prompt on screen → resolve any prompt-blocked entry and drift to idle.
+    if (promptBlockedRef.current) {
+      promptBlockedRef.current = false;
+      useStore.getState().resolveHumanMessage(`prompt:${agentId}`);
+    }
     scheduleIdle();
   }, [agentId, updateAgent, pushFeed, scheduleIdle, cancelIdle]);
 }
