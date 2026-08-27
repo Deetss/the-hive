@@ -2996,7 +2996,11 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   if (provider === 'codex') {
     opts.autoWriteOnPattern = [
       { needle: 'Do you trust the contents of this directory', response: '1\r' },
-      { needle: 'Set up the Codex agent sandbox', response: '2\r' }
+      { needle: 'Set up the Codex agent sandbox', response: '2\r' },
+      // Belt-and-suspenders for the per-command approval prompt. Primary fix:
+      // installCodexHooks seeds approval_policy="never" in config.toml so this
+      // dialog never fires. Fallback: answer '1' (yes, proceed) in the PTY.
+      { needle: 'Would you like to run the following command', response: '1\r' }
     ];
   }
   const res = ptyManager.spawn(opts, owner);

@@ -2104,6 +2104,29 @@ export class HiveManager {
       const shim = this.shimPath();
       let config = existsSync(join(userHome, 'config.toml'))
         ? readFileSync(join(userHome, 'config.toml'), 'utf8') : '';
+      // Suppress every interactive gate so headless hive workers NEVER block on a
+      // prompt. Three gates in codex 0.149.1 (all seeded here):
+      //   1. Directory trust  → .sandbox_migration + state_5.sqlite thread row (above)
+      //   2. Sandbox setup    → .sandbox_migration "v1" sentinel (above)
+      //   3. Command approval → approval_policy = "never" in config.toml (THIS block)
+      //      The CLI flag --dangerously-bypass-approvals-and-sandbox is appended at
+      //      spawn time when autoMode is on, but some agents launch before autoMode
+      //      is set, so we also seal it at the config.toml level. The config key is
+      //      the TOML equivalent of --ask-for-approval never.
+      // Also seed [projects.'<cwd>'].trust_level = "trusted" — the config.toml trust
+      // source (distinct from the state_5.sqlite threads rows; codex checks both).
+      // Both sandboxes are fine for a headless trusted worker; "unelevated" avoids
+      // the Administrator-rights requirement and is what real interactive sessions use.
+      config += '\n# --- the-hive prompt-suppression (auto-generated; do not edit) ---\n';
+      config += 'approval_policy = "never"\n';
+      if (process.platform === 'win32') {
+        config += '\n[windows]\nsandbox = "unelevated"\n';
+      }
+      if (agentCwd) {
+        // TOML keys with backslashes need single-quoted literal strings.
+        const tomlCwd = agentCwd.replace(/\\/g, '\\\\');
+        config += `\n[projects."${tomlCwd}"]\ntrust_level = "trusted"\n`;
+      }
       if (shim) {
         const events = ['PreToolUse', 'PostToolUse', 'Stop', 'SubagentStop',
           'SessionStart', 'UserPromptSubmit', 'PreCompact', 'PostCompact'];
