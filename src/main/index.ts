@@ -25,6 +25,7 @@ import * as syncLock from './syncLock';
 import * as sync from './sync';
 import * as profiles from './profiles';
 import { ldaRunner } from './lda';
+import type { LdaUsageMetrics } from '../shared/localDelegate';
 import { normalizeWeekly, weeklyDelayMs } from '../shared/weeklySchedule';
 import {
   getBranch, getStatus, getLog, getBranches, getAheadBehind, isRepo, getDiff, mainRepoRoot,
@@ -236,6 +237,55 @@ const ptyToAgent = new Map<string, string>();
  *  install disabled) so the freshly-installed CLI launches in the SAME pty/window —
  *  no user click. Cleared the moment it's consumed, so it can never loop installs. */
 const pendingInstallRelaunch = new Map<string, { opts: AgentSpawnOptions; owner: Electron.WebContents | null; bin: string }>();
+
+interface DelegateLedgerState {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheCreation: number;
+  usd: number;
+  model: string;
+  provider: string;
+  sessionId: string;
+}
+const delegateLedgerTotals = new Map<string, DelegateLedgerState>();
+
+function recordDelegateLedger(delegateId: string, usage: LdaUsageMetrics): void {
+  const agentId = `delegate:${delegateId}`;
+  let state = delegateLedgerTotals.get(agentId);
+  if (!state) {
+    state = {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheCreation: 0,
+      usd: 0,
+      model: usage.model ?? '',
+      provider: usage.provider ?? '',
+      sessionId: agentId
+    };
+    delegateLedgerTotals.set(agentId, state);
+  }
+  state.input += usage.inputTokens;
+  state.output += usage.outputTokens;
+  state.cacheRead += usage.cacheReadTokens;
+  state.cacheCreation += usage.cacheWriteTokens;
+  state.usd += usage.usd;
+  if (usage.model) state.model = usage.model;
+  if (usage.provider) state.provider = usage.provider;
+  hive.appendCostLedger({
+    agentId,
+    sessionId: state.sessionId,
+    ts: Date.now(),
+    input: state.input,
+    output: state.output,
+    cacheRead: state.cacheRead,
+    cacheCreation: state.cacheCreation,
+    model: state.model,
+    provider: state.provider,
+    usd: state.usd
+  });
+}
 const hive = new HiveManager(
   () => resolveHarnessHome(),
   (channel, payload) => {
@@ -255,7 +305,8 @@ const telemetry = new TelemetryCollector({
   resolveCwd: (agentId) => hive.registry().agents[agentId]?.cwd ?? null,
   // D11: scopes the transcript fallback to this agent's own session instead of
   // summing every transcript in a (routinely shared) cwd.
-  resolveSessionId: (agentId) => hive.lastSession(agentId)
+  resolveSessionId: (agentId) => hive.lastSession(agentId),
+  resolveProvider: (agentId) => hive.registry().agents[agentId]?.provider ?? null
 });
 // Usage provider (Seam 1) — the INTEGRATION swap: Oscar's telemetry collector (#7)
 // IS the provider, replacing Lane A's interim StubUsageProvider. Same
@@ -4356,6 +4407,7 @@ ipcMain.handle('lda:health', (_evt, arg: unknown) => ldaRunner.health(typeof arg
 ipcMain.handle('lda:invoke', async (_evt, arg: unknown) => {
   const req = arg as Parameters<typeof ldaRunner.invoke>[0];
   const result = await ldaRunner.invoke(req);
+  if (result.usage) recordDelegateLedger(req.delegateId, result.usage);
   hive.appendLog({
     kind: 'lda-call',
     delegateId: req.delegateId,

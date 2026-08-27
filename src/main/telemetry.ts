@@ -49,6 +49,8 @@ export interface AgentUsageSample {
   cacheCreation: number;
   /** Normalized model id (`claude-opus-4-8`, no `[1m]` suffix). */
   model: string;
+  /** Provider/runtime that incurred the spend (`claude`, `codex`, …). */
+  provider: string;
   usd: number;
 }
 
@@ -94,6 +96,7 @@ export interface TelemetrySnapshot {
 interface SessionAccum {
   agentId: string;
   model: string;
+  provider: string;
   ts: number;
   input: number;
   output: number;
@@ -123,6 +126,8 @@ export interface TelemetryCollectorOptions {
    *  cwd (the common case for hive workers) pulls in every other agent's and
    *  every past session's history too. */
   resolveSessionId?: (agentId: string) => string | undefined;
+  /** Resolve an agent's runtime provider (claude, codex, …) for spend tagging. */
+  resolveProvider?: (agentId: string) => string | null;
 }
 
 export class TelemetryCollector {
@@ -133,6 +138,7 @@ export class TelemetryCollector {
   private readonly emit?: (channel: string, payload: unknown) => void;
   private readonly resolveCwd?: (agentId: string) => string | null;
   private readonly resolveSessionId?: (agentId: string) => string | undefined;
+  private readonly resolveProvider?: (agentId: string) => string | null;
 
   /** sessionId → running accumulation. */
   private readonly sessions = new Map<string, SessionAccum>();
@@ -152,6 +158,7 @@ export class TelemetryCollector {
     this.emit = opts.emit;
     this.resolveCwd = opts.resolveCwd;
     this.resolveSessionId = opts.resolveSessionId;
+    this.resolveProvider = opts.resolveProvider;
   }
 
   /** Bind the loopback OTLP listener. The handler is live the instant this
@@ -293,6 +300,8 @@ export class TelemetryCollector {
             const accum = this.session(agentId, sessionId);
             const model = normalizeModel(str(attrs['model']));
             if (model) accum.model = model;
+            const provider = str(attrs['provider']) || str(resAttrs['provider']);
+            if (provider) accum.provider = provider;
             accum.ts = Date.now();
             const value = pointValue(dp);
             if (metric.name === 'claude_code.token.usage') {
@@ -358,8 +367,21 @@ export class TelemetryCollector {
   private session(agentId: string, sessionId: string): SessionAccum {
     let accum = this.sessions.get(sessionId);
     if (!accum) {
-      accum = { agentId, model: '', ts: Date.now(), input: 0, output: 0, cacheRead: 0, cacheCreation: 0, usd: 0 };
+      accum = {
+        agentId,
+        model: '',
+        provider: this.resolveProvider?.(agentId) ?? '',
+        ts: Date.now(),
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheCreation: 0,
+        usd: 0
+      };
       this.sessions.set(sessionId, accum);
+    } else if (!accum.provider) {
+      const provider = this.resolveProvider?.(agentId);
+      if (provider) accum.provider = provider;
     }
     let set = this.agentSessions.get(agentId);
     if (!set) { set = new Set(); this.agentSessions.set(agentId, set); }
@@ -380,7 +402,16 @@ export class TelemetryCollector {
     const set = this.agentSessions.get(agentId);
     if (!set || set.size === 0) return null;
     const out: AgentUsageSample = {
-      agentId, sessionId: '', ts: 0, input: 0, output: 0, cacheRead: 0, cacheCreation: 0, model: '', usd: 0
+      agentId,
+      sessionId: '',
+      ts: 0,
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheCreation: 0,
+      model: '',
+      provider: '',
+      usd: 0
     };
     for (const sid of set) {
       const a = this.sessions.get(sid);
@@ -390,7 +421,14 @@ export class TelemetryCollector {
       out.cacheRead += a.cacheRead;
       out.cacheCreation += a.cacheCreation;
       out.usd += a.usd;
+      if (a.provider) {
+        if (!out.provider || a.ts >= out.ts) out.provider = a.provider;
+      }
       if (a.ts >= out.ts) { out.ts = a.ts; out.sessionId = sid; out.model = a.model; }
+    }
+    if (!out.provider) {
+      const resolved = this.resolveProvider?.(agentId);
+      if (resolved) out.provider = resolved;
     }
     return out;
   }
@@ -426,6 +464,7 @@ export class TelemetryCollector {
       cacheRead: u.cacheReadTokens,
       cacheCreation: u.cacheWriteTokens,
       model: u.model ?? '',
+      provider: this.resolveProvider?.(agentId) ?? '',
       usd: u.estimatedCostUsd
     };
   }
@@ -457,7 +496,7 @@ interface ResourceLogs { resource?: { attributes?: OtelKV[] }; scopeLogs?: { log
  *  user.email, user.account_id/uuid, organization.id, user.id) is ignored, so
  *  nothing this module emits can carry identity. */
 const ATTR_ALLOWLIST = new Set([
-  'agent.id', 'agent.name', 'session.id', 'model', 'type',
+  'agent.id', 'agent.name', 'session.id', 'model', 'provider', 'type',
   'tool_name', 'success', 'duration_ms', 'decision', 'event.name', 'error', 'message'
 ]);
 

@@ -45,6 +45,7 @@ interface HookPayload {
   /** CostSample payloads only (synthesized by the proxy-bridge sidecar for
    *  qwen). Raw token counts for one response, fed to the cost ledger. */
   model?: string;
+  provider?: string;
   input?: number;
   output?: number;
   cache_read?: number;
@@ -219,6 +220,10 @@ export class HookServer {
         const output = p.output ?? 0;
         const cacheRead = p.cache_read ?? 0;
         const cacheCreation = p.cache_creation ?? 0;
+        const registry = this.hive.registry();
+        const provider = (typeof p.provider === 'string' && p.provider.trim())
+          ? p.provider.trim()
+          : registry.agents[agentId]?.provider ?? null;
         this.hive.appendCostLedger({
           agentId,
           sessionId: p.session_id,
@@ -228,12 +233,13 @@ export class HookServer {
           cacheRead,
           cacheCreation,
           model: p.model ?? '',
+          provider,
           usd: estimateCostUsd(p.model, {
             inputTokens: input,
             outputTokens: output,
             cacheReadTokens: cacheRead,
             cacheWriteTokens: cacheCreation
-          })
+          }, provider)
         });
       }
       return {};

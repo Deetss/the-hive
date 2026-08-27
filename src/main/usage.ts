@@ -47,6 +47,8 @@ export interface AgentUsageSample {
   cacheCreation: number;
   /** Normalized base model id (no `[1m]` suffix), or null if unknown. */
   model: string | null;
+  /** Provider/runtime that incurred the spend (claude, codex, etc.), null when unknown. */
+  provider: string | null;
   /** Claude-precomputed cost (live path) / transcript-fallback estimate (interim).
    *  Never recomputed by a consumer. */
   usd: number;
@@ -64,7 +66,12 @@ export interface UsageProvider {
  *  Wired (in index.ts) to the hive registry: cwd for the transcript dir,
  *  sessionId for the resume/dedup key, model for the (best-effort) tier. */
 export interface UsageResolver {
-  (agentId: string): { cwd: string; sessionId?: string | null; model?: string | null } | null;
+  (agentId: string): {
+    cwd: string;
+    sessionId?: string | null;
+    model?: string | null;
+    provider?: string | null;
+  } | null;
 }
 
 /** Strip the `[1m]` (or `[…]`) context-window suffix so the model id matches the
@@ -96,6 +103,7 @@ export class StubUsageProvider implements UsageProvider {
       cacheRead: u.cacheReadTokens,
       cacheCreation: u.cacheWriteTokens,
       model: normalizeModel(info.model),
+      provider: info.provider ?? null,
       usd: u.estimatedCostUsd // interim fallback estimate; Oscar's provider supplies Claude-precomputed usd
     };
   }

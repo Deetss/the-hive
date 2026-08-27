@@ -6,13 +6,15 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, normalize } from 'node:path';
 import { listLocalDelegates } from './config';
 import { getSecret } from './integrations';
+import { estimateCostUsd, normalizeModel } from './pricing';
 import type {
   LdaCapability,
   LdaApiCapability,
   LdaInvokeRequest,
   LdaResult,
   LdaHealthResult,
-  LocalDelegateConfig
+  LocalDelegateConfig,
+  LdaUsageMetrics
 } from '../shared/localDelegate';
 
 const execFileAsync = promisify(execFile);
@@ -26,6 +28,42 @@ function timeouts(cfg: LocalDelegateConfig): { health: number; invoke: number } 
     health: cfg.timeoutMs?.health ?? DEFAULT_HEALTH_MS,
     invoke: cfg.timeoutMs?.invoke ?? DEFAULT_INVOKE_MS
   };
+}
+
+function providerLabel(kind: LdaProviderKind): string | null {
+  switch (kind) {
+    case 'anthropic-compat':
+      return 'anthropic';
+    case 'openai-compat':
+      return 'openai';
+    case 'ollama':
+      return 'ollama';
+    default:
+      return null;
+  }
+}
+
+const TOKENS_PER_CHAR = 4;
+
+function approxTokens(text: string | null | undefined): number {
+  if (!text) return 0;
+  const trimmed = text.replace(/\s+/g, ' ').trim();
+  if (!trimmed) return 0;
+  return Math.ceil(trimmed.length / TOKENS_PER_CHAR);
+}
+
+function num(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function tryParseJson(body: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(body);
+    return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Path translation (wsl-exec only) ────────────────────────────────────────
@@ -213,23 +251,51 @@ function buildApiRequestBody(cfg: LocalDelegateConfig, prompt: string): string {
   }
 }
 
-function extractApiResponseText(cfg: LocalDelegateConfig, body: string): string {
-  try {
-    const r = JSON.parse(body) as Record<string, unknown>;
-    if (cfg.providerKind === 'openai-compat') {
-      const choices = r.choices as Array<{ message?: { content?: string } }> | undefined;
-      return choices?.[0]?.message?.content ?? body;
-    }
-    if (cfg.providerKind === 'anthropic-compat') {
-      const content = r.content as Array<{ text?: string }> | undefined;
-      return content?.[0]?.text ?? body;
-    }
-    if (cfg.providerKind === 'ollama') {
-      const msg = (r.message as { content?: string } | undefined);
-      return msg?.content ?? body;
-    }
-    return body;
-  } catch { return body; }
+function usageFromParsed(cfg: LocalDelegateConfig, parsed: Record<string, unknown> | null): { input: number; output: number } | null {
+  if (!parsed) return null;
+  if (cfg.providerKind === 'openai-compat') {
+    const usage = parsed.usage as Record<string, unknown> | undefined;
+    if (!usage) return null;
+    const input = num(usage.prompt_tokens);
+    const completion = num(usage.completion_tokens);
+    const total = num(usage.total_tokens);
+    if (input || completion) return { input, output: completion };
+    if (input || total) return { input, output: Math.max(0, total - input) };
+    return null;
+  }
+  if (cfg.providerKind === 'anthropic-compat') {
+    const usage = parsed.usage as Record<string, unknown> | undefined;
+    if (!usage) return null;
+    const input = num(usage.input_tokens);
+    const output = num(usage.output_tokens);
+    if (input || output) return { input, output };
+    return null;
+  }
+  if (cfg.providerKind === 'ollama') {
+    const input = num((parsed as Record<string, unknown>).prompt_eval_count);
+    const output = num((parsed as Record<string, unknown>).eval_count);
+    if (input || output) return { input, output };
+    return null;
+  }
+  return null;
+}
+
+function extractApiResponseText(cfg: LocalDelegateConfig, body: string, parsed?: Record<string, unknown> | null): string {
+  const r = parsed ?? tryParseJson(body);
+  if (!r) return body;
+  if (cfg.providerKind === 'openai-compat') {
+    const choices = r.choices as Array<{ message?: { content?: string } }> | undefined;
+    return choices?.[0]?.message?.content ?? body;
+  }
+  if (cfg.providerKind === 'anthropic-compat') {
+    const content = r.content as Array<{ text?: string }> | undefined;
+    return content?.[0]?.text ?? body;
+  }
+  if (cfg.providerKind === 'ollama') {
+    const msg = (r.message as { content?: string } | undefined);
+    return msg?.content ?? body;
+  }
+  return body;
 }
 
 function apiEndpoint(cfg: LocalDelegateConfig, cap: LdaApiCapability | 'health'): string {
@@ -315,8 +381,36 @@ async function runHttp(cfg: LocalDelegateConfig, cap: LdaApiCapability, req: Lda
     if (res.status < 200 || res.status >= 300) {
       return { ok: false, output: `HTTP ${res.status}: ${res.body.slice(0, 400)}`, exitCode: res.status, durationMs };
     }
-    const output = cap === 'embed' ? res.body : extractApiResponseText(cfg, res.body);
-    return { ok: true, output, exitCode: 0, durationMs };
+    const parsed = tryParseJson(res.body);
+    const completionText = cap === 'embed' ? '' : extractApiResponseText(cfg, res.body, parsed);
+    const provider = providerLabel(cfg.providerKind);
+    let usage: LdaUsageMetrics | undefined;
+    if (provider && (cap === 'complete' || cap === 'embed')) {
+      const counts = usageFromParsed(cfg, parsed);
+      const inputTokens = counts?.input ?? approxTokens(prompt);
+      const outputFromParsed = counts?.output ?? 0;
+      const estimatedOutput = cap === 'embed' ? 0 : approxTokens(completionText);
+      const outputTokens = cap === 'embed' ? outputFromParsed : (outputFromParsed || estimatedOutput);
+      if (inputTokens || outputTokens) {
+        const usd = estimateCostUsd(cfg.model, {
+          inputTokens,
+          outputTokens,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0
+        }, provider);
+        usage = {
+          provider,
+          model: normalizeModel(cfg.model),
+          inputTokens,
+          outputTokens,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          usd
+        };
+      }
+    }
+    const output = cap === 'embed' ? res.body : completionText;
+    return { ok: true, output, exitCode: 0, durationMs, usage };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, output: msg, exitCode: 1, durationMs: Date.now() - t0 };
