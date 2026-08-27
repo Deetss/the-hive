@@ -178,6 +178,12 @@ export interface GovernorPolicy {
   earlyWindowFloorPct?: number;
   /** Absolute backstop: RED regardless of pace when usage% >= this (default 90). */
   absoluteBackstopPct?: number;
+  /** Per-window absolute cap for the 5h window: RED when 5h usage% >= this,
+   *  independent of the 7d window and of pace. Defaults to absoluteBackstopPct. */
+  fiveHourCapPct?: number;
+  /** Per-window absolute cap for the 7d window: RED when 7d usage% >= this,
+   *  independent of the 5h window and of pace. Defaults to absoluteBackstopPct. */
+  sevenDayCapPct?: number;
   /** Max age of agent rate-limit data to include in aggregation (default 10min). */
   recentAgentWindowMs?: number;
   /** Manual override: 'force-green' bypasses computed mode until cleared. */

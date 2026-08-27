@@ -5466,6 +5466,8 @@ function runGovernorBeat(): void {
   const yellowMargin = policy.yellowMarginPts ?? 10;
   const earlyFloor = policy.earlyWindowFloorPct ?? 15;
   const backstop = policy.absoluteBackstopPct ?? 90;
+  const fiveHourCap = policy.fiveHourCapPct ?? backstop;
+  const sevenDayCap = policy.sevenDayCapPct ?? backstop;
   const recentMs = policy.recentAgentWindowMs ?? 10 * 60 * 1000;
 
   // Pull rate limits across all recently-active agents; take worst pct per window.
@@ -5483,14 +5485,14 @@ function runGovernorBeat(): void {
   if (!maxFiveHour && !maxSevenDay) return; // no live rate-limit data — stay in current mode
 
   /** Evaluate one window: returns 'red', 'yellow', or 'green' + the margin. */
-  function evalWindow(pct: number, resetsAt: string, windowMs: number): { level: 'green' | 'yellow' | 'red'; ahead: number; reason: string } {
+  function evalWindow(pct: number, resetsAt: string, windowMs: number, backstopPct = backstop): { level: 'green' | 'yellow' | 'red'; ahead: number; reason: string } {
     const resetMs = new Date(resetsAt).getTime();
     const windowStart = resetMs - windowMs;
     const elapsed = Math.max(0, Math.min(100, ((now - windowStart) / windowMs) * 100));
     const ahead = pct - elapsed; // positive = ahead of pace, negative = behind
 
-    // Absolute backstop
-    if (pct >= backstop) return { level: 'red', ahead, reason: `usage ${pct.toFixed(1)}% >= backstop ${backstop}%` };
+    // Absolute backstop (per-window cap): govern when over on this window regardless of pace
+    if (pct >= backstopPct) return { level: 'red', ahead, reason: `usage ${pct.toFixed(1)}% >= cap ${backstopPct}%` };
     // Early-window floor: don't trip until meaningful usage
     if (pct < earlyFloor) return { level: 'green', ahead, reason: `usage ${pct.toFixed(1)}% < floor ${earlyFloor}%` };
     // Pace-based
@@ -5499,8 +5501,8 @@ function runGovernorBeat(): void {
     return { level: 'green', ahead, reason: `usage ${pct.toFixed(1)}% < pace ${elapsed.toFixed(1)}%` };
   }
 
-  const five = maxFiveHour ? evalWindow(maxFiveHour.pct, maxFiveHour.resetsAt, WINDOW_5H_MS) : null;
-  const seven = maxSevenDay ? evalWindow(maxSevenDay.pct, maxSevenDay.resetsAt, WINDOW_7D_MS) : null;
+  const five = maxFiveHour ? evalWindow(maxFiveHour.pct, maxFiveHour.resetsAt, WINDOW_5H_MS, fiveHourCap) : null;
+  const seven = maxSevenDay ? evalWindow(maxSevenDay.pct, maxSevenDay.resetsAt, WINDOW_7D_MS, sevenDayCap) : null;
 
   // Take the more conservative window (highest-severity)
   const rank = (l: GovernorLevel | undefined) => l === 'red' ? 2 : l === 'yellow' ? 1 : 0;
@@ -5511,8 +5513,8 @@ function runGovernorBeat(): void {
     if (!meta) continue;
     const provider = (meta.provider as AgentProvider | undefined) ?? 'claude';
     if (!isClaudeProvider(provider)) continue;
-    const fiveEval = entry.fiveHour ? evalWindow(entry.fiveHour.pct, entry.fiveHour.resetsAt, WINDOW_5H_MS) : null;
-    const sevenEval = entry.sevenDay ? evalWindow(entry.sevenDay.pct, entry.sevenDay.resetsAt, WINDOW_7D_MS) : null;
+    const fiveEval = entry.fiveHour ? evalWindow(entry.fiveHour.pct, entry.fiveHour.resetsAt, WINDOW_5H_MS, fiveHourCap) : null;
+    const sevenEval = entry.sevenDay ? evalWindow(entry.sevenDay.pct, entry.sevenDay.resetsAt, WINDOW_7D_MS, sevenDayCap) : null;
     let best = fiveEval;
     if (!best || (sevenEval && rank(sevenEval.level) > rank(best.level))) best = sevenEval;
     if (!best) continue;
