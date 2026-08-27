@@ -90,20 +90,21 @@ export interface AttemptGovernorOffloadsOptions {
    *  `accountKey` is in this set are offloaded (G4 per-profile trigger). A spec
    *  with no `accountKey` is always eligible (the beat only calls while RED). */
   redProfiles?: string[];
+  profileConfigs?: Record<string, AutoOffloadConfig>;
   notify?: OffloadNotify;
 }
 
 const queuedObjectives: OffloadWorkSpec[] = [];
 /** offload spawn-request id -> target id, so a slot is released per target when
  *  the worker terminates (G2). Was a bare Set that was never drained. */
-const activeRequests = new Map<string, string>();
+const activeRequests = new Map<string, { targetId: string; profileKey: string }>();
 /** target id -> rolling token-spend samples for the per-target tok/min gate. */
 const targetTokenSpend = new Map<string, Array<{ ts: number; tokens: number }>>();
 let attemptRunning = false;
 let lastHoldNotifyAt = 0;
 
 export function loadAutoOffloadConfig(policy?: AutoOffloadConfig, hiveRoot?: string | null): ResolvedAutoOffloadConfig {
-  const configPolicy = policy ?? readConfig().governorPolicy?.autoOffload ?? {};
+  const configPolicy = policy ?? readConfig().governorPolicy?.global?.autoOffload ?? {};
   const harnessHome = resolveHarnessHome();
   const root = hiveRoot ?? (harnessHome ? join(harnessHome, 'hive') : undefined);
   const defaultTargetsFile = root ? join(root, 'offload-targets.json') : 'offload-targets.json';
@@ -147,7 +148,13 @@ export function releaseOffloadSlot(reqId: string): void {
 /** How many active offload workers are running against one target. */
 function countActiveForTarget(targetId: string): number {
   let n = 0;
-  for (const id of activeRequests.values()) if (id === targetId) n += 1;
+  for (const entry of activeRequests.values()) if (entry.targetId === targetId) n += 1;
+  return n;
+}
+
+function countActiveForProfile(profileKey: string): number {
+  let n = 0;
+  for (const entry of activeRequests.values()) if (entry.profileKey === profileKey) n += 1;
   return n;
 }
 
@@ -172,8 +179,8 @@ export function requeueOffloadObjective(reqId: string, spec: OffloadWorkSpec, fa
 
 export async function attemptGovernorOffloads(options: AttemptGovernorOffloadsOptions = {}): Promise<void> {
   if (attemptRunning) return;
-  const resolved = loadAutoOffloadConfig(options.policy, options.hiveRoot);
-  if (!resolved.enabled) return;
+  const globalResolved = loadAutoOffloadConfig(options.policy, options.hiveRoot);
+  if (!globalResolved.enabled) return;
   const hiveRoot = options.hiveRoot ?? resolveDefaultHiveRoot();
   if (!hiveRoot) {
     console.warn('[governor-offload] no hive root available for spawn queue');
@@ -183,41 +190,80 @@ export async function attemptGovernorOffloads(options: AttemptGovernorOffloadsOp
   const redProfiles = options.redProfiles && options.redProfiles.length ? new Set(options.redProfiles) : null;
   const snapshot = [...queuedObjectives, ...(options.pendingObjectives ?? [])];
   if (!snapshot.length) return;
-  let globalLimit = Math.max(0, resolved.maxConcurrent - activeRequests.size);
-  if (globalLimit <= 0) return;
+
+  const GLOBAL_PROFILE_KEY = '__global';
+  const resolvedConfigs = new Map<string, ResolvedAutoOffloadConfig>();
+  resolvedConfigs.set(GLOBAL_PROFILE_KEY, globalResolved);
+
+  const profileConfigs = options.profileConfigs ?? {};
+  for (const [profileKey, profileConfig] of Object.entries(profileConfigs)) {
+    try {
+      resolvedConfigs.set(profileKey, loadAutoOffloadConfig(profileConfig, options.hiveRoot));
+    } catch (error) {
+      console.warn(
+        `[governor-offload] failed to load profile override for ${profileKey}:`,
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
   attemptRunning = true;
   try {
-    const targets = await findHealthyTargets(resolved.targetsFile, resolved.tryOrder, resolved.healthCheckTimeoutMs);
-    if (!targets.length) {
-      maybeNotifyHold(resolved, options.notify);
+    const healthyTargetsByProfile = new Map<string, HealthyOffloadTarget[]>();
+    for (const [profileKey, config] of resolvedConfigs.entries()) {
+      const targets = await findHealthyTargets(config.targetsFile, config.tryOrder, config.healthCheckTimeoutMs);
+      healthyTargetsByProfile.set(profileKey, targets);
+    }
+
+    const hasAnyTargets = Array.from(healthyTargetsByProfile.values()).some((targets) => targets.length > 0);
+    if (!hasAnyTargets) {
+      maybeNotifyHold(globalResolved, options.notify);
       return;
     }
+
+    let globalRemaining = Math.max(0, globalResolved.maxConcurrent - activeRequests.size);
+    if (globalRemaining <= 0) return;
+
     for (const next of snapshot) {
-      if (globalLimit <= 0) break;
-      // G4: offload only work whose OWNING profile is RED.
+      if (globalRemaining <= 0) break;
       if (redProfiles && next.accountKey && !redProfiles.has(next.accountKey)) continue;
-      // Per-target concurrency + tok/min gate: skip a saturated/throttled target so
-      // pickTarget falls through tryOrder instead of piling onto it (§4).
-      const candidates = targets.filter((t) => targetHasCapacity(t, resolved) && !(next.excludeTargets ?? []).includes(t.id));
+
+      const profileKey = (next.accountKey && resolvedConfigs.has(next.accountKey)) ? next.accountKey : GLOBAL_PROFILE_KEY;
+      const resolvedConfig = resolvedConfigs.get(profileKey) ?? globalResolved;
+      const healthyTargets =
+        healthyTargetsByProfile.get(profileKey) ?? healthyTargetsByProfile.get(GLOBAL_PROFILE_KEY) ?? [];
+      if (!healthyTargets.length) {
+        maybeNotifyHold(resolvedConfig, options.notify);
+        continue;
+      }
+
+      const profileRemaining = Math.max(0, resolvedConfig.maxConcurrent - countActiveForProfile(profileKey));
+      if (profileRemaining <= 0) continue;
+
+      const candidates = healthyTargets.filter(
+        (t) => targetHasCapacity(t, resolvedConfig) && !(next.excludeTargets ?? []).includes(t.id)
+      );
       const target = pickTarget(next, candidates);
-      if (!target) continue; // no capacity anywhere this beat — leave it queued
+      if (!target) continue;
+
       consumeQueuedObjective(next);
-      if (resolved.dryRun) {
+      if (resolvedConfig.dryRun) {
         console.log(`[governor-offload] dry-run: would offload "${next.objective}" to ${target.id}`);
-        globalLimit -= 1;
+        globalRemaining -= 1;
         continue;
       }
       const result = createOffloadSpawnRequest(spawnDir, target, next);
       if (result) {
-        activeRequests.set(result.id, target.id);
+        activeRequests.set(result.id, { targetId: target.id, profileKey });
         recordTargetSpend(target.id, next.tokenCap ?? 0);
-        globalLimit -= 1;
+        globalRemaining -= 1;
       }
     }
   } finally {
     attemptRunning = false;
   }
 }
+
 
 export async function findHealthyTargets(manifestPath: string, tryOrder: string[], timeoutMs: number): Promise<HealthyOffloadTarget[]> {
   if (!manifestPath || !existsSync(manifestPath)) return [];
