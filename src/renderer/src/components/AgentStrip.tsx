@@ -99,6 +99,8 @@ export function AgentStrip({ config }: AgentStripProps) {
         <div
           key={a.id}
           ref={(el) => { cardRefs.current[a.id] = el; }}
+          data-testid="roster-row"
+          data-agent-id={a.id}
           draggable
           onDragStart={(e) => { setDragId(a.id); e.dataTransfer.effectAllowed = 'move'; }}
           onDragOver={(e) => {
@@ -232,6 +234,7 @@ export function AgentStrip({ config }: AgentStripProps) {
         size="lg"
         style={{ alignSelf: 'center', flexShrink: 0 }}
         onClick={() => setAddAgentOpen(true)}
+        data-testid="add-agent-btn"
       >
         <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', whiteSpace: 'nowrap' }}>
           <Icon name="plus" /> add agent

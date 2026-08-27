@@ -532,7 +532,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
         zIndex: 500
       }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 940, maxWidth: '95vw' }}>
+      <div onClick={(e) => e.stopPropagation()} data-testid="add-agent-modal" style={{ width: 940, maxWidth: '95vw' }}>
         <PixelPanel
           variant="dialog"
           title="ADD AGENT"
@@ -654,6 +654,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                     <select
                       value={profileId ?? ''}
                       onChange={(e) => applyProfile(e.target.value)}
+                      data-testid="profile-select"
                       title="A saved engine + account + model bundle. Picking one fills in the fields below; a Claude profile launches under its own account login."
                       style={{
                         padding: '4px 8px 2px', background: 'var(--cth-cream-100)', border: 'none',
@@ -928,6 +929,8 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                             <button
                               key={p.id}
                               onClick={() => pickProvider(p.id)}
+                              data-testid="provider-btn"
+                              data-provider={p.id}
                               title={
                                 p.id === 'antigravity'
                                   ? 'Spawn the Antigravity CLI (agy) with a Gemini model'
@@ -973,6 +976,8 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                             <button
                               key={m.label}
                               onClick={() => pickModel(m.id)}
+                              data-testid="model-btn"
+                              data-model={m.id ?? ''}
                               title={m.id ?? 'CLI default model'}
                               style={{
                                 padding: '3px 8px 1px',
@@ -1203,7 +1208,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                 <PixelButton variant="secondary" size="md" onClick={skipHire} disabled={busy}>skip hire</PixelButton>
               )}
               <PixelButton variant="ghost" size="md" onClick={onClose} disabled={busy}>cancel</PixelButton>
-              <PixelButton variant="primary" size="md" onClick={submit} disabled={busy}>
+              <PixelButton variant="primary" size="md" onClick={submit} disabled={busy} data-testid="spawn-btn">
                 {busy ? 'spawning...' : 'spawn'}
               </PixelButton>
             </div>
