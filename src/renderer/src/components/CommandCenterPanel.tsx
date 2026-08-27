@@ -607,7 +607,9 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
       { to: 'god', act: 'request', subject: 'Task from the human', body: full },
       'human'
     );
-    setDispatchText('');
+    if (res.ok) {
+      setDispatchText('');
+    }
     setDispatchMsg(res.ok
       ? `sent to Abathur${suggested ? ` (suggesting ${suggested.name})` : ''}`
       : `failed: ${res.error ?? '?'}`);
