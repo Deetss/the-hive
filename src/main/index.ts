@@ -2984,6 +2984,16 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   if (provider === 'codex' && opts.hive?.id) {
     await enableCodexRemoteForSpawn(opts, opts.hive.id);
   }
+  // Codex 0.149.1 shows an interactive "Do you trust the contents of this directory?"
+  // dialog on every NEW directory, even with --dangerously-bypass-approvals-and-sandbox.
+  // UI codex works because a human presses 1/Enter; headless spawns die at ~1.4s with
+  // no one to answer. Auto-answer by detecting the prompt in PTY output and writing the
+  // affirmative choice. One-shot per spawn — never fires again after the first answer.
+  if (provider === 'codex') {
+    opts.autoWriteOnPattern = [
+      { needle: 'Do you trust the contents of this directory', response: '1\r' }
+    ];
+  }
   const res = ptyManager.spawn(opts, owner);
   if (res.ok) analytics.track('agent_spawned', { provider });
   syncKeepAwake(); // arm the power-save blocker while ≥1 agent PTY is alive (#18)

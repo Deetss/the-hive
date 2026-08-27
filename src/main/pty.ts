@@ -91,6 +91,10 @@ export interface SpawnOptions {
    *  MUST contain no embedded double-quotes (it is wrapped verbatim on Windows).
    *  `command` is still recorded for display but is not executed. */
   shellScript?: string;
+  /** One-shot PTY auto-answers for interactive prompts that block headless spawns.
+   *  Each entry: when `needle` first appears in accumulated PTY output, write `response`
+   *  to the PTY stdin (once, never repeated). Used for codex's directory-trust dialog. */
+  autoWriteOnPattern?: Array<{ needle: string; response: string }>;
 }
 
 /**
@@ -689,12 +693,30 @@ export class PtyManager {
       };
       this.sessions.set(opts.id, session);
 
+      // State for autoWriteOnPattern: accumulate raw PTY bytes and fire each
+      // response exactly once when its needle first appears. Scoped here so the
+      // closure only lives as long as the proc callbacks.
+      const autoPatterns = opts.autoWriteOnPattern ?? [];
+      const autoAnswered = new Set<string>();
+      let autoAccum = '';
+
       proc.onData((data) => {
         // Drop trailing output from a process whose id was already reclaimed by
         // a respawn (or killed) — it would corrupt the new session's screen.
         if (this.sessions.get(opts.id) !== session) return;
         session.hasOutput = true;
         session.lastOutputAt = Date.now();
+        // One-shot auto-answer for blocking interactive prompts (e.g. codex trust dialog).
+        if (autoPatterns.length > 0) {
+          autoAccum += data;
+          if (autoAccum.length > 8192) autoAccum = autoAccum.slice(-8192);
+          for (const { needle, response } of autoPatterns) {
+            if (!autoAnswered.has(needle) && autoAccum.includes(needle)) {
+              autoAnswered.add(needle);
+              setTimeout(() => { try { proc.write(response); } catch { /* proc gone */ } }, 100);
+            }
+          }
+        }
         // Route to the session's owner window (multi-window owner routing).
         this.safeSend(`pty:data:${opts.id}`, data, session.owner);
       });
