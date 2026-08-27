@@ -3,6 +3,7 @@ import type { AccentColorName } from '@/design/tokens';
 import type { OfficeCharacterName } from '@/scene/office/cast';
 import type { ThemeId } from '@/scene/office/themeRegistry';
 import type { StatusKind } from '@/components/PixelBadge';
+import type { ActiveTaskSession, HiveTask, TaskSessionSnapshot } from '@/types/tasks';
 import type { AgentProvider } from '@shared/agentProvider';
 import type { HireManifest } from '@shared/hire';
 import {
@@ -16,6 +17,8 @@ import { DEFAULT_ORG_TRIGGER, type OrgTriggerConfig, type WebhookTrigger } from 
 
 const ACTIVITY_LS_KEY = 'cth.activity.v1';
 const ACTIVITY_CAP = 50;
+const TASK_SESSION_LS_KEY = 'cth.tasks.sessions.v1';
+const TASK_SESSION_HISTORY_LIMIT = 20;
 
 /** One entry in the Activity/Updates feed — a tagged insight from god/agents. */
 export interface ActivityEntry {
@@ -32,6 +35,65 @@ function loadActivityFeed(): ActivityEntry[] {
     const raw = localStorage.getItem(ACTIVITY_LS_KEY);
     return raw ? JSON.parse(raw) as ActivityEntry[] : [];
   } catch { return []; }
+}
+
+interface TaskSessionStateData {
+  active: ActiveTaskSession;
+  history: TaskSessionSnapshot[];
+}
+
+function randomSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `ts-${Math.random().toString(36).slice(2)}`;
+}
+
+function defaultActiveTaskSession(): ActiveTaskSession {
+  return { id: randomSessionId(), label: 'Session 1', startedAt: Date.now() };
+}
+
+function sanitizeTasksForSession(tasks: HiveTask[]): HiveTask[] {
+  return tasks.map((task) => ({
+    ...task,
+    dependsOn: [...(task.dependsOn ?? [])],
+    humanQA: task.humanQA ? task.humanQA.map((entry) => ({ ...entry })) : undefined
+  }));
+}
+
+function loadTaskSessionState(): TaskSessionStateData {
+  try {
+    const raw = window.localStorage.getItem(TASK_SESSION_LS_KEY);
+    if (!raw) {
+      return { active: defaultActiveTaskSession(), history: [] };
+    }
+    const parsed = JSON.parse(raw) as Partial<TaskSessionStateData> | null;
+    const activeValid = parsed?.active
+      && typeof parsed.active.id === 'string'
+      && typeof parsed.active.label === 'string'
+      && typeof parsed.active.startedAt === 'number';
+    const active = activeValid
+      ? parsed!.active as ActiveTaskSession
+      : defaultActiveTaskSession();
+    const history = Array.isArray(parsed?.history)
+      ? (parsed!.history as TaskSessionSnapshot[]).filter((entry) => (
+        entry && typeof entry.id === 'string'
+        && typeof entry.label === 'string'
+        && typeof entry.startedAt === 'number'
+        && typeof entry.endedAt === 'number'
+        && Array.isArray(entry.tasks)
+      ))
+      : [];
+    return { active, history };
+  } catch {
+    return { active: defaultActiveTaskSession(), history: [] };
+  }
+}
+
+function saveTaskSessionState(active: ActiveTaskSession, history: TaskSessionSnapshot[]): void {
+  try {
+    window.localStorage.setItem(TASK_SESSION_LS_KEY, JSON.stringify({ active, history }));
+  } catch { /* ignore storage errors */ }
 }
 
 /** A direct hive message from god/agents addressed to the human (not via a task card).
@@ -65,6 +127,8 @@ import { isCompactionCommand } from '@shared/providerAutomation';
 import { preferredAgentRole } from '@shared/agentRole';
 import { isInboxNudge } from '@shared/hiveNudge';
 import { refocusAfterRemoval, focusOnLoad, restoreFocus } from './focusMode';
+
+const initialTaskSessions = loadTaskSessionState();
 
 export type ToolKind =
   | 'Read' | 'Edit' | 'Write' | 'Bash' | 'WebFetch' | 'WebSearch'
@@ -313,6 +377,13 @@ interface State {
   /** Count of pending 'Assigned to me' items (unanswered humanQA across all tasks). */
   assignedPending: number;
   setAssignedPending: (n: number) => void;
+  activeTaskSession: ActiveTaskSession;
+  taskSessionHistory: TaskSessionSnapshot[];
+  viewedTaskSessionId: string | null;
+  startNewTaskSession: (snapshot: HiveTask[], label?: string) => void;
+  selectTaskSession: (id: string | null) => void;
+  renameTaskSession: (id: string, label: string) => void;
+  deleteTaskSession: (id: string) => void;
   /** Conversation IDs the human sent as Quick-Ask queries. Used to exclude
    *  god's replies from the Ask Me direct-message stream.
    *  TODO: evict stale ids (e.g. cap at 200 or clear on session reset) — fine at
@@ -939,6 +1010,57 @@ export const useStore = create<State>((set, get) => ({
   setAskMePending: (n) => set({ askMePending: n }),
   assignedPending: 0,
   setAssignedPending: (n) => set({ assignedPending: n }),
+  activeTaskSession: initialTaskSessions.active,
+  taskSessionHistory: initialTaskSessions.history,
+  viewedTaskSessionId: null,
+  startNewTaskSession: (snapshot, label) => set((s) => {
+    const trimmed = label?.trim();
+    const now = Date.now();
+    const historyEntry: TaskSessionSnapshot = {
+      id: s.activeTaskSession.id,
+      label: s.activeTaskSession.label,
+      startedAt: s.activeTaskSession.startedAt,
+      endedAt: now,
+      tasks: sanitizeTasksForSession(snapshot)
+    };
+    const history = [historyEntry, ...s.taskSessionHistory].slice(0, TASK_SESSION_HISTORY_LIMIT);
+    const defaultLabel = `Session ${history.length + 1}`;
+    const activeTaskSession: ActiveTaskSession = {
+      id: randomSessionId(),
+      label: trimmed && trimmed.length > 0 ? trimmed : defaultLabel,
+      startedAt: now
+    };
+    saveTaskSessionState(activeTaskSession, history);
+    return { activeTaskSession, taskSessionHistory: history, viewedTaskSessionId: null };
+  }),
+  selectTaskSession: (id) => set({ viewedTaskSessionId: id }),
+  renameTaskSession: (id, label) => set((s) => {
+    const trimmed = label.trim();
+    if (!trimmed) return {};
+    if (s.activeTaskSession.id === id) {
+      const activeTaskSession = { ...s.activeTaskSession, label: trimmed };
+      saveTaskSessionState(activeTaskSession, s.taskSessionHistory);
+      return { activeTaskSession };
+    }
+    let changed = false;
+    const history = s.taskSessionHistory.map((entry) => {
+      if (entry.id === id) {
+        changed = true;
+        return { ...entry, label: trimmed };
+      }
+      return entry;
+    });
+    if (!changed) return {};
+    saveTaskSessionState(s.activeTaskSession, history);
+    return { taskSessionHistory: history };
+  }),
+  deleteTaskSession: (id) => set((s) => {
+    const history = s.taskSessionHistory.filter((entry) => entry.id !== id);
+    if (history.length === s.taskSessionHistory.length) return {};
+    const viewedTaskSessionId = s.viewedTaskSessionId === id ? null : s.viewedTaskSessionId;
+    saveTaskSessionState(s.activeTaskSession, history);
+    return { taskSessionHistory: history, viewedTaskSessionId };
+  }),
   quickAskConversations: [],
   trackQuickAskConversation: (id) => set((s) => ({
     quickAskConversations: s.quickAskConversations.includes(id)

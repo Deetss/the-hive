@@ -1,0 +1,47 @@
+export interface HumanQA {
+  q: string;
+  /** Default 'question'. 'action' = human must DO something (sets doneAt when complete).
+   *  'review' = human must approve a doc (sets approved). */
+  kind?: 'question' | 'action' | 'review';
+  a?: string;
+  askedAt?: string;
+  answeredAt?: string;
+  /** Set when the human dismisses the ask from the ASK ME board WITHOUT answering —
+   *  the question stays on the card (history is preserved) but openQuestion() stops
+   *  returning it, so the card leaves ASK ME. */
+  dismissedAt?: string;
+  /** action entries: ISO timestamp when the human completed the action. */
+  doneAt?: string;
+  /** review entries: path to the document or report to review. */
+  docPath?: string;
+  /** review entries: true = approved, false = changes requested. undefined = pending. */
+  approved?: boolean;
+}
+
+export interface HiveTask {
+  id: string;
+  title: string;
+  description?: string;
+  assignee?: string;
+  status: 'todo' | 'doing' | 'blocked' | 'done';
+  dependsOn: string[];
+  priority: number;
+  createdAt: string;
+  /** First-class human feedback: the god appends {q} when a card needs the human;
+   *  the ASK ME view fills in {a}. Full history stays on the card. */
+  humanQA?: HumanQA[];
+}
+
+export interface TaskSessionSnapshot {
+  id: string;
+  label: string;
+  startedAt: number;
+  endedAt: number;
+  tasks: HiveTask[];
+}
+
+export interface ActiveTaskSession {
+  id: string;
+  label: string;
+  startedAt: number;
+}
