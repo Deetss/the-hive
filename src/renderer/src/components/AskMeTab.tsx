@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PixelButton } from './PixelButton';
+import { Markdown } from './Markdown';
 import { useStore } from '@/store/store';
 
 /**
@@ -48,7 +49,7 @@ export function AskMeTab() {
             </span>
           </div>
           <div style={{ padding: 9, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 14, lineHeight: '19px', color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap' }}>{msg.body}</div>
+            <Markdown text={msg.body} style={{ fontSize: 14, lineHeight: '19px', color: 'var(--cth-ink-900)' }} />
             <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
               <textarea
                 value={msg.replyDraft}
