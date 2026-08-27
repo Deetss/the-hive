@@ -1067,7 +1067,10 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                     <Row label={config.autoMode && preset.autoFlag ? 'Command (auto mode on)' : 'Command'}>
                       <input
                         value={command}
-                        onChange={(e) => setCommand(e.target.value)}
+                        onChange={(e) => {
+                          if (profileId !== undefined) setProfileId(undefined);
+                          setCommand(e.target.value);
+                        }}
                         placeholder={
                           provider === 'antigravity'
                             ? 'agy'
