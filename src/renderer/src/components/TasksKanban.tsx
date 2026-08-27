@@ -3,6 +3,7 @@ import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { PixelBadge } from './PixelBadge';
 import { Icon } from './Icon';
+import { UatPanel } from './UatPanel';
 import { useStore } from '@/store/store';
 
 /** A card on the task kanban. Mirrors HiveTask in the main/preload process —
@@ -157,6 +158,8 @@ export function TasksKanban() {
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [acting, setActing] = useState<string | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [view, setView] = useState<'tasks' | 'uat'>('tasks');
+  const [uatPending, setUatPending] = useState(0);
 
   const refresh = useCallback(async () => {
     try { setTasks(parseTasks(await window.cth.hiveTasks())); } catch { /* keep last good */ }
@@ -234,10 +237,57 @@ export function TasksKanban() {
         ?? id)
       : undefined;
 
+  const baseToggleStyle = {
+    fontFamily: 'var(--cth-font-display)',
+    fontSize: 9,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase'
+  };
+  const activeToggleStyle = {
+    background: 'var(--cth-ink-900)',
+    color: 'var(--cth-cream-50)',
+    boxShadow: 'inset 0 0 0 1px var(--cth-ink-900), 0 1px 0 var(--cth-ink-900)'
+  };
+  const uatBadgeStatus = uatPending > 0 ? 'waiting' : 'success';
+  const uatBadgeLabel = uatPending > 0
+    ? `${uatPending} UAT ${uatPending === 1 ? 'item' : 'items'} open`
+    : 'UAT clear';
+
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--cth-paper-200)', position: 'relative' }}>
-      {/* Assigned to me — pending humanQA items across all tasks */}
-      {pendingItems.length > 0 && (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', flexShrink: 0,
+        borderBottom: '1px solid var(--cth-ink-300)', background: 'var(--cth-paper-100)'
+      }}>
+        <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 9, color: 'var(--cth-ink-500)', letterSpacing: '0.08em' }}>
+          MODES
+        </span>
+        <PixelButton
+          variant="secondary"
+          size="sm"
+          onClick={() => setView('tasks')}
+          style={{ ...baseToggleStyle, ...(view === 'tasks' ? activeToggleStyle : {}) }}
+        >
+          TASK BOARD
+        </PixelButton>
+        <PixelButton
+          variant="secondary"
+          size="sm"
+          onClick={() => setView('uat')}
+          style={{ ...baseToggleStyle, ...(view === 'uat' ? activeToggleStyle : {}) }}
+        >
+          UAT CHECKLIST
+        </PixelButton>
+        <div style={{ marginLeft: 'auto' }}>
+          <PixelBadge status={uatBadgeStatus} label={uatBadgeLabel} />
+        </div>
+      </div>
+
+      <div style={{
+        flex: 1, minHeight: 0, display: view === 'tasks' ? 'flex' : 'none', flexDirection: 'column'
+      }}>
+        {/* Assigned to me — pending humanQA items across all tasks */}
+        {pendingItems.length > 0 && (
         <div style={{ flexShrink: 0, borderBottom: '2px solid var(--cth-ink-300)' }}>
           <button
             onClick={() => setAtmeCollapsed((v) => !v)}
@@ -451,6 +501,13 @@ export function TasksKanban() {
             </div>
           );
         })}
+        </div>
+      </div>
+
+      <div style={{
+        flex: 1, minHeight: 0, display: view === 'uat' ? 'flex' : 'none', flexDirection: 'column', padding: 10
+      }}>
+        <UatPanel onPendingChange={setUatPending} />
       </div>
     </div>
   );
