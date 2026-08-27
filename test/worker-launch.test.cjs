@@ -62,7 +62,7 @@ test("auto-mode appends the PROVIDER'S flag, not claude's", () => {
   // A codex worker given --permission-mode would still stall at its first ask;
   // each provider's preset knows its own flag, same as the renderer's spawn path.
   const codex = launch({ requestCommand: 'codex', autoMode: true });
-  assert.deepEqual(codex.args, ['--dangerously-bypass-approvals-and-sandbox']);
+  assert.deepEqual(codex.args, ['--dangerously-bypass-approvals-and-sandbox', '--dangerously-bypass-hook-trust']);
   const agy = launch({ requestCommand: 'agy', autoMode: true });
   assert.deepEqual(agy.args, ['--dangerously-skip-permissions']);
   const kimi = launch({ requestCommand: 'kimi', autoMode: true });
@@ -71,10 +71,10 @@ test("auto-mode appends the PROVIDER'S flag, not claude's", () => {
 
 test('an explicit stance wins for non-claude providers too (no doubled flag)', () => {
   const l = launch({
-    requestCommand: 'codex --dangerously-bypass-approvals-and-sandbox',
+    requestCommand: 'codex --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust',
     autoMode: true
   });
-  assert.deepEqual(l.args, ['--dangerously-bypass-approvals-and-sandbox']);
+  assert.deepEqual(l.args, ['--dangerously-bypass-approvals-and-sandbox', '--dangerously-bypass-hook-trust']);
 });
 
 test('a provider whose preset declares no auto flag gets nothing appended', () => {
@@ -94,7 +94,8 @@ test("an explicit request provider picks that provider's flag for a custom binar
   assert.deepEqual(l.args, ['--dangerously-bypass-approvals-and-sandbox']);
 });
 
-test('a missing command falls back to the default, then to claude', () => {
+test('a missing command falls back to the provider default, then configured default, then claude', () => {
+  assert.equal(launch({ requestProvider: 'codex', defaultCommand: 'claude' }).bin, 'codex');
   assert.equal(launch({ defaultCommand: 'codex --full-auto' }).bin, 'codex');
   assert.equal(launch({}).bin, 'claude');
 });
