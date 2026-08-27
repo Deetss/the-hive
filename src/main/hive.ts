@@ -2034,13 +2034,19 @@ export class HiveManager {
             has_user_event INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0
           )`);
           const now = Math.floor(Date.now() / 1000);
+          // INSERT OR REPLACE (not IGNORE): the state_5.sqlite is copied from the
+          // user's personal ~/.codex which may already contain a hive-pretrust row
+          // for a DIFFERENT cwd (e.g. the hive root). A truncated base64 id can
+          // collide when paths share a long prefix (e.g. hive root vs worktree), so
+          // we use the full base64url of agentCwd — unique per path — and OR REPLACE
+          // so the cwd is always the actual spawn cwd even if a stale row exists.
           db.prepare(`
-            INSERT OR IGNORE INTO threads
+            INSERT OR REPLACE INTO threads
               (id, rollout_path, created_at, updated_at, source, model_provider,
                cwd, title, sandbox_policy, approval_mode)
             VALUES (?, '', ?, ?, 'cli', 'hive-pretrust', ?, 'hive pre-trust',
                     '{"type":"disabled"}', 'never')
-          `).run('hive-pretrust-' + Buffer.from(agentCwd).toString('base64').slice(0, 20),
+          `).run('hive-pretrust-' + Buffer.from(agentCwd).toString('base64url'),
             now, now, codexCwd);
           db.close();
         } catch { /* best-effort — a real session will still create the trust entry */ }
