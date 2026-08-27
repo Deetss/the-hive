@@ -2558,11 +2558,9 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   // Profile command override (D2): if a profile pins a specific engine binary and
   // the passed command is still the global default (user didn't override it), swap
   // in the profile's command. Explicit modal/opts.command always wins.
-  if (opts.hive?.profileId) {
-    const profile = getRuntimeProfile(opts.hive.profileId);
-    if (profile?.command && opts.command === readConfig().defaultCommand) {
-      opts.command = profile.command;
-    }
+  const runtimeProfile = opts.hive?.profileId ? getRuntimeProfile(opts.hive.profileId) : undefined;
+  if (runtimeProfile?.command && opts.command === readConfig().defaultCommand) {
+    opts.command = runtimeProfile.command;
   }
   // Which CLI is this? Explicit wins; else inferred from the binary
   // (claude/codex/grok/agy). Non-Claude providers skip every Claude-only spawn step
@@ -2580,7 +2578,12 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   if (claudeProvider && governorMode === 'red') {
     const cfg0 = readConfig();
     if ((cfg0.governorPolicy?.enabled ?? true) && cfg0.governorPolicy?.manualOverride !== 'force-green') {
-      return { ok: false, error: 'Usage governor: Claude spawn blocked (rate-limit window critical). Use edgentic or Azure delegate.' };
+      const profileState = governorProfileState(opts.hive?.profileId ?? null);
+      if (profileState.mode === 'red') {
+        const profileLabel = runtimeProfile?.name ?? opts.hive?.profileId ?? 'default Claude account';
+        const reasonSuffix = profileState.reason ? ` — ${profileState.reason}` : '';
+        return { ok: false, error: `Usage governor: Claude spawn blocked for ${profileLabel}${reasonSuffix}. Use edgentic or Azure delegate.` };
+      }
     }
   }
   // ── Missing engine CLI → run its installer visibly (pre-spawn) ───────────────
@@ -2768,7 +2771,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     // else cfg.defaultModel; else the role-based tier. Overmind always uses its own
     // engine config (overmindProvider/overmindModel) via modelForRole.
     if (!args.includes('--model')) {
-      const profileModel = opts.hive?.profileId ? getRuntimeProfile(opts.hive.profileId)?.model : undefined;
+      const profileModel = runtimeProfile?.model;
       const m = opts.hive.isOvermind
         ? modelForRole(opts.hive, cfg)
         : profileModel ?? cfg.defaultModel ?? modelForRole(opts.hive, cfg);
@@ -2832,7 +2835,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     // The Claude block has the same guard; non-Claude providers need it too so that
     // a profile's model is honoured even when the command string omits --model.
     if (!ncArgs.includes('--model') && preset.supportsModel && preset.modelFlag) {
-      const profileModel2 = opts.hive?.profileId ? getRuntimeProfile(opts.hive.profileId)?.model : undefined;
+      const profileModel2 = runtimeProfile?.model;
       if (profileModel2) ncArgs.push(preset.modelFlag, profileModel2);
     }
     opts.args = ncArgs;
@@ -2959,21 +2962,20 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   // (e.g. codex) routes all API calls to that endpoint. MAIN-ONLY — key never
   // crosses IPC; baseUrl is already validated by isSafeHttpUrl at profile save.
   if (opts.hive?.profileId) {
-    const cloudProfile = getRuntimeProfile(opts.hive.profileId);
-    if (cloudProfile?.baseUrl && cloudProfile.apiKeyRef) {
+    if (runtimeProfile?.baseUrl && runtimeProfile.apiKeyRef) {
       // Re-validate at spawn time: a stale or tampered config.json could carry a URL
       // that passed validation when saved but now targets a private or unsafe host.
-      if (isSafeHttpUrl(cloudProfile.baseUrl, cloudProfile.allowPrivate ?? false)) {
-        const cloudKey = integrations.getSecret(cloudProfile.apiKeyRef);
+      if (isSafeHttpUrl(runtimeProfile.baseUrl, runtimeProfile.allowPrivate ?? false)) {
+        const cloudKey = integrations.getSecret(runtimeProfile.apiKeyRef);
         if (cloudKey) {
           opts.env = {
             ...(opts.env ?? {}),
-            OPENAI_BASE_URL: cloudProfile.baseUrl,
+            OPENAI_BASE_URL: runtimeProfile.baseUrl,
             OPENAI_API_KEY: cloudKey
           };
         }
       } else {
-        console.warn(`[spawn] profile ${cloudProfile.id} baseUrl failed SSRF check at spawn — endpoint not injected`);
+        console.warn(`[spawn] profile ${runtimeProfile.id} baseUrl failed SSRF check at spawn — endpoint not injected`);
       }
     }
   }
@@ -5361,10 +5363,27 @@ function runWorkerWakeBeat(): void {
 const WINDOW_5H_MS = 5 * 60 * 60 * 1000;
 const WINDOW_7D_MS = 7 * 24 * 60 * 60 * 1000;
 
+type GovernorLevel = 'green' | 'yellow' | 'red';
+
 /** Current governor mode (persisted across beats; IPC-pushed to renderer). */
-let governorMode: 'green' | 'yellow' | 'red' = 'green';
+let governorMode: GovernorLevel = 'green';
 /** Agent ids paused by the governor (so we can un-pause on recovery). */
 const governorPausedAgents = new Set<string>();
+/** Per-profile governor severity (rebuilt each beat). */
+const governorProfileStates = new Map<string, { mode: GovernorLevel; reason: string }>();
+const DEFAULT_CLAUDE_PROFILE_KEY = '__default_claude_profile__';
+
+function claudeAccountKey(profileId?: string | null): string {
+  if (typeof profileId === 'string') {
+    const trimmed = profileId.trim();
+    if (trimmed) return trimmed;
+  }
+  return DEFAULT_CLAUDE_PROFILE_KEY;
+}
+
+function governorProfileState(profileId?: string | null): { mode: GovernorLevel; reason?: string } {
+  return governorProfileStates.get(claudeAccountKey(profileId)) ?? { mode: 'green' };
+}
 
 /** One governor beat: evaluate pace vs usage for both rate-limit windows, set the
  *  floor mode (GREEN/YELLOW/RED), pause/unblock Claude agents, and push the mode
@@ -5399,9 +5418,11 @@ function runGovernorBeat(): void {
   // Pull rate limits across all recently-active agents; take worst pct per window.
   const allLimits = hookServer.allRateLimits();
   const now = Date.now();
+  const limitEntries = Object.entries(allLimits);
+  const reg = hive.registry();
   let maxFiveHour: { pct: number; resetsAt: string } | null = null;
   let maxSevenDay: { pct: number; resetsAt: string } | null = null;
-  for (const entry of Object.values(allLimits)) {
+  for (const [, entry] of limitEntries) {
     if (now - entry.ts > recentMs) continue; // stale — skip
     if (entry.fiveHour && (!maxFiveHour || entry.fiveHour.pct > maxFiveHour.pct)) maxFiveHour = entry.fiveHour;
     if (entry.sevenDay && (!maxSevenDay || entry.sevenDay.pct > maxSevenDay.pct)) maxSevenDay = entry.sevenDay;
@@ -5429,8 +5450,32 @@ function runGovernorBeat(): void {
   const seven = maxSevenDay ? evalWindow(maxSevenDay.pct, maxSevenDay.resetsAt, WINDOW_7D_MS) : null;
 
   // Take the more conservative window (highest-severity)
-  const rank = (l: 'green' | 'yellow' | 'red' | undefined) => l === 'red' ? 2 : l === 'yellow' ? 1 : 0;
-  let newMode: 'green' | 'yellow' | 'red' = 'green';
+  const rank = (l: GovernorLevel | undefined) => l === 'red' ? 2 : l === 'yellow' ? 1 : 0;
+  const profileStates = new Map<string, { level: GovernorLevel; reason: string }>();
+  for (const [agentId, entry] of limitEntries) {
+    if (now - entry.ts > recentMs) continue;
+    const meta = reg.agents?.[agentId];
+    if (!meta) continue;
+    const provider = (meta.provider as AgentProvider | undefined) ?? 'claude';
+    if (!isClaudeProvider(provider)) continue;
+    const fiveEval = entry.fiveHour ? evalWindow(entry.fiveHour.pct, entry.fiveHour.resetsAt, WINDOW_5H_MS) : null;
+    const sevenEval = entry.sevenDay ? evalWindow(entry.sevenDay.pct, entry.sevenDay.resetsAt, WINDOW_7D_MS) : null;
+    let best = fiveEval;
+    if (!best || (sevenEval && rank(sevenEval.level) > rank(best.level))) best = sevenEval;
+    if (!best) continue;
+    const key = claudeAccountKey(meta.profileId);
+    const prev = profileStates.get(key);
+    if (!prev || rank(best.level) > rank(prev.level)) {
+      profileStates.set(key, { level: best.level as GovernorLevel, reason: best.reason });
+    }
+  }
+  governorProfileStates.clear();
+  for (const [key, value] of profileStates.entries()) {
+    if (value.level === 'green') continue;
+    governorProfileStates.set(key, { mode: value.level, reason: value.reason });
+  }
+
+  let newMode: GovernorLevel = 'green';
   let reason = 'all clear';
   if ((rank(five?.level) >= rank(seven?.level)) && five) { newMode = five.level; reason = `5h: ${five.reason}`; }
   else if (seven) { newMode = seven.level; reason = `7d: ${seven.reason}`; }
@@ -5440,7 +5485,6 @@ function runGovernorBeat(): void {
 
   if (newMode === 'red' && prevMode !== 'red') {
     // Escalate to RED: pause active Claude agents + notify god
-    const reg = hive.registry();
     for (const [id, a] of Object.entries(reg.agents)) {
       if (a.archived || a.isOvermind) continue;
       if (!isClaudeProvider(a.provider as AgentProvider ?? 'claude')) continue;
