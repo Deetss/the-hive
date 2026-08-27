@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useStore, selectedAgent } from '@/store/store';
 import { startMockLoop, stopMockLoop } from '@/store/mockEvents';
 import type { HarnessConfig } from '@/store/config';
@@ -71,6 +71,16 @@ export function App() {
   const [closing, setClosing] = useState<ClosingTimeState | null>(null);
   const [vpWidth, setVpWidth] = useState<number>(window.innerWidth);
 
+  // Open Settings with a fresh config read so local state in SettingsModal
+  // initializes from the current disk value, not the stale load-time snapshot.
+  // Without this, a setting changed in SettingsModal would appear to reset the
+  // next time Settings opened in the same session (the prop hadn't updated).
+  const openSettings = useCallback((section?: SettingsSection) => {
+    window.cth.getConfig().then(fresh => setConfig(fresh)).catch(() => {/* use stale on failure */});
+    setSettingsSection(section);
+    setSettingsOpen(true);
+  }, []);
+
   // Deep link into Settings from anywhere in the tree. Settings' open state is
   // local to App, so a nested control (e.g. "set it now" beside a disabled Talk
   // button) has no path to it without threading a prop through every layer
@@ -79,12 +89,11 @@ export function App() {
   useEffect(() => {
     const onOpenSettings = (e: Event): void => {
       const section = (e as CustomEvent<{ section?: SettingsSection }>).detail?.section;
-      setSettingsSection(section);
-      setSettingsOpen(true);
+      openSettings(section);
     };
     window.addEventListener('cth:open-settings', onOpenSettings);
     return () => window.removeEventListener('cth:open-settings', onOpenSettings);
-  }, []);
+  }, [openSettings]);
 
   // Initial config load
   useEffect(() => {
@@ -374,7 +383,7 @@ export function App() {
             (sidebar detail, god Command Center, fullscreen) carries it. */}
         <button
           className="cth-titlebar-nodrag cth-settings-btn cth-tip"
-          onClick={() => { setSettingsSection(undefined); setSettingsOpen(true); }}
+          onClick={() => openSettings()}
           data-tip="Settings"
           aria-label="Settings"
           style={{
