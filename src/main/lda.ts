@@ -14,7 +14,8 @@ import type {
   LdaResult,
   LdaHealthResult,
   LocalDelegateConfig,
-  LdaUsageMetrics
+  LdaUsageMetrics,
+  LdaProviderKind
 } from '../shared/localDelegate';
 
 const execFileAsync = promisify(execFile);
