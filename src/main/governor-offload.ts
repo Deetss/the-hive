@@ -5,9 +5,12 @@ import { readConfig, resolveHarnessHome } from './config';
 import type { AutoOffloadConfig } from './config';
 import type { AgentProvider } from '../shared/agentProvider';
 
-const DEFAULT_TRY_ORDER = ['edgentic', 'azure'];
+const DEFAULT_TRY_ORDER = ['edgentic', 'azure-mini', 'azure-codex'];
 const DEFAULT_MAX_CONCURRENT = 2;
 const DEFAULT_HEALTHCHECK_TIMEOUT_MS = 2000;
+const DEFAULT_TARGET_MAX_CONCURRENT = 2;
+const DEFAULT_MAX_REQUEUES = 3;
+const DEFAULT_HOLD_NOTIFY_INTERVAL_MS = 10 * 60 * 1000;
 
 interface OffloadTargetDefinition {
   wire?: string;
@@ -20,6 +23,11 @@ interface OffloadTargetDefinition {
   command?: string;
   name?: string;
   tokenCap?: number;
+  /** Per-target concurrent-worker cap. Overrides the policy default. Heavy codex
+   *  is the real constraint (~2-3 at current Azure quota). */
+  maxConcurrent?: number;
+  /** Per-target tokens/minute ceiling. 0/undefined = no tok/min gate. */
+  tokensPerMinute?: number;
 }
 
 interface OffloadManifest {
@@ -35,6 +43,10 @@ export interface ResolvedAutoOffloadConfig {
   maxConcurrent: number;
   healthCheckTimeoutMs: number;
   dryRun: boolean;
+  defaultTargetMaxConcurrent: number;
+  defaultTokensPerMinute: number;
+  maxRequeues: number;
+  holdNotifyIntervalMs: number;
 }
 
 export interface HealthyOffloadTarget extends OffloadTargetDefinition {
@@ -52,6 +64,14 @@ export interface OffloadWorkSpec {
   tokenCap?: number;
   isolate?: boolean;
   targetPreference?: string[];
+  /** Claude account key this work WOULD have run under, so the per-profile RED
+   *  gate (G4) offloads only work whose own account is over cap. */
+  accountKey?: string;
+  /** Targets already tried and failed for this objective — pickTarget skips them
+   *  so a requeue lands on a different endpoint (§6 failure rollback). */
+  excludeTargets?: string[];
+  /** Requeue count, for the poison-spec cap. Internal. */
+  requeues?: number;
 }
 
 export interface OffloadSpawnResult {
@@ -59,15 +79,28 @@ export interface OffloadSpawnResult {
   filePath: string;
 }
 
+/** Callback for surfacing held/dropped work to god without importing index.ts. */
+export type OffloadNotify = (subject: string, body: string) => void;
+
 export interface AttemptGovernorOffloadsOptions {
   policy?: AutoOffloadConfig;
   hiveRoot?: string | null;
   pendingObjectives?: OffloadWorkSpec[];
+  /** Claude account keys currently RED. When provided, only specs whose
+   *  `accountKey` is in this set are offloaded (G4 per-profile trigger). A spec
+   *  with no `accountKey` is always eligible (the beat only calls while RED). */
+  redProfiles?: string[];
+  notify?: OffloadNotify;
 }
 
 const queuedObjectives: OffloadWorkSpec[] = [];
-const activeRequestIds = new Set<string>();
+/** offload spawn-request id -> target id, so a slot is released per target when
+ *  the worker terminates (G2). Was a bare Set that was never drained. */
+const activeRequests = new Map<string, string>();
+/** target id -> rolling token-spend samples for the per-target tok/min gate. */
+const targetTokenSpend = new Map<string, Array<{ ts: number; tokens: number }>>();
 let attemptRunning = false;
+let lastHoldNotifyAt = 0;
 
 export function loadAutoOffloadConfig(policy?: AutoOffloadConfig, hiveRoot?: string | null): ResolvedAutoOffloadConfig {
   const configPolicy = policy ?? readConfig().governorPolicy?.autoOffload ?? {};
@@ -85,7 +118,14 @@ export function loadAutoOffloadConfig(policy?: AutoOffloadConfig, hiveRoot?: str
   const maxConcurrent = numberWithFallback(configPolicy.maxConcurrent, DEFAULT_MAX_CONCURRENT);
   const healthCheckTimeoutMs = numberWithFallback(configPolicy.healthCheckTimeoutMs, DEFAULT_HEALTHCHECK_TIMEOUT_MS);
   const dryRun = configPolicy.dryRun === true;
-  return { enabled, targetsFile, tryOrder, maxConcurrent, healthCheckTimeoutMs, dryRun };
+  const defaultTargetMaxConcurrent = numberWithFallback(configPolicy.defaultTargetMaxConcurrent, DEFAULT_TARGET_MAX_CONCURRENT);
+  const defaultTokensPerMinute = numberWithFallback(configPolicy.defaultTokensPerMinute, 0);
+  const maxRequeues = numberWithFallback(configPolicy.maxRequeues, DEFAULT_MAX_REQUEUES);
+  const holdNotifyIntervalMs = numberWithFallback(configPolicy.holdNotifyIntervalMs, DEFAULT_HOLD_NOTIFY_INTERVAL_MS);
+  return {
+    enabled, targetsFile, tryOrder, maxConcurrent, healthCheckTimeoutMs, dryRun,
+    defaultTargetMaxConcurrent, defaultTokensPerMinute, maxRequeues, holdNotifyIntervalMs
+  };
 }
 
 export function queueOffloadObjective(spec: OffloadWorkSpec): void {
@@ -95,6 +135,39 @@ export function queueOffloadObjective(spec: OffloadWorkSpec): void {
 
 export function pendingOffloadObjectives(): OffloadWorkSpec[] {
   return [...queuedObjectives];
+}
+
+/** Free the concurrency slot a terminated offload worker held (G2). Idempotent
+ *  and a no-op for ids we don't track, so index.ts can call it for EVERY worker
+ *  teardown and every spawn-request failure without checking provenance first. */
+export function releaseOffloadSlot(reqId: string): void {
+  if (reqId) activeRequests.delete(reqId);
+}
+
+/** How many active offload workers are running against one target. */
+function countActiveForTarget(targetId: string): number {
+  let n = 0;
+  for (const id of activeRequests.values()) if (id === targetId) n += 1;
+  return n;
+}
+
+/** Re-queue an offloaded objective whose worker failed / was reaped, onto a
+ *  DIFFERENT target (§6). Frees the slot, bumps the requeue count, and after
+ *  `maxRequeues` HOLDS the work (informing god once) instead of looping. */
+export function requeueOffloadObjective(reqId: string, spec: OffloadWorkSpec, failedTargetId?: string, notify?: OffloadNotify): void {
+  releaseOffloadSlot(reqId);
+  if (!spec?.objective || !spec.cwd) return;
+  const resolved = loadAutoOffloadConfig();
+  const attempts = (spec.requeues ?? 0) + 1;
+  if (attempts > resolved.maxRequeues) {
+    notify?.(
+      `[offload held] ${spec.name ?? spec.objective.slice(0, 40)}`,
+      `Offload objective failed on ${attempts} targets (last: ${failedTargetId ?? 'unknown'}) and hit the requeue cap (${resolved.maxRequeues}). Held — not retried. Objective: ${spec.objective}`
+    );
+    return;
+  }
+  const exclude = dedupeStrings([...(spec.excludeTargets ?? []), ...(failedTargetId ? [failedTargetId] : [])]);
+  queuedObjectives.push({ ...spec, requeues: attempts, excludeTargets: exclude });
 }
 
 export async function attemptGovernorOffloads(options: AttemptGovernorOffloadsOptions = {}): Promise<void> {
@@ -107,36 +180,38 @@ export async function attemptGovernorOffloads(options: AttemptGovernorOffloadsOp
     return;
   }
   const spawnDir = join(hiveRoot, 'spawn-requests');
-  const queue = [...queuedObjectives, ...(options.pendingObjectives ?? [])];
-  if (!queue.length) return;
-  const limit = Math.max(0, resolved.maxConcurrent - activeRequestIds.size);
-  if (limit <= 0) return;
+  const redProfiles = options.redProfiles && options.redProfiles.length ? new Set(options.redProfiles) : null;
+  const snapshot = [...queuedObjectives, ...(options.pendingObjectives ?? [])];
+  if (!snapshot.length) return;
+  let globalLimit = Math.max(0, resolved.maxConcurrent - activeRequests.size);
+  if (globalLimit <= 0) return;
   attemptRunning = true;
   try {
     const targets = await findHealthyTargets(resolved.targetsFile, resolved.tryOrder, resolved.healthCheckTimeoutMs);
     if (!targets.length) {
-      console.warn('[governor-offload] no healthy offload targets');
+      maybeNotifyHold(resolved, options.notify);
       return;
     }
-    let processed = 0;
-    while (processed < limit && queue.length) {
-      const next = queue.shift();
-      if (!next) break;
+    for (const next of snapshot) {
+      if (globalLimit <= 0) break;
+      // G4: offload only work whose OWNING profile is RED.
+      if (redProfiles && next.accountKey && !redProfiles.has(next.accountKey)) continue;
+      // Per-target concurrency + tok/min gate: skip a saturated/throttled target so
+      // pickTarget falls through tryOrder instead of piling onto it (§4).
+      const candidates = targets.filter((t) => targetHasCapacity(t, resolved) && !(next.excludeTargets ?? []).includes(t.id));
+      const target = pickTarget(next, candidates);
+      if (!target) continue; // no capacity anywhere this beat — leave it queued
       consumeQueuedObjective(next);
-      const target = pickTarget(next, targets);
-      if (!target) {
-        console.warn('[governor-offload] no suitable target for objective');
-        continue;
-      }
       if (resolved.dryRun) {
-        console.log(`[governor-offload] dry-run: would offload objective "${next.objective}" to ${target.id}`);
-        processed += 1;
+        console.log(`[governor-offload] dry-run: would offload "${next.objective}" to ${target.id}`);
+        globalLimit -= 1;
         continue;
       }
       const result = createOffloadSpawnRequest(spawnDir, target, next);
       if (result) {
-        activeRequestIds.add(result.id);
-        processed += 1;
+        activeRequests.set(result.id, target.id);
+        recordTargetSpend(target.id, next.tokenCap ?? 0);
+        globalLimit -= 1;
       }
     }
   } finally {
@@ -225,8 +300,47 @@ function buildSpawnRequest(id: string, target: HealthyOffloadTarget, spec: Offlo
   if (target.command) payload.command = target.command;
   if (spec.tokenCap ?? target.tokenCap) payload.tokenCap = spec.tokenCap ?? target.tokenCap;
   if (spec.slack) payload.slack = spec.slack;
-  payload.hive = { offload: { target: target.id } };
+  // Provenance round-trips the target id + owning account so a reaped worker can be
+  // requeued onto a different target and re-gated per-profile (§6, G4).
+  payload.hive = { offload: { target: target.id, accountKey: spec.accountKey } };
   return payload;
+}
+
+/** True when a target has both a free concurrency slot AND tok/min headroom. */
+function targetHasCapacity(target: HealthyOffloadTarget, resolved: ResolvedAutoOffloadConfig): boolean {
+  const cap = target.maxConcurrent ?? resolved.defaultTargetMaxConcurrent;
+  if (cap > 0 && countActiveForTarget(target.id) >= cap) return false;
+  return targetTokenBudgetOk(target, resolved);
+}
+
+function targetTokenBudgetOk(target: HealthyOffloadTarget, resolved: ResolvedAutoOffloadConfig): boolean {
+  const ceiling = target.tokensPerMinute ?? resolved.defaultTokensPerMinute;
+  if (!ceiling || ceiling <= 0) return true; // no gate configured for this target
+  const now = Date.now();
+  const samples = (targetTokenSpend.get(target.id) ?? []).filter((s) => now - s.ts < 60_000);
+  targetTokenSpend.set(target.id, samples);
+  const spent = samples.reduce((a, s) => a + s.tokens, 0);
+  return spent < ceiling;
+}
+
+function recordTargetSpend(targetId: string, tokens: number): void {
+  if (!tokens || tokens <= 0) return;
+  const now = Date.now();
+  const samples = (targetTokenSpend.get(targetId) ?? []).filter((s) => now - s.ts < 60_000);
+  samples.push({ ts: now, tokens });
+  targetTokenSpend.set(targetId, samples);
+}
+
+function maybeNotifyHold(resolved: ResolvedAutoOffloadConfig, notify?: OffloadNotify): void {
+  console.warn('[governor-offload] no healthy offload targets — work held');
+  if (!notify) return;
+  const now = Date.now();
+  if (now - lastHoldNotifyAt < resolved.holdNotifyIntervalMs) return;
+  lastHoldNotifyAt = now;
+  notify(
+    '[offload held] no healthy target',
+    'Governor is RED and offload-eligible work is queued, but no offload target is healthy (down / throttled / missing key). Work is HELD and will drain when a target recovers or the window resets. Not routed onto a paused Claude account.'
+  );
 }
 
 function providerFromWire(wire?: string): AgentProvider | undefined {
