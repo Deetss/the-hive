@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelBadge } from './PixelBadge';
 import { PixelButton } from './PixelButton';
@@ -165,6 +165,9 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
     setDispatchSeed({ text: dispatchSeedRequest.text, seq: dispatchSeedRequest.seq });
     clearDispatchSeedRequest();
   }, [dispatchSeedRequest, clearDispatchSeedRequest]);
+  // Reset once FloorTab has consumed the seed so a later remount (tab switch)
+  // can't re-inject stale text into a field the user already dispatched + cleared.
+  const resetDispatchSeed = useCallback(() => setDispatchSeed({ text: '', seq: 0 }), []);
   // Lifted so the memory-graph tab can jump to a specific agent's memory file.
   const [selectedMemoryAgent, setSelectedMemoryAgent] = useState<string | null>(null);
   const updateAgent = useStore((s) => s.updateAgent);
@@ -337,7 +340,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
             <Centered>Abathur has no live terminal.</Centered>
           )
         )}
-        {tab === 'floor' && <FloorTab seed={dispatchSeed} />}
+        {tab === 'floor' && <FloorTab seed={dispatchSeed} onSeedConsumed={resetDispatchSeed} />}
         {tab === 'tasks' && <TasksKanban />}
         {tab === 'ask' && <QuickAskPanel />}
         {tab === 'human' && <AskMeTab />}
@@ -362,7 +365,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
 
 // ─── Floor tab — roster, model, dispatch, dirs, assistant ────────────────────
 
-function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
+function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number }; onSeedConsumed: () => void }) {
   const agents = useStore((s) => s.agents);
   const select = useStore((s) => s.select);
   const updateAgent = useStore((s) => s.updateAgent);
@@ -409,8 +412,11 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
   // Seed the dispatch box from a task-card "assign" (keyed on seq so repeat
   // assigns re-prefill). seq === 0 is the untouched initial state — skip it.
   useEffect(() => {
-    if (seed.seq > 0) setDispatchText(seed.text);
-  }, [seed.seq, seed.text]);
+    if (seed.seq > 0) {
+      setDispatchText(seed.text);
+      onSeedConsumed(); // clear the parent seed so a remount won't re-seed after dispatch
+    }
+  }, [seed.seq, seed.text, onSeedConsumed]);
 
   // Load local skills once so they appear in the slash-suggest dropdown.
   useEffect(() => {
