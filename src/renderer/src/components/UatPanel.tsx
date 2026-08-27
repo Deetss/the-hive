@@ -32,9 +32,9 @@ const FILENAME = 'uat.json';
 const POLL_MS = 5000;
 
 const STATUS_META: Record<UatStatus, { label: string; color: string; icon: Parameters<typeof Icon>[0]['name'] }> = {
-  pending: { label: 'pending', color: 'var(--cth-lemon)', icon: 'hourglass' },
+  pending: { label: 'pending', color: 'var(--cth-lemon)', icon: 'clock' },
   pass: { label: 'pass', color: 'var(--cth-mint)', icon: 'check' },
-  fail: { label: 'fail', color: 'var(--cth-coral)', icon: 'close' }
+  fail: { label: 'fail', color: 'var(--cth-coral)', icon: 'x' }
 };
 
 function emptyDoc(): UatDocument {
@@ -52,8 +52,8 @@ function parseDoc(raw: string): UatDocument {
       title: typeof parsed.title === 'string' ? parsed.title : undefined,
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : undefined,
       items: items
-        .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-        .map((item) => ({
+        .filter((item: unknown): item is Record<string, unknown> => !!item && typeof item === 'object')
+        .map((item: Record<string, unknown>) => ({
           id: typeof item.id === 'string' && item.id ? item.id : newId(),
           text: typeof item.text === 'string' ? item.text : '(untitled)',
           status: item.status === 'pass' || item.status === 'fail' ? item.status : 'pending',
@@ -310,7 +310,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <PixelBadge
                   label={meta.label}
-                  accent={item.status === 'pass' ? 'mint' : item.status === 'fail' ? 'coral' : 'lemon'}
+                  status={item.status === 'pass' ? 'success' : item.status === 'fail' ? 'blocked' : 'waiting'}
                 />
                 <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 14, color: 'var(--cth-ink-900)', flex: 1 }}>
                   {item.text}
@@ -325,7 +325,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
                     color: 'var(--cth-ink-400)'
                   }}
                 >
-                  <Icon name="trash" />
+                  <Icon name="x" />
                 </button>
               </div>
 
@@ -449,7 +449,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
         <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 10, color: 'var(--cth-ink-500)' }}>
           last updated: {formatTimestamp(doc?.updatedAt)}
         </span>
-        {saving && <PixelBadge label="saving…" accent="sky" />}
+        {saving && <PixelBadge label="saving…" status="thinking" />}
         {error && (
           <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-coral)' }}>
             {error}
