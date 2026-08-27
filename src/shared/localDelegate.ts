@@ -73,11 +73,22 @@ export interface LdaInvokeRequest {
   args: LdaInvokeArgs;
 }
 
+export interface LdaUsageMetrics {
+  provider: string | null;
+  model: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  usd: number;
+}
+
 export interface LdaResult {
   ok: boolean;
   output: string;
   exitCode: number;
   durationMs: number;
+  usage?: LdaUsageMetrics;
 }
 
 export interface LdaHealthResult {

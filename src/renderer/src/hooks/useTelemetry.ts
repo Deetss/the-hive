@@ -22,6 +22,7 @@ export interface AgentUsageSample {
   cacheRead: number;
   cacheCreation: number;
   model: string;
+  provider: string;
   usd: number;
 }
 

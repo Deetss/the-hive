@@ -41,7 +41,7 @@ export interface CommandHistoryRow {
  *     <harnessHome>/hive/cost-ledger.jsonl keys 1:1 for a straight INSERT…SELECT
  *     (coordinated w/ jim-mq290qkn 2026-06-06):
  *       cost_ledger(id, agent_id, session_id TEXT, ts, input, output,
- *                   cache_read, cache_creation, model TEXT, usd REAL)
+ *                   cache_read, cache_creation, model TEXT, provider TEXT, usd REAL)
  *     Rows are CUMULATIVE snapshots (one per agent per heartbeat beat) — diff
  *     consecutive rows for velocity; index (agent_id, session_id, ts). Additive;
  *     lands as a later migration.
