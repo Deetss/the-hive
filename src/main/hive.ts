@@ -2123,9 +2123,10 @@ export class HiveManager {
         config += '\n[windows]\nsandbox = "unelevated"\n';
       }
       if (agentCwd) {
-        // TOML keys with backslashes need single-quoted literal strings.
-        const tomlCwd = agentCwd.replace(/\\/g, '\\\\');
-        config += `\n[projects."${tomlCwd}"]\ntrust_level = "trusted"\n`;
+        // TOML single-quoted literal keys need no backslash escaping. Lowercase
+        // to match the pattern codex itself writes (verified in Oscar's config.toml).
+        const tomlCwd = agentCwd.toLowerCase();
+        config += `\n[projects.'${tomlCwd}']\ntrust_level = "trusted"\n`;
       }
       if (shim) {
         const events = ['PreToolUse', 'PostToolUse', 'Stop', 'SubagentStop',
