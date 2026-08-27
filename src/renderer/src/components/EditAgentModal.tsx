@@ -3,19 +3,23 @@ import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { SpritePortrait } from './SpritePortrait';
 import { ProviderLogo } from './ProviderLogo';
+import { acquireTerminal, resetTerminal } from './terminalPool';
 import { useStore, type Agent } from '@/store/store';
 import { OFFICE_CAST, type OfficeCharacterName } from '@/scene/office/cast';
 import { type AccentColorName } from '@/design/tokens';
 import {
   type AgentProvider,
   type HarnessConfig,
+  type RuntimeProfile,
   AGENT_PROVIDER_PRESETS,
   buildSpawnCommand,
+  tokenizeCommand,
   modelsForProvider,
   inferAgentProvider,
   providerPreset,
   isClaudeProvider
 } from '@/store/config';
+import { roleForHiveSpawn } from '@shared/agentRole';
 
 const ACCENTS: AccentColorName[] = ['coral', 'mint', 'sky', 'lemon', 'lilac', 'peach'];
 
@@ -26,9 +30,9 @@ export interface EditAgentModalProps {
 
 /**
  * Compact post-hire editor for Identity / Engine / Briefing. Mirrors the Add
- * Agent fields that matter after spawn; save only patches the durable roster
- * via updateAgent (engine changes apply on the next restart).
- */
+ * Agent fields that matter after spawn; save patches the durable roster and
+ * transparently restarts the engine when its profile/provider/model changes.
+*/
 export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
   const updateAgent = useStore((s) => s.updateAgent);
   const [config, setConfig] = useState<HarnessConfig | null>(null);
@@ -42,6 +46,9 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
   const [model, setModel] = useState<string | undefined>(agent.model);
   const [description, setDescription] = useState(agent.description);
   const [goal, setGoal] = useState(agent.goal ?? '');
+  const [profileId, setProfileId] = useState<string | undefined>(agent.profileId ?? undefined);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void window.cth.getConfig().then(setConfig).catch(() => setConfig(null));
@@ -56,9 +63,11 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
     setModel(agent.model);
     setDescription(agent.description);
     setGoal(agent.goal ?? '');
+    setProfileId(agent.profileId ?? undefined);
   }, [agent.id]);
 
   const pickProvider = (id: AgentProvider) => {
+    setProfileId(undefined);
     setProvider(id);
     if (!config) {
       setModel(undefined);
@@ -68,27 +77,151 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
     setModel(nextModel);
   };
 
+  const selectModel = (id?: string) => {
+    setProfileId(undefined);
+    setModel(id);
+  };
+
+  const applyProfile = (id: string) => {
+    if (!id) {
+      setProfileId(undefined);
+      return;
+    }
+    const next = (config?.runtimeProfiles ?? []).find((p) => p.id === id);
+    if (!next) {
+      setProfileId(undefined);
+      return;
+    }
+    setProfileId(next.id);
+    setProvider(next.provider);
+    const nextModel = next.model ?? (isClaudeProvider(next.provider)
+      ? config?.defaultModel
+      : config?.providerDefaultModels?.[next.provider]);
+    setModel(nextModel);
+  };
+
   const preset = providerPreset(provider);
+  const runtimeProfiles = config?.runtimeProfiles ?? [];
+  const selectedProfile = profileId ? runtimeProfiles.find((p) => p.id === profileId) : undefined;
 
-  const save = () => {
-    const trimmedName = name.trim() || agent.name;
-    const trimmedDescription = description.trim() || 'a fresh harness';
-    const trimmedGoal = goal.trim();
-    const command = config
-      ? buildSpawnCommand(config, model, provider)
-      : agent.command;
+  const resolveConfig = async (): Promise<HarnessConfig | null> => {
+    if (config) return config;
+    try {
+      const fresh = await window.cth.getConfig();
+      setConfig(fresh);
+      return fresh;
+    } catch {
+      return null;
+    }
+  };
 
-    updateAgent(agent.id, {
+  const restartAgent = async (
+    commandStr: string,
+    runtimeProfile: RuntimeProfile | undefined,
+    trimmedName: string,
+    trimmedDescription: string
+  ) => {
+    if (!agent.ptyId) return;
+    const tokens = tokenizeCommand(commandStr);
+    if (!tokens.length) throw new Error('Engine command is empty.');
+    const [exe, ...args] = tokens;
+    const entry = acquireTerminal(agent.ptyId);
+    let cols = entry.term.cols || 100;
+    let rows = entry.term.rows || 30;
+    try {
+      entry.fit.fit();
+      cols = entry.term.cols;
+      rows = entry.term.rows;
+    } catch { /* layout unchanged */ }
+
+    const killed = await window.cth.killPty(agent.ptyId);
+    if (!killed.ok && !/^no pty:/i.test(killed.error ?? '')) {
+      throw new Error(killed.error ?? 'Could not stop the current process.');
+    }
+
+    resetTerminal(agent.ptyId);
+
+    const hiveMeta = {
+      id: agent.id,
       name: trimmedName,
-      character,
-      accent,
+      cwd: agent.cwd,
       provider,
-      model,
-      command,
-      description: trimmedDescription,
-      goal: trimmedGoal || undefined
+      isOvermind: agent.isOvermind,
+      isAssistant: agent.isAssistant,
+      profileId: runtimeProfile?.id,
+      role: roleForHiveSpawn({ ...agent, description: trimmedDescription })
+    };
+
+    const res = await window.cth.spawnPty({
+      id: agent.ptyId,
+      cwd: agent.cwd,
+      command: exe,
+      args,
+      provider,
+      cols,
+      rows,
+      hive: hiveMeta
     });
-    onClose();
+
+    if (!res.ok) {
+      throw new Error(res.error ?? 'Restart failed.');
+    }
+  };
+
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    setError(null);
+
+    try {
+      const trimmedName = name.trim() || agent.name;
+      const trimmedDescription = description.trim() || 'a fresh harness';
+      const trimmedGoal = goal.trim();
+      const cfg = await resolveConfig();
+      const profiles = cfg?.runtimeProfiles ?? runtimeProfiles;
+      const activeProfile = profileId ? profiles.find((p) => p.id === profileId) : undefined;
+
+      let nextCommand = activeProfile?.command?.trim();
+      if (!nextCommand || !nextCommand.length) {
+        if (cfg) {
+          nextCommand = buildSpawnCommand(cfg, model, provider);
+        } else {
+          nextCommand = agent.command ?? '';
+        }
+      }
+      nextCommand = nextCommand.trim();
+      if (!nextCommand) throw new Error('Could not build a command for this engine.');
+
+      const originalProvider = inferAgentProvider(agent.command, agent.provider);
+      const originalProfileId = agent.profileId ?? undefined;
+      const providerChanged = provider !== originalProvider;
+      const modelChanged = (agent.model ?? undefined) !== (model ?? undefined);
+      const profileChanged = originalProfileId !== (profileId ?? undefined);
+      const commandChanged = (agent.command?.trim() ?? '') !== nextCommand;
+      const engineChanged = providerChanged || modelChanged || profileChanged || commandChanged;
+
+      if (engineChanged && agent.ptyId) {
+        await restartAgent(nextCommand, activeProfile, trimmedName, trimmedDescription);
+      }
+
+      updateAgent(agent.id, {
+        name: trimmedName,
+        character,
+        accent,
+        provider,
+        model,
+        command: nextCommand,
+        profileId: profileId ?? undefined,
+        description: trimmedDescription,
+        goal: trimmedGoal || undefined
+      });
+
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -186,7 +319,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
               </Row>
             </Section>
 
-            <Section label="Engine" hint="provider · model · next restart">
+            <Section label="Engine" hint="provider · model · runtime profile">
               <Row label="Provider">
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {AGENT_PROVIDER_PRESETS.map((p) => {
@@ -197,6 +330,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
                         type="button"
                         onClick={() => pickProvider(p.id)}
                         title={p.label}
+                        disabled={saving}
                         style={{
                           padding: '3px 8px 1px',
                           background: active ? `var(--cth-${accent}-light)` : 'var(--cth-cream-100)',
@@ -204,7 +338,8 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
                             ? 'inset 0 0 0 1.5px var(--cth-ink-500)'
                             : 'inset 0 0 0 1px var(--cth-ink-100)',
                           fontFamily: 'var(--cth-font-ui)', fontSize: 12,
-                          color: 'var(--cth-ink-900)', cursor: 'pointer', border: 'none',
+                          color: 'var(--cth-ink-900)', cursor: saving ? 'not-allowed' : 'pointer', border: 'none',
+                          opacity: saving ? 0.7 : 1,
                           display: 'inline-flex', alignItems: 'center', gap: 6
                         }}
                       >
@@ -215,6 +350,36 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
                   })}
                 </div>
               </Row>
+
+              {runtimeProfiles.length > 0 && (
+                <Row label="Account / profile">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <select
+                      value={profileId ?? ''}
+                      onChange={(e) => applyProfile(e.target.value)}
+                      disabled={saving}
+                      data-testid="profile-select"
+                      title="Saved engine + account bundle. Default account clears the assignment."
+                      style={{
+                        padding: '4px 8px 2px', background: 'var(--cth-cream-100)', border: 'none',
+                        boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)',
+                        fontSize: 12, color: 'var(--cth-ink-900)', outline: 'none', cursor: saving ? 'not-allowed' : 'pointer',
+                        maxWidth: 320, opacity: saving ? 0.7 : 1
+                      }}
+                    >
+                      <option value="">Default account</option>
+                      {runtimeProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    {selectedProfile?.model && (
+                      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-mono)' }}>
+                        {selectedProfile.model}
+                      </span>
+                    )}
+                  </div>
+                </Row>
+              )}
 
               {preset.supportsModel && (
                 <Row label="Model">
@@ -230,7 +395,8 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
                         <button
                           key={m.label}
                           type="button"
-                          onClick={() => setModel(m.id)}
+                          onClick={() => selectModel(m.id)}
+                          disabled={saving}
                           title={m.id ?? 'CLI default model'}
                           style={{
                             padding: '3px 8px 1px',
@@ -239,7 +405,8 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
                               ? 'inset 0 0 0 1.5px var(--cth-ink-500)'
                               : 'inset 0 0 0 1px var(--cth-ink-100)',
                             fontFamily: 'var(--cth-font-ui)', fontSize: 12,
-                            color: 'var(--cth-ink-900)', cursor: 'pointer', border: 'none'
+                            color: 'var(--cth-ink-900)', cursor: saving ? 'not-allowed' : 'pointer', border: 'none',
+                            opacity: saving ? 0.7 : 1
                           }}
                         >
                           {m.label}
@@ -251,7 +418,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
               )}
 
               <span style={{ fontSize: 12, color: 'var(--cth-ink-500)', lineHeight: '16px' }}>
-                Engine changes are saved for the next restart. Use Command Center → Floor to restart a live session onto a new provider/model now.
+                Engine changes relaunch the agent immediately; no manual restart required.
               </span>
             </Section>
 
@@ -280,10 +447,24 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
               </div>
             </div>
 
+            {error && (
+              <div style={{
+                padding: '6px 10px',
+                background: 'var(--cth-coral-light)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-coral)',
+                fontSize: 13,
+                color: 'var(--cth-ink-900)'
+              }}>
+                {error}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-              <PixelButton variant="ghost" size="md" onClick={onClose}>cancel</PixelButton>
+              <PixelButton variant="ghost" size="md" onClick={onClose} disabled={saving}>cancel</PixelButton>
               <div style={{ flex: 1 }} />
-              <PixelButton variant="primary" size="md" onClick={save}>save changes</PixelButton>
+              <PixelButton variant="primary" size="md" onClick={save} disabled={saving}>
+                {saving ? 'saving…' : 'save changes'}
+              </PixelButton>
             </div>
           </div>
         </PixelPanel>
