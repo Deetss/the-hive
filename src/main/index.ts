@@ -4936,10 +4936,17 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   // here. Gated HARD on enabled===true (default false), so this is a pure
   // pass-through today and current spawns are byte-identical. The already-offloaded
   // guard (hive.offload.target) stops a codex-bound request looping back through.
+  // Per-profile RED is derived from LIVE agent rate-limit samples, which stop
+  // arriving once that account's Claude workers are paused — i.e. exactly when
+  // offload should fire. So we also accept the GLOBAL governor being RED as the
+  // trigger (offload is opt-in per request via offloadEligible, so this can only
+  // reroute work the caller already marked). Tightening this back to strict
+  // per-profile precision needs the staleness-aware governor from
+  // governor-policy-config (keep last-known RED across stale windows).
   if (cfgSpawn.governorPolicy?.autoOffload?.enabled === true
       && raw.offloadEligible === true
       && !raw.hive?.offload?.target
-      && governorProfileState(raw.profile).mode === 'red') {
+      && (governorProfileState(raw.profile).mode === 'red' || governorMode === 'red')) {
     const accountKey = claudeAccountKey(raw.profile);
     const offloadTokenCap = typeof raw.tokenCap === 'number' && Number.isFinite(raw.tokenCap) && raw.tokenCap > 0 ? raw.tokenCap : undefined;
     queueOffloadObjective({
