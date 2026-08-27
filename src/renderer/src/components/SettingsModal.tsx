@@ -188,7 +188,9 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
   // ─── v0.3.4 redesign: settings that were onboarding-trapped or UI-less ────
   const cfgX = config as HarnessConfig & {
     strongKeepalive?: boolean; audience?: string; autoMode?: boolean;
-    defaultModel?: string; maxTurns?: number; semanticMemory?: boolean;
+    defaultModel?: string; defaultSpawnProfileId?: string;
+    runtimeProfiles?: HarnessConfig['runtimeProfiles'];
+    maxTurns?: number; semanticMemory?: boolean;
   };
   const [keepAwake, setKeepAwake] = useState<boolean>(cfgX.strongKeepalive === true);
   const toggleKeepAwake = async () => {
@@ -230,6 +232,20 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
       setDefaultModelNote('saved — applies to newly spawned agents');
       setTimeout(() => setDefaultModelNote(''), 2200);
     } catch { setDefaultModelNote('save failed'); }
+  };
+  const runtimeProfiles = cfgX.runtimeProfiles ?? [];
+  const [defaultProfileSel, setDefaultProfileSel] = useState<string>(cfgX.defaultSpawnProfileId ?? '');
+  const [defaultProfileNote, setDefaultProfileNote] = useState('');
+  const saveDefaultProfile = async (id: string) => {
+    setDefaultProfileSel(id);
+    try {
+      await window.cth.updateConfig({ defaultSpawnProfileId: id || undefined } as Partial<HarnessConfig>);
+      setDefaultProfileNote('saved — applies to new agents');
+      setTimeout(() => setDefaultProfileNote(''), 2200);
+    } catch {
+      setDefaultProfileNote('save failed');
+      setDefaultProfileSel(cfgX.defaultSpawnProfileId ?? '');
+    }
   };
   const [maxTurnsVal, setMaxTurnsVal] = useState<string>(cfgX.maxTurns != null ? String(cfgX.maxTurns) : '');
   const saveMaxTurns = async () => {
@@ -911,6 +927,47 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
                           }}>{config.harnessHome ?? '—'}</span>
                           <PixelButton variant="secondary" size="sm" onClick={pickNewHome}>change...</PixelButton>
                         </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 16 }}>
+                        <div style={{
+                          fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+                          color: 'var(--cth-ink-500)', textTransform: 'uppercase'
+                        }}>
+                          Default profile for new agents
+                        </div>
+                        <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                          When set, the Add Agent modal pre-selects this runtime profile. “Operator default” uses the profile you pick per spawn.
+                        </span>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button
+                            onClick={() => void saveDefaultProfile('')}
+                            style={{
+                              padding: '3px 8px 1px', border: 'none', cursor: 'pointer',
+                              fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-900)',
+                              background: defaultProfileSel === '' ? 'var(--cth-sky-light)' : 'var(--cth-cream-100)',
+                              boxShadow: defaultProfileSel === '' ? 'inset 0 0 0 1.5px var(--cth-ink-500)' : 'inset 0 0 0 1px var(--cth-ink-100)'
+                            }}
+                          >(operator default)</button>
+                          {runtimeProfiles.map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => void saveDefaultProfile(p.id)}
+                              style={{
+                                padding: '3px 8px 1px', border: 'none', cursor: 'pointer',
+                                fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-900)',
+                                background: defaultProfileSel === p.id ? 'var(--cth-sky-light)' : 'var(--cth-cream-100)',
+                                boxShadow: defaultProfileSel === p.id ? 'inset 0 0 0 1.5px var(--cth-ink-500)' : 'inset 0 0 0 1px var(--cth-ink-100)'
+                              }}
+                            >{p.name}</button>
+                          ))}
+                        </div>
+                        {runtimeProfiles.length === 0 && (
+                          <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-400)' }}>
+                            Create runtime profiles in AI Engines to list them here.
+                          </span>
+                        )}
+                        {defaultProfileNote && <span style={{ fontSize: 12, color: 'var(--cth-mint)' }}>{defaultProfileNote}</span>}
                       </div>
 
                       <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
