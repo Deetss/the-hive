@@ -19,7 +19,7 @@ import {
   listLocalDelegates, upsertLocalDelegate, removeLocalDelegate,
   modelForRole, OPS_STANDUP_MISSION, HEARTBEAT_MISSION, COMPACT_MAINTENANCE_MISSION, type HarnessConfig, type ScheduledMission
 } from './config';
-import { attemptGovernorOffloads } from './governor-offload';
+import { attemptGovernorOffloads, releaseOffloadSlot, requeueOffloadObjective, queueOffloadObjective, type OffloadWorkSpec } from './governor-offload';
 import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde } from './fs';
 import * as syncLock from './syncLock';
 import * as sync from './sync';
@@ -429,6 +429,10 @@ interface WorkerRec {
   /** Per-worker TOTAL-token cap from the spawn-request (overrides the config
    *  default). 0/undefined = no per-request cap. P4 plumbing — unlimited today. */
   tokenCap?: number;
+  /** Set only for workers spawned by the auto-offload path: the target it ran on
+   *  plus enough of the original spec to requeue it onto another target if it is
+   *  reaped without signaling done (§6). Undefined for normal workers. */
+  offload?: { targetId: string; spec: OffloadWorkSpec };
 }
 /** Live ephemeral workers by id. Populated by the spawn-request watcher; consulted
  *  by teardownPty so a finished/crashed/reaped worker's worktree is PRESERVED (not
@@ -530,6 +534,7 @@ function teardownPty(id: string): void {
     const worker = liveWorkers.get(id);
     if (worker) {
       liveWorkers.delete(id);
+      releaseOffloadSlot(worker.reqId); // G2: free the offload slot (no-op for normal workers)
       void finalizeWorkerWorktree(wtPath, origCwd, worker);
     } else {
       void removeWorktree(origCwd, wtPath)
@@ -4802,6 +4807,8 @@ interface SpawnRequest {
   slack?: { channel: string; thread_ts: string };     // reply target + where failures surface
   isolate?: boolean;                                   // default true (fresh worktree)
   tokenCap?: number;                                   // optional per-worker token cap (advisory P1)
+  offloadEligible?: boolean;                           // opt-in: MAY be routed to a non-Claude endpoint when RED (default false)
+  hive?: { offload?: { target?: string; accountKey?: string } }; // provenance stamped by createOffloadSpawnRequest
   // Appearance on the office floor. Both optional and both validated renderer-side
   // against the real cast and accent lists, so a bad value degrades to the default
   // rather than breaking the card.
@@ -4897,6 +4904,10 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   const slack = raw.slack && typeof raw.slack.channel === 'string' && typeof raw.slack.thread_ts === 'string'
     ? { channel: raw.slack.channel, thread_ts: raw.slack.thread_ts } : undefined;
   const fail = (reason: string): void => {
+    // An offload request reserved its concurrency slot when it was WRITTEN; a spawn
+    // that never becomes a live worker would leak it (teardownPty never runs), so
+    // free it here. No-op for normal requests.
+    if (raw.hive?.offload?.target && typeof raw.id === 'string') releaseOffloadSlot(raw.id);
     informGod(`[worker spawn rejected] ${reason}`, `Spawn-request ${basename(filePath)} rejected: ${reason}.`, slack);
     archiveRequest(filePath, '.failed');
   };
@@ -4918,6 +4929,39 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   // model-flag dedupe). Pure and unit-tested — see workerLaunch.ts for why this
   // translation earned a test.
   const cfgSpawn = readConfig();
+
+  // Auto-offload producer (G1), DARK by default. When the feature is ON and this
+  // request is explicitly offload-eligible AND its owning Claude account is RED,
+  // route it to a healthy non-Claude endpoint instead of spawning a Claude worker
+  // here. Gated HARD on enabled===true (default false), so this is a pure
+  // pass-through today and current spawns are byte-identical. The already-offloaded
+  // guard (hive.offload.target) stops a codex-bound request looping back through.
+  if (cfgSpawn.governorPolicy?.autoOffload?.enabled === true
+      && raw.offloadEligible === true
+      && !raw.hive?.offload?.target
+      && governorProfileState(raw.profile).mode === 'red') {
+    const accountKey = claudeAccountKey(raw.profile);
+    const offloadTokenCap = typeof raw.tokenCap === 'number' && Number.isFinite(raw.tokenCap) && raw.tokenCap > 0 ? raw.tokenCap : undefined;
+    queueOffloadObjective({
+      objective, cwd,
+      name: typeof raw.name === 'string' ? raw.name : undefined,
+      slack,
+      model: typeof raw.model === 'string' ? raw.model : undefined,
+      tokenCap: offloadTokenCap,
+      isolate: raw.isolate !== false,
+      accountKey
+    });
+    void attemptGovernorOffloads({
+      policy: cfgSpawn.governorPolicy.autoOffload,
+      hiveRoot: hive.root(),
+      redProfiles: [accountKey],
+      notify: (subject, body) => informGod(subject, body, slack)
+    });
+    console.log(`[worker] offloaded ${reqId} (owning account RED) — not spawning Claude`);
+    archiveRequest(filePath, '.done');
+    return;
+  }
+
   // Runtime-profiles v1 — an optional `profile` on the request names a saved
   // engine+account+model bundle. Its engine/model/command fill in ONLY where the
   // request stays silent (an explicit request field always wins), and its
@@ -5002,7 +5046,26 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   // tokenCap is optional plumbing (default unlimited) — only a positive finite cap is kept.
   const tokenCap = typeof raw.tokenCap === 'number' && Number.isFinite(raw.tokenCap) && raw.tokenCap > 0
     ? raw.tokenCap : undefined;
-  liveWorkers.set(workerId, { workerId, reqId, name: meta.name, slack, baseBranch, spawnedAt: Date.now(), tokenCap });
+  // Offload provenance (§6): if this worker was spawned by the auto-offload path,
+  // keep the target + a minimal spec so a reap-without-done can requeue it onto
+  // another target. Reconstructed from the request the offload path wrote.
+  const offloadTarget = raw.hive?.offload?.target;
+  const offload = offloadTarget
+    ? {
+        targetId: offloadTarget,
+        spec: {
+          objective, cwd,
+          name: typeof raw.name === 'string' ? raw.name : undefined,
+          slack,
+          model: typeof raw.model === 'string' ? raw.model : undefined,
+          profile: typeof raw.profile === 'string' ? raw.profile : undefined,
+          tokenCap,
+          accountKey: raw.hive?.offload?.accountKey,
+          excludeTargets: [offloadTarget]
+        } as OffloadWorkSpec
+      }
+    : undefined;
+  liveWorkers.set(workerId, { workerId, reqId, name: meta.name, slack, baseBranch, spawnedAt: Date.now(), tokenCap, offload });
 
   // Dispatch the objective via the standard inbox path (zero new transport),
   // reusing the autonomous-request preamble so the worker gets the exact Slack

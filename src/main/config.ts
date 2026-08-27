@@ -158,6 +158,20 @@ export interface AutoOffloadConfig {
   healthCheckTimeoutMs?: number;
   /** Dry-run: emit logs but skip queueing spawn requests. */
   dryRun?: boolean;
+  /** Fallback per-target concurrent-worker cap when a manifest target omits its
+   *  own `maxConcurrent`. Default 2 (heavy codex is the binding constraint at
+   *  current Azure quota). Per-target values in the manifest override this. */
+  defaultTargetMaxConcurrent?: number;
+  /** Fallback per-target tokens/minute ceiling when a manifest target omits its
+   *  own `tokensPerMinute`. 0/undefined = no tok/min gate. Per-target manifest
+   *  values override this. */
+  defaultTokensPerMinute?: number;
+  /** Max times one objective is requeued across targets before it is HELD and
+   *  god is informed once. Default 3 (poison-spec guard). */
+  maxRequeues?: number;
+  /** Min ms between "no healthy target — work held" notifications to god, so a
+   *  sustained RED with no target doesn't spam the inbox. Default 600000. */
+  holdNotifyIntervalMs?: number;
 }
 
 /** Usage-cap governor policy. The governor runs on a 60s beat and paces Claude
