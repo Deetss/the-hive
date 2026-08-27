@@ -19,6 +19,7 @@ import {
   listLocalDelegates, upsertLocalDelegate, removeLocalDelegate,
   modelForRole, OPS_STANDUP_MISSION, HEARTBEAT_MISSION, COMPACT_MAINTENANCE_MISSION, type HarnessConfig, type ScheduledMission
 } from './config';
+import { attemptGovernorOffloads } from './governor-offload';
 import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde } from './fs';
 import * as syncLock from './syncLock';
 import * as sync from './sync';
@@ -5454,6 +5455,9 @@ function runGovernorBeat(): void {
       body: `Rate-limit pace exceeded (${reason}). Claude agents paused; new Claude spawns blocked. Route new work to delegate/edgentic until the window resets.`
     }, 'system');
     console.log('[governor] RED:', reason);
+    if (policy.autoOffload?.enabled === true) {
+      void attemptGovernorOffloads({ policy: policy.autoOffload, hiveRoot: hive.root() });
+    }
   } else if (newMode !== 'red' && prevMode === 'red') {
     recoverGovernorAgents();
     console.log('[governor] recovered to', newMode);
