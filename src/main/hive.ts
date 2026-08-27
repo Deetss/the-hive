@@ -2044,7 +2044,7 @@ export class HiveManager {
             INSERT OR REPLACE INTO threads
               (id, rollout_path, created_at, updated_at, source, model_provider,
                cwd, title, sandbox_policy, approval_mode)
-            VALUES (?, '', ?, ?, 'cli', 'hive-pretrust', ?, 'hive pre-trust',
+            VALUES (?, '', ?, ?, 'exec', 'hive-pretrust', ?, 'hive pre-trust',
                     '{"type":"disabled"}', 'never')
           `).run('hive-pretrust-' + Buffer.from(agentCwd).toString('base64url'),
             now, now, codexCwd);
