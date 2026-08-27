@@ -29,6 +29,7 @@ import { TaskDetailOverlay } from '@/components/TaskDetailOverlay';
 import { IdePanel } from '@/ide/IdePanel';
 import { useHoldOptionToTalk } from '@/freeflow/holdOption';
 import brandLogo from '@brand/logo.png?url';
+import { cancelQaTimer } from '@/components/QuickAskPanel';
 
 // Injected at build time from package.json (see electron.vite.config.ts).
 declare const __APP_VERSION__: string;
@@ -136,9 +137,15 @@ export function App() {
     if (!window.cth?.onHiveMessage) return;
     return window.cth.onHiveMessage((e) => {
       const state = useStore.getState();
-      // Ask Me stream: skip replies to human's own Quick-Ask queries.
+      // Ask Me stream: direct messages to the human. Quick-Ask replies are
+      // routed to the Q&A store instead of the Ask Me inbox.
       if (e.needsHuman && e.body && e.id) {
-        if (!(e.conversation && state.quickAskConversations.includes(e.conversation))) {
+        if (e.conversation && state.quickAskConversations.includes(e.conversation)) {
+          // This is god's reply to a Quick-Ask query — resolve it in the store
+          // and cancel the timeout. Works even when QuickAskPanel is unmounted.
+          cancelQaTimer(e.conversation);
+          state.resolveQuickAskReply(e.conversation, e.body!);
+        } else {
           state.addHumanMessage({
             id: e.id, from: e.from, subject: e.subject ?? '',
             body: e.body!, act: e.act,

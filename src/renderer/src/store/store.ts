@@ -46,6 +46,21 @@ export interface HumanMessage {
   resolved: boolean;
   replyDraft: string;
 }
+
+export interface QAEntry {
+  /** Stable display-slot key — never changes for the lifetime of this Q. */
+  id: string;
+  question: string;
+  /** undefined = not yet answered; string (including '') = god replied */
+  answer?: string;
+  askedAt: number;
+  /** The wire-level conversation id for the CURRENT attempt. Rotates on each
+   *  retry so a stale in-flight reply to a superseded id can never satisfy a
+   *  newer attempt. */
+  currentConversation: string;
+  waiting: boolean;
+  timedOut: boolean;
+}
 import { isCompactionCommand } from '@shared/providerAutomation';
 import { preferredAgentRole } from '@shared/agentRole';
 import { isInboxNudge } from '@shared/hiveNudge';
@@ -304,6 +319,13 @@ interface State {
    *  string-array scale for typical usage but will grow unbounded over a long session. */
   quickAskConversations: string[];
   trackQuickAskConversation: (id: string) => void;
+  /** Quick-Ask Q&A thread — persisted here so it survives tab switches. */
+  quickAskEntries: QAEntry[];
+  addQuickAskEntry: (entry: QAEntry) => void;
+  rotateQuickAskEntry: (entryId: string, newWireId: string) => void;
+  resolveQuickAskReply: (wireId: string, body: string) => void;
+  timeoutQuickAskEntry: (wireId: string) => void;
+  failQuickAskEntry: (entryId: string, msg: string) => void;
   /** Direct hive messages from god/agents addressed to the human.
    *  Persisted in the store so they survive AskMeTab unmount/tab switches. */
   humanMessages: HumanMessage[];
@@ -922,6 +944,29 @@ export const useStore = create<State>((set, get) => ({
     quickAskConversations: s.quickAskConversations.includes(id)
       ? s.quickAskConversations
       : [...s.quickAskConversations, id]
+  })),
+  quickAskEntries: [],
+  addQuickAskEntry: (entry) => set((s) => ({ quickAskEntries: [...s.quickAskEntries, entry] })),
+  rotateQuickAskEntry: (entryId, newWireId) => set((s) => ({
+    quickAskEntries: s.quickAskEntries.map((e) =>
+      e.id === entryId ? { ...e, currentConversation: newWireId, waiting: true, timedOut: false, answer: undefined } : e
+    )
+  })),
+  resolveQuickAskReply: (wireId, body) => set((s) => ({
+    quickAskEntries: s.quickAskEntries.map((e) =>
+      e.currentConversation === wireId && (e.waiting || e.timedOut)
+        ? { ...e, answer: body, waiting: false, timedOut: false } : e
+    )
+  })),
+  timeoutQuickAskEntry: (wireId) => set((s) => ({
+    quickAskEntries: s.quickAskEntries.map((e) =>
+      e.currentConversation === wireId && e.waiting ? { ...e, waiting: false, timedOut: true } : e
+    )
+  })),
+  failQuickAskEntry: (entryId, msg) => set((s) => ({
+    quickAskEntries: s.quickAskEntries.map((e) =>
+      e.id === entryId ? { ...e, answer: msg, waiting: false, timedOut: false } : e
+    )
   })),
   humanMessages: [],
   addHumanMessage: (msg) => set((s) => {
