@@ -11,10 +11,9 @@ import {
   shell,
   Notification,
   type IpcMainInvokeEvent,
-  type IpcMainInvokeListener,
   type WebContents
 } from 'electron';
-import { WebSocketServer, WebSocket } from 'ws';
+import WebSocket from 'ws';
 import { spawn } from 'node:child_process';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import {
@@ -151,13 +150,14 @@ type BrowserBridgeClient = {
 };
 
 const browserBridgeClients = new Set<BrowserBridgeClient>();
-const browserInvokeHandlers = new Map<string, IpcMainInvokeListener>();
-let browserSocketServer: WebSocketServer | null = null;
+type IpcMainInvokeHandler = Parameters<typeof ipcMain.handle>[1];
+const browserInvokeHandlers = new Map<string, IpcMainInvokeHandler>();
+let browserSocketServer: WebSocket.Server | null = null;
 let browserBridgeClientSeq = 0;
 const BROWSER_BRIDGE_SEND_SYMBOL = Symbol('browserBridgeOriginalSend');
 
 const originalIpcHandle = ipcMain.handle.bind(ipcMain);
-ipcMain.handle = ((channel: string, listener: IpcMainInvokeListener) => {
+ipcMain.handle = ((channel: string, listener: IpcMainInvokeHandler) => {
   browserInvokeHandlers.set(channel, listener);
   return originalIpcHandle(channel, listener);
 }) as typeof ipcMain.handle;
@@ -187,17 +187,17 @@ type BrowserBridgeInvokeMessage = Extract<BrowserBridgeInbound, { type: 'invoke'
 
 function setupBrowserSocketServer(server: HttpServer): void {
   if (browserSocketServer) return;
-  const wss = new WebSocketServer({ server, path: '/bridge' });
+  const wss = new WebSocket.Server({ server, path: '/bridge' });
   browserSocketServer = wss;
-  wss.on('connection', (socket) => {
+  wss.on('connection', (socket: WebSocket) => {
     const client: BrowserBridgeClient = { socket, subscriptions: new Set(), id: ++browserBridgeClientSeq };
     browserBridgeClients.add(client);
     browserBridgeSend(client, { type: 'hello', version: 1 });
-    socket.on('message', (data) => { handleBrowserClientMessage(client, data); });
+    socket.on('message', (data: WebSocket.Data) => { handleBrowserClientMessage(client, data); });
     socket.on('close', () => { browserBridgeClients.delete(client); });
-    socket.on('error', (err) => { console.error('[browser-bridge] client error:', err); });
+    socket.on('error', (err: Error) => { console.error('[browser-bridge] client error:', err); });
   });
-  wss.on('error', (err) => { console.error('[browser-bridge] server error:', err); });
+  wss.on('error', (err: Error) => { console.error('[browser-bridge] server error:', err); });
   wss.on('close', () => {
     browserSocketServer = null;
     browserBridgeClients.clear();
@@ -252,7 +252,7 @@ function toBridgeBuffer(value: Buffer | ArrayBuffer): Buffer {
   return Buffer.from(value);
 }
 
-function normalizeBridgeData(data: WebSocket.RawData): string {
+function normalizeBridgeData(data: WebSocket.Data): string {
   if (typeof data === 'string') return data;
   if (Buffer.isBuffer(data)) return data.toString('utf8');
   if (Array.isArray(data)) {
@@ -261,7 +261,7 @@ function normalizeBridgeData(data: WebSocket.RawData): string {
   return toBridgeBuffer(data as ArrayBuffer).toString('utf8');
 }
 
-function handleBrowserClientMessage(client: BrowserBridgeClient, raw: WebSocket.RawData): void {
+function handleBrowserClientMessage(client: BrowserBridgeClient, raw: WebSocket.Data): void {
   let parsed: BrowserBridgeInbound;
   try {
     parsed = JSON.parse(normalizeBridgeData(raw)) as BrowserBridgeInbound;
@@ -6743,5 +6743,8 @@ app.on('will-quit', (e) => {
     new Promise<void>((r) => setTimeout(r, 1200))
   ]).then(finish, finish);
 });
+
+
+
 
 

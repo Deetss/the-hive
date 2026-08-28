@@ -1,5 +1,5 @@
-import { memo, useMemo, type CSSProperties, type ReactNode } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { memo, useMemo, type CSSProperties } from 'react';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 const codeStyle: CSSProperties = {
@@ -12,16 +12,37 @@ const codeStyle: CSSProperties = {
 
 const REMARK_PLUGINS = [remarkGfm];
 
-const markdownComponents = {
-  p: ({ children }: { children: ReactNode }) => <p style={{ margin: '0 0 6px' }}>{children}</p>,
-  ul: ({ children }: { children: ReactNode }) => <ul style={{ margin: '0 0 6px', paddingLeft: 18 }}>{children}</ul>,
-  ol: ({ children }: { children: ReactNode }) => <ol style={{ margin: '0 0 6px', paddingLeft: 18 }}>{children}</ol>,
-  li: ({ children }: { children: ReactNode }) => <li style={{ margin: '0 0 2px' }}>{children}</li>,
-  code: ({ children }: { children: ReactNode }) => <code style={codeStyle}>{children}</code>,
-  a: ({ children, href }: { children: ReactNode; href?: string }) => (
-    <a href={href} style={{ color: 'var(--cth-sky, #4aa3ff)' }}>{children}</a>
+const markdownComponents: Components = {
+  p: ({ children, node: _node, style, ...props }) => (
+    <p {...props} style={{ ...style, margin: '0 0 6px' }}>{children}</p>
+  ),
+  ul: ({ children, node: _node, style, ...props }) => (
+    <ul {...props} style={{ ...style, margin: '0 0 6px', paddingLeft: 18 }}>{children}</ul>
+  ),
+  ol: ({ children, node: _node, style, ...props }) => (
+    <ol {...props} style={{ ...style, margin: '0 0 6px', paddingLeft: 18 }}>{children}</ol>
+  ),
+  li: ({ children, node: _node, style, ...props }) => (
+    <li {...props} style={{ ...style, margin: '0 0 2px' }}>{children}</li>
+  ),
+  code: (props) => {
+    const { children, node: _node, style, ...rest } = props;
+    const { inline: _inline, ...restWithoutInline } = rest as typeof rest & { inline?: unknown };
+    return (
+      <code
+        {...restWithoutInline}
+        style={{ ...codeStyle, ...(style ?? {}) }}
+      >
+        {children}
+      </code>
+    );
+  },
+  a: ({ children, node: _node, style, href, ...props }) => (
+    <a {...props} href={href} style={{ ...style, color: 'var(--cth-sky, #4aa3ff)' }}>
+      {children}
+    </a>
   )
-} as const;
+};
 
 interface MarkdownProps {
   text: string;
@@ -54,3 +75,8 @@ function MarkdownInner({ text, style }: MarkdownProps): JSX.Element {
 }
 
 export const Markdown = memo(MarkdownInner, (prev, next) => prev.text === next.text && isSameStyle(prev.style, next.style));
+
+
+
+
+
