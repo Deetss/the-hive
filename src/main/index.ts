@@ -5709,6 +5709,9 @@ const WINDOW_7D_MS = 7 * 24 * 60 * 60 * 1000;
 type GovernorLevel = 'green' | 'yellow' | 'red';
 
 type GovernorWindowSnapshot = { pct: number; resetsAt: string; level?: GovernorLevel; reason?: string };
+type WindowUsage = { pct: number; resetsAt: string };
+type GovernorUsageProfiles = Record<string, { fiveHour: WindowUsage | null; sevenDay: WindowUsage | null }>;
+type GovernorUsage = { fiveHour: WindowUsage | null; sevenDay: WindowUsage | null; profiles?: GovernorUsageProfiles };
 type GovernorBroadcastProfile = { profileId: string; mode: GovernorLevel; reason: string };
 type GovernorBroadcastPayload = {
   mode: GovernorLevel;
@@ -5888,6 +5891,10 @@ function claudeAccountKey(profileId?: string | null): string {
   return DEFAULT_CLAUDE_PROFILE_KEY;
 }
 
+function profileIdFromKey(key: string): string | null {
+  return key === DEFAULT_CLAUDE_PROFILE_KEY ? null : key;
+}
+
 function governorProfileState(profileId?: string | null): { mode: GovernorLevel; reason?: string } {
   return governorProfileStates.get(claudeAccountKey(profileId)) ?? { mode: 'green' };
 }
@@ -5895,9 +5902,8 @@ function governorProfileState(profileId?: string | null): { mode: GovernorLevel;
 /** Rate-limit usage is fed by LIVE Claude request hooks and is in-memory only, so
  *  a fresh app restart boots the governor GREEN until an agent makes a request —
  *  which never happens while everything is paused, leaving offload unable to fire.
- *  We persist the last-known window usage and reload it on a beat that has no live
- *  data, discarding any window already past its reset. */
-type GovernorUsage = { fiveHour: { pct: number; resetsAt: string } | null; sevenDay: { pct: number; resetsAt: string } | null };
+ *  We persist the last-known window usage (global + per-profile) and reload it on
+ *  beats with no live data, discarding any window already past its reset. */
 function governorUsagePath(): string | null {
   const home = resolveHarnessHome();
   return home ? join(home, 'governor-usage.json') : null;
@@ -5905,14 +5911,50 @@ function governorUsagePath(): string | null {
 function persistGovernorUsage(u: GovernorUsage): void {
   const p = governorUsagePath();
   if (!p) return;
-  try { writeFileSync(p, JSON.stringify(u)); } catch { /* best-effort */ }
+  const profiles = u.profiles && Object.keys(u.profiles).length > 0 ? u.profiles : undefined;
+  const payload: GovernorUsage = {
+    fiveHour: u.fiveHour ?? null,
+    sevenDay: u.sevenDay ?? null,
+    profiles
+  };
+  try { writeFileSync(p, JSON.stringify(payload)); } catch { /* best-effort */ }
 }
 function loadGovernorUsage(): GovernorUsage | null {
   const p = governorUsagePath();
   if (!p || !existsSync(p)) return null;
   try {
-    const raw = JSON.parse(readFileSync(p, 'utf8')) as GovernorUsage;
-    return { fiveHour: raw.fiveHour ?? null, sevenDay: raw.sevenDay ?? null };
+    const raw = JSON.parse(readFileSync(p, 'utf8')) as Record<string, unknown>;
+
+    const normalizeWindow = (value: unknown): WindowUsage | null => {
+      if (!value || typeof value !== 'object') return null;
+      const record = value as Record<string, unknown>;
+      const pct = Number(record.pct);
+      const resetsAt = typeof record.resetsAt === 'string' ? record.resetsAt : '';
+      if (!Number.isFinite(pct) || !resetsAt) return null;
+      return { pct, resetsAt };
+    };
+
+    const fiveHour = normalizeWindow(raw.fiveHour);
+    const sevenDay = normalizeWindow(raw.sevenDay);
+
+    let profiles: GovernorUsageProfiles | undefined;
+    if (raw.profiles && typeof raw.profiles === 'object') {
+      const entries = Object.entries(raw.profiles as Record<string, unknown>);
+      const acc: GovernorUsageProfiles = {};
+      for (const [key, value] of entries) {
+        if (typeof key !== 'string' || !key) continue;
+        if (!value || typeof value !== 'object') continue;
+        const item = value as Record<string, unknown>;
+        const five = normalizeWindow(item.fiveHour);
+        const seven = normalizeWindow(item.sevenDay);
+        if (!five && !seven) continue;
+        acc[key] = { fiveHour: five, sevenDay: seven };
+      }
+      if (Object.keys(acc).length > 0) profiles = acc;
+    }
+
+    if (!fiveHour && !sevenDay && !profiles) return null;
+    return { fiveHour: fiveHour ?? null, sevenDay: sevenDay ?? null, profiles };
   } catch { return null; }
 }
 
@@ -5950,7 +5992,6 @@ function runGovernorBeat(): void {
   const profileSettingsCache = new Map<string, ResolvedProfileSettings>();
   profileSettingsCache.set(DEFAULT_CLAUDE_PROFILE_KEY, baselineSettings);
 
-  type WindowUsage = { pct: number; resetsAt: string };
   const profileUsage = new Map<string, { settings: ResolvedProfileSettings; fiveHour: WindowUsage | null; sevenDay: WindowUsage | null }>();
   let maxFiveHour: WindowUsage | null = null;
   let maxSevenDay: WindowUsage | null = null;
@@ -5998,14 +6039,56 @@ function runGovernorBeat(): void {
     if (entry.sevenDay && (!usageState.sevenDay || entry.sevenDay.pct > usageState.sevenDay.pct)) usageState.sevenDay = entry.sevenDay;
   }
 
-  if (maxFiveHour || maxSevenDay) {
-    persistGovernorUsage({ fiveHour: maxFiveHour, sevenDay: maxSevenDay });
-  } else {
-    const saved = loadGovernorUsage();
-    if (saved?.fiveHour && new Date(saved.fiveHour.resetsAt).getTime() > now) maxFiveHour = saved.fiveHour;
-    if (saved?.sevenDay && new Date(saved.sevenDay.resetsAt).getTime() > now) maxSevenDay = saved.sevenDay;
-    if (!maxFiveHour && !maxSevenDay) return;
+  const saved = loadGovernorUsage();
+  const reviveWindow = (usage: WindowUsage | null | undefined): WindowUsage | null => {
+    if (!usage) return null;
+    const resetMs = new Date(usage.resetsAt).getTime();
+    if (!Number.isFinite(resetMs) || resetMs <= now) return null;
+    return usage;
+  };
+
+  if (saved) {
+    const savedFive = reviveWindow(saved.fiveHour);
+    if (savedFive && (!maxFiveHour || savedFive.pct > maxFiveHour.pct)) maxFiveHour = savedFive;
+    const savedSeven = reviveWindow(saved.sevenDay);
+    if (savedSeven && (!maxSevenDay || savedSeven.pct > maxSevenDay.pct)) maxSevenDay = savedSeven;
+
+    if (saved.profiles) {
+      for (const [key, value] of Object.entries(saved.profiles)) {
+        const savedProfileFive = reviveWindow(value?.fiveHour);
+        const savedProfileSeven = reviveWindow(value?.sevenDay);
+        if (!savedProfileFive && !savedProfileSeven) continue;
+        let usageState = profileUsage.get(key);
+        if (!usageState) {
+          usageState = { settings: getProfileSettings(profileIdFromKey(key)), fiveHour: null, sevenDay: null };
+          profileUsage.set(key, usageState);
+        }
+        if (savedProfileFive && (!usageState.fiveHour || savedProfileFive.pct > usageState.fiveHour.pct)) usageState.fiveHour = savedProfileFive;
+        if (savedProfileSeven && (!usageState.sevenDay || savedProfileSeven.pct > usageState.sevenDay.pct)) usageState.sevenDay = savedProfileSeven;
+        if (savedProfileFive && (!maxFiveHour || savedProfileFive.pct > maxFiveHour.pct)) maxFiveHour = savedProfileFive;
+        if (savedProfileSeven && (!maxSevenDay || savedProfileSeven.pct > maxSevenDay.pct)) maxSevenDay = savedProfileSeven;
+      }
+    }
   }
+
+  if (!maxFiveHour && !maxSevenDay && profileUsage.size === 0) return;
+
+  const profilesToPersist: GovernorUsageProfiles = {};
+  for (const [key, usageState] of profileUsage.entries()) {
+    const five = usageState.fiveHour;
+    const seven = usageState.sevenDay;
+    if (!five && !seven) continue;
+    profilesToPersist[key] = {
+      fiveHour: five ? { pct: five.pct, resetsAt: five.resetsAt } : null,
+      sevenDay: seven ? { pct: seven.pct, resetsAt: seven.resetsAt } : null
+    };
+  }
+
+  persistGovernorUsage({
+    fiveHour: maxFiveHour ?? null,
+    sevenDay: maxSevenDay ?? null,
+    profiles: Object.keys(profilesToPersist).length > 0 ? profilesToPersist : undefined
+  });
 
   const evaluateWindowUsage = (usage: WindowUsage, windowMs: number, threshold: ResolvedWindowSettings): { level: GovernorLevel; reason: string } => {
     if (!threshold.enabled) return { level: 'green', reason: 'window disabled' };
