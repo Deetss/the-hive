@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { SpritePortrait } from './SpritePortrait';
@@ -203,16 +203,19 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   // modal wins else profile); they do NOT detach it. Profile still supplies the
   // account / claudeConfigDir. Only an explicit 'Default account' selection clears it.
   const [profileId, setProfileId] = useState<string | undefined>(undefined);
+  const defaultProfileApplied = useRef(false);
 
   // Picking a model rebuilds the command; the command field stays editable for
   // power users (it's the source of truth for the actual spawn).
   const pickModel = (id?: string) => {
+    defaultProfileApplied.current = true;
     setModel(id);
     setCommand(buildSpawnCommand(config, id, provider));
   };
   // Apply a saved runtime profile: adopt its engine, model and command in one go,
   // and remember its id so the spawn records which account/engine launched here.
   const applyProfile = (id: string) => {
+    defaultProfileApplied.current = true;
     if (!id) { setProfileId(undefined); return; }
     const p = (config.runtimeProfiles ?? []).find((x) => x.id === id);
     if (!p) { setProfileId(undefined); return; }
@@ -227,6 +230,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   // Codex spawns `codex`, not the configured `claude`). For 'custom' we keep the
   // user's typed command rather than blanking it.
   const pickProvider = (id: AgentProvider) => {
+    defaultProfileApplied.current = true;
     setProvider(id);
     // Seed the model: Claude from the global defaultModel; other engines from the
     // per-engine default set in Settings → AI Engines (providerDefaultModels), else
@@ -245,6 +249,25 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
     setCommand(buildSpawnCommand(config, nextModel, id));
   };
   const preset = providerPreset(provider);
+  useEffect(() => {
+    if (defaultProfileApplied.current) return;
+    if (pendingHire) return;
+    const defaultProfileId = config.defaultSpawnProfileId;
+    if (!defaultProfileId) return;
+    const profiles = config.runtimeProfiles ?? [];
+    const profile = profiles.find((p) => p.id === defaultProfileId);
+    if (!profile) return;
+    if (profileId !== undefined) {
+      defaultProfileApplied.current = true;
+      return;
+    }
+    setProfileId(profile.id);
+    setProvider(profile.provider);
+    const nextModel = profile.model ?? (isClaudeProvider(profile.provider) ? config.defaultModel : config.providerDefaultModels?.[profile.provider]);
+    setModel(nextModel);
+    setCommand(profile.command?.trim() || buildSpawnCommand(config, nextModel, profile.provider));
+    defaultProfileApplied.current = true;
+  }, [config.defaultSpawnProfileId, config.runtimeProfiles, config.defaultModel, config.providerDefaultModels, pendingHire, profileId]);
   const [goal, setGoal] = useState(pendingHire?.goal ?? '');
   const [isolate, setIsolate] = useState(pendingHire?.isolate ?? false);
   // #2 — optional Claude session id to continue. When set, the spawn seeds that
@@ -1068,7 +1091,11 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                       <input
                         value={command}
                         onChange={(e) => {
-                          if (profileId !== undefined) setProfileId(undefined);
+                          defaultProfileApplied.current = true;
+                          if (profileId !== undefined) {
+                            defaultProfileApplied.current = true;
+                            setProfileId(undefined);
+                          }
                           setCommand(e.target.value);
                         }}
                         placeholder={

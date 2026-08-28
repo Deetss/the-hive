@@ -1,47 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { PixelBadge } from './PixelBadge';
 import { Icon } from './Icon';
 import { UatPanel } from './UatPanel';
 import { useStore } from '@/store/store';
-
-/** A card on the task kanban. Mirrors HiveTask in the main/preload process —
- *  re-declared locally so the renderer doesn't reach into the preload package
- *  (same convention as store/config.ts). */
-export interface HumanQA {
-  q: string;
-  /** Default 'question'. 'action' = human must DO something (sets doneAt when
-   *  complete). 'review' = human must approve a doc (sets approved). */
-  kind?: 'question' | 'action' | 'review';
-  a?: string;
-  askedAt?: string;
-  answeredAt?: string;
-  /** Set when the human dismisses the ask from the ASK ME board WITHOUT
-   *  answering — the question stays on the card (history is preserved) but
-   *  openQuestion() stops returning it, so the card leaves ASK ME. */
-  dismissedAt?: string;
-  /** action entries: ISO timestamp when the human completed the action. */
-  doneAt?: string;
-  /** review entries: path to the document or report to review. */
-  docPath?: string;
-  /** review entries: true = approved, false = changes requested. undefined = pending. */
-  approved?: boolean;
-}
-
-export interface HiveTask {
-  id: string;
-  title: string;
-  description?: string;
-  assignee?: string;
-  status: 'todo' | 'doing' | 'blocked' | 'done';
-  dependsOn: string[];
-  priority: number;
-  createdAt: string;
-  /** First-class human feedback: the god appends {q} when a card needs the
-   *  human; the ASK ME view fills in {a}. Full history stays on the card. */
-  humanQA?: HumanQA[];
-}
+import { HumanQA, HiveTask } from '@/types/tasks';
 
 /** The card's currently open question for the human, if any. An entry the human
  *  dismissed (dismissedAt) counts as resolved, same as an answered one.
@@ -73,6 +37,10 @@ function fmtAge(iso?: string): string {
   if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
   if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h`;
   return `${Math.floor(ms / 86_400_000)}d`;
+}
+
+function fmtSessionTimestamp(ts: number): string {
+  return new Date(ts).toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 /** Waiting on the human = blocked with an unanswered question on the card. */
@@ -153,6 +121,13 @@ export function TasksKanban() {
   const [tasks, setTasks] = useState<HiveTask[]>([]);
   const openTaskDetail = useStore((s) => s.openTaskDetail);
   const setAssignedPending = useStore((s) => s.setAssignedPending);
+  const activeTaskSession = useStore((s) => s.activeTaskSession);
+  const taskSessionHistory = useStore((s) => s.taskSessionHistory);
+  const viewedTaskSessionId = useStore((s) => s.viewedTaskSessionId);
+  const selectTaskSession = useStore((s) => s.selectTaskSession);
+  const startNewTaskSession = useStore((s) => s.startNewTaskSession);
+  const renameTaskSession = useStore((s) => s.renameTaskSession);
+  const deleteTaskSession = useStore((s) => s.deleteTaskSession);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [atmeCollapsed, setAtmeCollapsed] = useState(false);
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
@@ -161,24 +136,46 @@ export function TasksKanban() {
   const [view, setView] = useState<'tasks' | 'uat'>('tasks');
   const [uatPending, setUatPending] = useState(0);
 
-  const refresh = useCallback(async () => {
-    try { setTasks(parseTasks(await window.cth.hiveTasks())); } catch { /* keep last good */ }
+  const viewingActive = viewedTaskSessionId === null;
+  const selectedArchivedSession = useMemo(
+    () => taskSessionHistory.find((entry) => entry.id === viewedTaskSessionId) ?? null,
+    [taskSessionHistory, viewedTaskSessionId]
+  );
+  const readOnly = !viewingActive;
+
+  const loadLiveTasks = useCallback(async (): Promise<HiveTask[] | null> => {
+    try {
+      const next = parseTasks(await window.cth.hiveTasks());
+      setTasks(next);
+      return next;
+    } catch {
+      return null;
+    }
   }, []);
 
   const dismissTask = useCallback(async (id: string) => {
+    if (readOnly) return;
     setTasks((prev) => prev.filter((t) => t.id !== id));
     try {
       const result = await window.cth.hiveDeleteTask(id);
-      if (!result.ok) void refresh();
-    } catch { /* next poll re-syncs */ }
-  }, [refresh]);
+      if (!result.ok) void loadLiveTasks();
+    } catch {
+      void loadLiveTasks();
+    }
+  }, [loadLiveTasks, readOnly]);
 
   const patchQA = useCallback(async (taskId: string, qa: HumanQA[]) => {
+    if (readOnly) return;
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, humanQA: qa } : t));
-    await window.cth.hivePatchTask(taskId, { humanQA: qa });
-  }, []);
+    try {
+      await window.cth.hivePatchTask(taskId, { humanQA: qa });
+    } catch {
+      void loadLiveTasks();
+    }
+  }, [loadLiveTasks, readOnly]);
 
   const sendAnswer = useCallback(async (task: HiveTask, e: HumanQA, draftKey: string) => {
+    if (readOnly) return;
     const text = (answerDrafts[draftKey] ?? '').trim();
     if (!text || acting) return;
     setActing(draftKey);
@@ -187,36 +184,87 @@ export function TasksKanban() {
       await patchQA(task.id, qa);
       await window.cth.hiveSend({ to: 'god', act: 'inform', subject: `HUMAN ANSWER on task "${task.title}"`, body: `Q: ${e.q}\nA: ${text}` }, 'human');
       setAnswerDrafts((d) => { const n = { ...d }; delete n[draftKey]; return n; });
-    } catch { /* leave draft */ }
+    } catch {
+      /* leave draft */
+    }
     setActing(null);
-  }, [answerDrafts, acting, patchQA]);
+  }, [acting, answerDrafts, patchQA, readOnly]);
 
   const markDone = useCallback(async (task: HiveTask, e: HumanQA, draftKey: string) => {
-    if (acting) return;
+    if (readOnly || acting) return;
     setActing(draftKey);
     try {
       const qa = (task.humanQA ?? []).map((q) => q === e ? { ...q, doneAt: new Date().toISOString() } : q);
       await patchQA(task.id, qa);
-    } catch { /* noop */ }
+    } catch {
+      void loadLiveTasks();
+    }
     setActing(null);
-  }, [acting, patchQA]);
+  }, [acting, loadLiveTasks, patchQA, readOnly]);
 
   const reviewDecide = useCallback(async (task: HiveTask, e: HumanQA, approved: boolean, draftKey: string) => {
-    if (acting) return;
+    if (readOnly || acting) return;
     setActing(draftKey);
     try {
       const qa = (task.humanQA ?? []).map((q) => q === e ? { ...q, approved, answeredAt: new Date().toISOString() } : q);
       await patchQA(task.id, qa);
       await window.cth.hiveSend({ to: 'god', act: 'inform', subject: `REVIEW ${approved ? 'APPROVED' : 'CHANGES REQUESTED'} on task "${task.title}"`, body: `${approved ? 'Approved' : 'Changes requested'}: ${e.docPath ?? e.q}` }, 'human');
-    } catch { /* noop */ }
+    } catch {
+      void loadLiveTasks();
+    }
     setActing(null);
-  }, [acting, patchQA]);
+  }, [acting, loadLiveTasks, patchQA, readOnly]);
+
+  const handleSelectActive = useCallback(() => {
+    if (!viewingActive) selectTaskSession(null);
+  }, [selectTaskSession, viewingActive]);
+
+  const handleSelectArchived = useCallback((sessionId: string) => {
+    if (viewedTaskSessionId !== sessionId) selectTaskSession(sessionId);
+  }, [selectTaskSession, viewedTaskSessionId]);
+
+  const handleRenameActive = useCallback(() => {
+    const next = window.prompt('Rename current session', activeTaskSession.label);
+    if (!next) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === activeTaskSession.label) return;
+    renameTaskSession(activeTaskSession.id, trimmed);
+  }, [activeTaskSession, renameTaskSession]);
+
+  const handleRenameArchived = useCallback((sessionId: string, currentLabel: string) => {
+    const next = window.prompt('Rename session', currentLabel);
+    if (!next) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === currentLabel) return;
+    renameTaskSession(sessionId, trimmed);
+  }, [renameTaskSession]);
+
+  const handleDeleteArchived = useCallback((sessionId: string) => {
+    const ok = window.confirm('Delete this archived session? This removes its task snapshot permanently.');
+    if (!ok) return;
+    deleteTaskSession(sessionId);
+  }, [deleteTaskSession]);
+
+  const handleNewSession = useCallback(async () => {
+    const latest = await loadLiveTasks();
+    const snapshot = latest ?? tasks;
+    startNewTaskSession(snapshot);
+    setAnswerDrafts({});
+    setExpandedKeys(new Set());
+  }, [loadLiveTasks, setAnswerDrafts, setExpandedKeys, startNewTaskSession, tasks]);
 
   useEffect(() => {
-    refresh();
-    timer.current = setInterval(refresh, POLL_MS);
-    return () => { if (timer.current) clearInterval(timer.current); };
-  }, [refresh]);
+    if (timer.current) { clearInterval(timer.current); timer.current = null; }
+    if (viewingActive) {
+      void loadLiveTasks();
+      timer.current = setInterval(() => { void loadLiveTasks(); }, POLL_MS);
+    } else {
+      setTasks(selectedArchivedSession?.tasks ?? []);
+    }
+    return () => {
+      if (timer.current) { clearInterval(timer.current); timer.current = null; }
+    };
+  }, [loadLiveTasks, selectedArchivedSession, viewingActive]);
 
   const pendingItems = tasks.flatMap((t) =>
     (t.humanQA ?? [])
@@ -224,7 +272,9 @@ export function TasksKanban() {
       .filter((item) => isPendingHumanQA(item.qa))
   ).sort((a, b) => (a.qa.askedAt ?? '') < (b.qa.askedAt ?? '') ? -1 : 1);
 
-  useEffect(() => { setAssignedPending(pendingItems.length); }, [pendingItems.length, setAssignedPending]);
+  useEffect(() => {
+    if (viewingActive) setAssignedPending(pendingItems.length);
+  }, [pendingItems.length, setAssignedPending, viewingActive]);
 
   const restorableAgents = useStore((s) => s.restorableAgents);
   /** Resolve an assignee id to a display name — falls back to the restorable
@@ -248,13 +298,107 @@ export function TasksKanban() {
     color: 'var(--cth-cream-50)',
     boxShadow: 'inset 0 0 0 1px var(--cth-ink-900), 0 1px 0 var(--cth-ink-900)'
   };
+  const sessionButtonStyle: CSSProperties = {
+    fontFamily: 'var(--cth-font-mono)',
+    fontSize: 11,
+    padding: '3px 8px',
+    border: '1px solid var(--cth-ink-200)',
+    background: 'var(--cth-paper-100)',
+    color: 'var(--cth-ink-800)',
+    cursor: 'pointer',
+    borderRadius: 4,
+    lineHeight: '14px',
+    whiteSpace: 'nowrap'
+  };
+  const sessionButtonActiveStyle: CSSProperties = {
+    background: 'var(--cth-ink-900)',
+    color: 'var(--cth-cream-50)',
+    borderColor: 'var(--cth-ink-900)'
+  };
+  const sessionIconButtonStyle: CSSProperties = {
+    background: 'none',
+    border: 'none',
+    color: 'var(--cth-ink-500)',
+    cursor: 'pointer',
+    padding: 0,
+    lineHeight: 1
+  };
   const uatBadgeStatus = uatPending > 0 ? 'waiting' : 'success';
   const uatBadgeLabel = uatPending > 0
     ? `${uatPending} UAT ${uatPending === 1 ? 'item' : 'items'} open`
     : 'UAT clear';
+  const activeSessionStarted = fmtSessionTimestamp(activeTaskSession.startedAt);
+  const isViewingArchived = !viewingActive && !!selectedArchivedSession;
+  const selectedSessionRange = selectedArchivedSession
+    ? `Started ${fmtSessionTimestamp(selectedArchivedSession.startedAt)} · Ended ${fmtSessionTimestamp(selectedArchivedSession.endedAt)}`
+    : '';
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--cth-paper-200)', position: 'relative' }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', flexShrink: 0,
+        borderBottom: '1px solid var(--cth-ink-300)', background: 'var(--cth-paper-50)'
+      }}>
+        <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 9, color: 'var(--cth-ink-500)', letterSpacing: '0.08em' }}>
+          SESSIONS
+        </span>
+        <button
+          onClick={handleSelectActive}
+          style={{ ...sessionButtonStyle, ...(viewingActive ? sessionButtonActiveStyle : {}) }}
+          title={`Started ${activeSessionStarted}`}
+        >
+          {activeTaskSession.label}
+        </button>
+        <span style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>
+          since {activeSessionStarted}
+        </span>
+        {taskSessionHistory.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {taskSessionHistory.map((session) => (
+              <div key={session.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button
+                  onClick={() => handleSelectArchived(session.id)}
+                  style={{ ...sessionButtonStyle, ...(viewedTaskSessionId === session.id ? sessionButtonActiveStyle : {}) }}
+                  title={`Started ${fmtSessionTimestamp(session.startedAt)} · Ended ${fmtSessionTimestamp(session.endedAt)}`}
+                >
+                  {session.label}
+                </button>
+                <button
+                  onClick={() => handleRenameArchived(session.id, session.label)}
+                  style={sessionIconButtonStyle}
+                  title="Rename session"
+                >
+                  ✎
+                </button>
+                <button
+                  onClick={() => handleDeleteArchived(session.id)}
+                  style={sessionIconButtonStyle}
+                  title="Delete session"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <PixelButton variant="secondary" size="sm" onClick={handleRenameActive}>
+            rename
+          </PixelButton>
+          <PixelButton variant="primary" size="sm" onClick={handleNewSession}>
+            new session
+          </PixelButton>
+        </div>
+      </div>
+      {isViewingArchived && selectedArchivedSession && (
+        <div style={{
+          padding: '6px 10px', borderBottom: '1px solid var(--cth-ink-300)',
+          background: 'var(--cth-paper-100)', fontFamily: 'var(--cth-font-mono)',
+          fontSize: 11, color: 'var(--cth-ink-700)'
+        }}>
+          Viewing archived session {selectedArchivedSession.label} ({selectedSessionRange}). Actions are read-only.
+        </div>
+      )}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', flexShrink: 0,
         borderBottom: '1px solid var(--cth-ink-300)', background: 'var(--cth-paper-100)'
@@ -364,11 +508,11 @@ export function TasksKanban() {
                       <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
                         <input
                           type="text"
-                          value={answerDrafts[key] ?? ''}
-                          onChange={(e) => setAnswerDrafts((d) => ({ ...d, [key]: e.target.value }))}
-                          onKeyDown={(e) => { if (e.key === 'Enter') void sendAnswer(task, qa, key); }}
-                          placeholder="your answer…"
-                          disabled={isActing}
+                        value={answerDrafts[key] ?? ''}
+                        onChange={(e) => setAnswerDrafts((d) => ({ ...d, [key]: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') void sendAnswer(task, qa, key); }}
+                        placeholder="your answer…"
+                          disabled={readOnly || isActing}
                           style={{
                             flex: 1, padding: '3px 6px', border: 'none', outline: 'none',
                             background: 'var(--cth-paper-100)',
@@ -379,7 +523,7 @@ export function TasksKanban() {
                         />
                         <button
                           onClick={() => void sendAnswer(task, qa, key)}
-                          disabled={isActing || !(answerDrafts[key] ?? '').trim()}
+                          disabled={readOnly || isActing || !(answerDrafts[key] ?? '').trim()}
                           style={{
                             padding: '3px 8px', border: 'none', cursor: 'pointer',
                             background: 'var(--cth-mint)', color: 'var(--cth-ink-900)',
@@ -394,7 +538,7 @@ export function TasksKanban() {
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 2 }}>
                         <button
                           onClick={() => void markDone(task, qa, key)}
-                          disabled={isActing}
+                          disabled={readOnly || isActing}
                           style={{
                             padding: '3px 8px', border: 'none', cursor: 'pointer',
                             background: 'var(--cth-mint)', color: 'var(--cth-ink-900)',
@@ -421,7 +565,7 @@ export function TasksKanban() {
                         <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
                           <button
                             onClick={() => void reviewDecide(task, qa, false, key)}
-                            disabled={isActing}
+                            disabled={readOnly || isActing}
                             style={{
                               padding: '3px 8px', border: 'none', cursor: 'pointer',
                               background: 'var(--cth-coral-light, #fde8e8)', color: 'var(--cth-ink-900)',
@@ -432,7 +576,7 @@ export function TasksKanban() {
                           >CHANGES</button>
                           <button
                             onClick={() => void reviewDecide(task, qa, true, key)}
-                            disabled={isActing}
+                            disabled={readOnly || isActing}
                             style={{
                               padding: '3px 8px', border: 'none', cursor: 'pointer',
                               background: 'var(--cth-mint)', color: 'var(--cth-ink-900)',
@@ -493,8 +637,9 @@ export function TasksKanban() {
                     task={t}
                     accent={col.accent}
                     assigneeName={nameFor(t.assignee)}
-                    onOpen={() => openTaskDetail(t.id)}
-                    onDismiss={() => dismissTask(t.id)}
+                    onOpen={readOnly ? undefined : () => openTaskDetail(t.id)}
+                    onDismiss={readOnly ? undefined : () => dismissTask(t.id)}
+                    readOnly={readOnly}
                   />
                 ))}
               </div>
@@ -518,22 +663,23 @@ export function TasksKanban() {
 // assignee. Everything else (the full contract, deps, controls) lives in the
 // detail view a click away: a kanban card can carry a title at most.
 
-function TaskCard({ task, accent, assigneeName, onOpen, onDismiss }: {
+function TaskCard({ task, accent, assigneeName, onOpen, onDismiss, readOnly }: {
   task: HiveTask;
   accent: string;
   assigneeName?: string;
-  onOpen: () => void;
-  onDismiss: () => void;
+  onOpen?: () => void;
+  onDismiss?: () => void;
+  readOnly: boolean;
 }) {
   return (
     <div style={{ position: 'relative', display: 'flex' }}>
       <button
-        onClick={onOpen}
-        title="open task details"
+        onClick={readOnly ? undefined : onOpen}
+        title={readOnly ? 'Session history view (read-only)' : 'open task details'}
         style={{
           flex: 1, minWidth: 0,
           display: 'flex', alignItems: 'stretch', gap: 0, padding: 0,
-          border: 'none', cursor: 'pointer', textAlign: 'left',
+          border: 'none', cursor: readOnly || !onOpen ? 'default' : 'pointer', textAlign: 'left',
           background: 'var(--cth-paper-100)',
           boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
         }}
@@ -560,20 +706,21 @@ function TaskCard({ task, accent, assigneeName, onOpen, onDismiss }: {
           }}>?</span>
         )}
       </button>
-      {/* Dismiss — sibling button (not nested) so it never triggers onOpen. */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-        title="dismiss this task (removes it from the board)"
-        aria-label="dismiss task"
-        style={{
-          position: 'absolute', top: 0, right: 0, width: 16, height: 16, padding: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
-          border: 'none', cursor: 'pointer', background: 'transparent',
-          color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)', fontSize: 12
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cth-coral)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cth-ink-500)'; }}
-      >✕</button>
+      {!readOnly && onDismiss && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+          title="dismiss this task (removes it from the board)"
+          aria-label="dismiss task"
+          style={{
+            position: 'absolute', top: 0, right: 0, width: 16, height: 16, padding: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+            border: 'none', cursor: 'pointer', background: 'transparent',
+            color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)', fontSize: 12
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cth-coral)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cth-ink-500)'; }}
+        >✕</button>
+      )}
     </div>
   );
 }

@@ -70,6 +70,8 @@ export interface HarnessConfig {
   defaultCommand: string;
   /** Default model for newly spawned agents (e.g. 'claude-sonnet-4-6[1m]'); unset = CLI default. */
   defaultModel?: string;
+  /** Runtime profile id new agents should default to (optional). */
+  defaultSpawnProfileId?: string;
   /** Which provider+model powers the Overmind orchestrator ("Abathur"). Default
    *  'claude' / 'claude-opus-4-8'. Mirrors src/main/config.ts. */
   overmindProvider?: AgentProvider;

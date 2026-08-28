@@ -270,6 +270,8 @@ export interface HarnessConfig {
   defaultCommand: string;
   /** Default model for newly spawned agents (e.g. 'claude-sonnet-4-6[1m]'); unset = CLI default. */
   defaultModel?: string;
+  /** Runtime profile id new agents should default to (optional). */
+  defaultSpawnProfileId?: string;
   /** Which provider powers the Overmind orchestrator ("Abathur"). The persona is
    *  constant; only its engine is selectable. Default 'claude'. Eligible providers
    *  are those that can receive inbox (claude/codex/antigravity/qwen). */
@@ -519,6 +521,7 @@ const DEFAULTS: HarnessConfig = {
   // over the role-based tiers (modelForRole) in the spawn handler, so all agents
   // (incl. god) default to Fable 5. A per-agent model choice still overrides it.
   defaultModel: 'claude-fable-5',
+  defaultSpawnProfileId: undefined,
   runtimeProfiles: [],
   localDelegates: [],
   // Seeded from the MCP catalog so the consent defaults never drift from it
