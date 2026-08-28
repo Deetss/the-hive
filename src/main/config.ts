@@ -235,6 +235,39 @@ export interface GovernorProfilePolicy {
   autoOffload?: Partial<AutoOffloadConfig>;
 }
 
+export const DEFAULT_GOVERNOR_PACE_MARGIN = 0;
+export const DEFAULT_GOVERNOR_YELLOW_MARGIN = 10;
+export const DEFAULT_GOVERNOR_EARLY_FLOOR = 15;
+export const DEFAULT_GOVERNOR_ABSOLUTE_BACKSTOP = 90;
+export const DEFAULT_GOVERNOR_RECENT_MS = 10 * 60 * 1000;
+export const DEFAULT_GOVERNOR_TRIP_MODE: GovernorWindowTripMode = 'pace-or-absolute';
+
+export type GovernorWindowKey = 'fiveHour' | 'sevenDay';
+
+export interface ResolvedGovernorWindowSettings {
+  enabled: boolean;
+  tripMode: GovernorWindowTripMode;
+  paceMarginPts: number;
+  yellowMarginPts: number;
+  earlyWindowFloorPct: number;
+  absoluteBackstopPct: number;
+}
+
+export interface ResolvedGovernorSpawnGateSettings {
+  governClaude: boolean;
+  governModels: string[];
+  exemptAgents: Set<string>;
+}
+
+export interface ResolvedGovernorProfileSettings {
+  enabled: boolean;
+  windows: { fiveHour: ResolvedGovernorWindowSettings; sevenDay: ResolvedGovernorWindowSettings };
+  spawnGate: ResolvedGovernorSpawnGateSettings;
+  autoOffloadMerged?: AutoOffloadConfig;
+  autoOffloadOverride?: Partial<AutoOffloadConfig>;
+  recentAgentWindowMs: number;
+}
+
 /** Usage-cap governor policy. The governor runs on a 60s beat and paces Claude
  *  usage against provider rate-limit windows. Defaults mirror the historic
  *  single-profile behavior until operators opt into per-profile overrides. */
@@ -818,6 +851,136 @@ function cloneProfilesMap(map?: Record<string, GovernorProfilePolicy | undefined
     if (clone) out[key] = clone;
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+function firstDefined<T>(...values: Array<T | undefined | null>): T | undefined {
+  for (const value of values) {
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
+function normalizeModelList(values: string[] | undefined): string[] {
+  if (!values) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of values) {
+    const slug = raw?.trim().toLowerCase();
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+    result.push(slug);
+  }
+  return result;
+}
+
+function mergeAutoOffloadConfigs(base?: AutoOffloadConfig, override?: Partial<AutoOffloadConfig> | null): AutoOffloadConfig | undefined {
+  if (!base && !override) return undefined;
+  const merged: AutoOffloadConfig = base
+    ? { ...base, tryOrder: Array.isArray(base.tryOrder) ? [...base.tryOrder] : base.tryOrder }
+    : {};
+  if (override) {
+    if (override.enabled !== undefined) merged.enabled = override.enabled;
+    if (override.targetsFile !== undefined) merged.targetsFile = override.targetsFile;
+    if (Array.isArray(override.tryOrder)) merged.tryOrder = [...override.tryOrder];
+    if (override.maxConcurrent !== undefined) merged.maxConcurrent = override.maxConcurrent;
+    if (override.healthCheckTimeoutMs !== undefined) merged.healthCheckTimeoutMs = override.healthCheckTimeoutMs;
+    if (override.dryRun !== undefined) merged.dryRun = override.dryRun;
+    if (override.defaultTargetMaxConcurrent !== undefined) merged.defaultTargetMaxConcurrent = override.defaultTargetMaxConcurrent;
+    if (override.defaultTokensPerMinute !== undefined) merged.defaultTokensPerMinute = override.defaultTokensPerMinute;
+    if (override.maxRequeues !== undefined) merged.maxRequeues = override.maxRequeues;
+    if (override.holdNotifyIntervalMs !== undefined) merged.holdNotifyIntervalMs = override.holdNotifyIntervalMs;
+  }
+  return merged;
+}
+
+function resolveWindowSettings(
+  policy: GovernorPolicy | undefined,
+  defaultProfile: GovernorProfilePolicy | undefined,
+  profilePolicy: GovernorProfilePolicy | undefined,
+  key: GovernorWindowKey,
+  evalDefaults: { paceMarginPts: number; yellowMarginPts: number; earlyWindowFloorPct: number; absoluteBackstopPct: number }
+): ResolvedGovernorWindowSettings {
+  const base: ResolvedGovernorWindowSettings = {
+    enabled: true,
+    tripMode: DEFAULT_GOVERNOR_TRIP_MODE,
+    paceMarginPts: evalDefaults.paceMarginPts,
+    yellowMarginPts: evalDefaults.yellowMarginPts,
+    earlyWindowFloorPct: evalDefaults.earlyWindowFloorPct,
+    absoluteBackstopPct: evalDefaults.absoluteBackstopPct
+  };
+  const apply = (threshold?: GovernorWindowThreshold) => {
+    if (!threshold) return;
+    if (threshold.enabled !== undefined) base.enabled = threshold.enabled;
+    if (threshold.tripMode) base.tripMode = threshold.tripMode;
+    if (threshold.paceMarginPts !== undefined) base.paceMarginPts = threshold.paceMarginPts;
+    if (threshold.yellowMarginPts !== undefined) base.yellowMarginPts = threshold.yellowMarginPts;
+    if (threshold.earlyWindowFloorPct !== undefined) base.earlyWindowFloorPct = threshold.earlyWindowFloorPct;
+    if (threshold.absoluteBackstopPct !== undefined) base.absoluteBackstopPct = threshold.absoluteBackstopPct;
+  };
+  apply(policy?.global?.windows?.[key]);
+  apply(defaultProfile?.windows?.[key]);
+  apply(profilePolicy?.windows?.[key]);
+  if (
+    key === 'fiveHour'
+    && policy?.fiveHourCapPct !== undefined
+    && policy?.global?.windows?.fiveHour?.absoluteBackstopPct == null
+    && defaultProfile?.windows?.fiveHour?.absoluteBackstopPct == null
+    && profilePolicy?.windows?.fiveHour?.absoluteBackstopPct == null
+  ) {
+    base.absoluteBackstopPct = policy.fiveHourCapPct;
+  }
+  if (
+    key === 'sevenDay'
+    && policy?.sevenDayCapPct !== undefined
+    && policy?.global?.windows?.sevenDay?.absoluteBackstopPct == null
+    && defaultProfile?.windows?.sevenDay?.absoluteBackstopPct == null
+    && profilePolicy?.windows?.sevenDay?.absoluteBackstopPct == null
+  ) {
+    base.absoluteBackstopPct = policy.sevenDayCapPct;
+  }
+  return base;
+}
+
+export function resolveGovernorPolicy(policy: GovernorPolicy | undefined, profileId: string | null): ResolvedGovernorProfileSettings {
+  const evalDefaults = {
+    paceMarginPts: firstDefined(policy?.global?.evaluation?.paceMarginPts, policy?.paceMarginPts, DEFAULT_GOVERNOR_PACE_MARGIN) ?? DEFAULT_GOVERNOR_PACE_MARGIN,
+    yellowMarginPts: firstDefined(policy?.global?.evaluation?.yellowMarginPts, policy?.yellowMarginPts, DEFAULT_GOVERNOR_YELLOW_MARGIN) ?? DEFAULT_GOVERNOR_YELLOW_MARGIN,
+    earlyWindowFloorPct: firstDefined(policy?.global?.evaluation?.minimumPaceFloorPct, policy?.earlyWindowFloorPct, DEFAULT_GOVERNOR_EARLY_FLOOR) ?? DEFAULT_GOVERNOR_EARLY_FLOOR,
+    absoluteBackstopPct: firstDefined(policy?.global?.evaluation?.absoluteBackstopPct, policy?.absoluteBackstopPct, DEFAULT_GOVERNOR_ABSOLUTE_BACKSTOP) ?? DEFAULT_GOVERNOR_ABSOLUTE_BACKSTOP
+  };
+  const defaultProfile = policy?.defaultProfile;
+  const profilePolicy = profileId ? policy?.profiles?.[profileId] : undefined;
+  const windows = {
+    fiveHour: resolveWindowSettings(policy, defaultProfile, profilePolicy, 'fiveHour', evalDefaults),
+    sevenDay: resolveWindowSettings(policy, defaultProfile, profilePolicy, 'sevenDay', evalDefaults)
+  };
+  const globalGate = policy?.global?.spawnGate;
+  const defaultGate = defaultProfile?.spawnGate;
+  const profileGate = profilePolicy?.spawnGate;
+  const spawnGateGovernClaude = profileGate?.governClaude ?? defaultGate?.governClaude ?? globalGate?.governClaude ?? true;
+  const enabled = profilePolicy?.enabled ?? spawnGateGovernClaude;
+  const exemptAgents = new Set<string>();
+  for (const list of [globalGate?.exemptAgents, defaultGate?.exemptAgents, profileGate?.exemptAgents]) {
+    if (!list) continue;
+    for (const id of list) {
+      if (typeof id === 'string' && id.trim()) exemptAgents.add(id.trim());
+    }
+  }
+  const autoOffloadBase = mergeAutoOffloadConfigs(policy?.global?.autoOffload, defaultProfile?.autoOffload ?? null);
+  const autoOffloadOverride = profilePolicy?.autoOffload ?? undefined;
+  const autoOffloadMerged = mergeAutoOffloadConfigs(autoOffloadBase, autoOffloadOverride);
+  return {
+    enabled,
+    windows,
+    spawnGate: {
+      governClaude: spawnGateGovernClaude,
+      governModels: normalizeModelList(profileGate?.governModels ?? defaultGate?.governModels ?? globalGate?.governModels),
+      exemptAgents
+    },
+    autoOffloadMerged,
+    autoOffloadOverride,
+    recentAgentWindowMs: firstDefined(policy?.global?.recentAgentWindowMs, policy?.recentAgentWindowMs, DEFAULT_GOVERNOR_RECENT_MS) ?? DEFAULT_GOVERNOR_RECENT_MS
+  };
 }
 
 function normalizeGovernorPolicyShape(policy: GovernorPolicy | undefined): GovernorPolicy | undefined {
