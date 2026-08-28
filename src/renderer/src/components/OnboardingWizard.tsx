@@ -200,7 +200,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       return;
     }
     const next = await window.cth.updateConfig({
-      onboardingComplete: true,
       audience: audience ?? 'technical',
       harnessHome, // the same trimmed value we just mkdir'd, not the raw field
       registeredRepos: repos,

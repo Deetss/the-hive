@@ -12,6 +12,7 @@ import { StatusBar } from '@/components/StatusBar';
 import { AddAgentModal } from '@/components/AddAgentModal';
 import { AbathurBooting } from '@/components/AbathurBooting';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
+import { ProfileWalkthrough } from '@/components/ProfileWalkthrough';
 import { HivePicker } from '@/components/HivePicker';
 import { QuitWarningModal, type ClosingTimeState } from '@/components/QuitWarningModal';
 import { CompletionToast } from '@/realtime/CompletionToast';
@@ -70,6 +71,8 @@ export function App() {
   const [quitWarn, setQuitWarn] = useState<{ ptyCount: number } | null>(null);
   const [closing, setClosing] = useState<ClosingTimeState | null>(null);
   const [vpWidth, setVpWidth] = useState<number>(window.innerWidth);
+  const [profileWalkthroughOpen, setProfileWalkthroughOpen] = useState(false);
+  const [profileWalkthroughMandatory, setProfileWalkthroughMandatory] = useState(false);
 
   // Open Settings with a fresh config read so local state in SettingsModal
   // initializes from the current disk value, not the stale load-time snapshot.
@@ -79,6 +82,36 @@ export function App() {
     window.cth.getConfig().then(fresh => setConfig(fresh)).catch(() => {/* use stale on failure */});
     setSettingsSection(section);
     setSettingsOpen(true);
+  }, []);
+
+  const handleProfileWalkthroughComplete = useCallback((next: HarnessConfig) => {
+    setConfig(next);
+    setProfileWalkthroughOpen(false);
+    setProfileWalkthroughMandatory(false);
+    setHiveOpened(true);
+  }, []);
+
+  const handleProfileWalkthroughCancel = useCallback(() => {
+    setProfileWalkthroughOpen(false);
+    setProfileWalkthroughMandatory(false);
+  }, []);
+
+  const openProfileWalkthroughFromSettings = useCallback(() => {
+    setSettingsOpen(false);
+    const fetchConfig = window.cth.getConfig?.();
+    if (fetchConfig && typeof (fetchConfig as Promise<HarnessConfig>).then === 'function') {
+      (fetchConfig as Promise<HarnessConfig>).then((fresh) => {
+        setConfig(fresh);
+        setProfileWalkthroughMandatory(false);
+        setProfileWalkthroughOpen(true);
+      }).catch(() => {
+        setProfileWalkthroughMandatory(false);
+        setProfileWalkthroughOpen(true);
+      });
+    } else {
+      setProfileWalkthroughMandatory(false);
+      setProfileWalkthroughOpen(true);
+    }
   }, []);
 
   // Deep link into Settings from anywhere in the tree. Settings' open state is
@@ -135,6 +168,14 @@ export function App() {
   // for whichever agent the user is viewing; gated on the flag, terminal-safe
   // (solo-hold threshold, aborts on any other key). See freeflow/holdOption.ts.
   useHoldOptionToTalk();
+
+  useEffect(() => {
+    if (!config) return;
+    if (config.harnessHome && !config.onboardingComplete && !profileWalkthroughOpen) {
+      setProfileWalkthroughMandatory(true);
+      setProfileWalkthroughOpen(true);
+    }
+  }, [config?.harnessHome, config?.onboardingComplete, profileWalkthroughOpen]);
 
   // Single always-on hive message subscription — lives here (App root) so it
   // fires regardless of which agent or tab is selected. Serves two streams:
@@ -291,8 +332,8 @@ export function App() {
     return <div style={{ width: '100vw', height: '100vh', background: 'var(--cth-cream-100)' }} />;
   }
 
-  if (!config.onboardingComplete) {
-    // Just-onboarded users go straight into the hive they set up — skip the picker.
+  if (!config.harnessHome) {
+    // First run: collect harness home, repos, and base config before continuing.
     return <OnboardingWizard onComplete={(next) => { setConfig(next); setHiveOpened(true); }} />;
   }
 
@@ -530,8 +571,9 @@ export function App() {
       {settingsOpen && (
         <SettingsModal
           config={config}
-          initialSection={settingsSection}
           onClose={() => { setSettingsOpen(false); setSettingsSection(undefined); }}
+          onOpenProfileWalkthrough={openProfileWalkthroughFromSettings}
+          initialSection={settingsSection}
         />
       )}
 
