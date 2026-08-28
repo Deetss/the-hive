@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelBadge } from './PixelBadge';
 import { PixelButton } from './PixelButton';
@@ -1217,6 +1217,20 @@ function ArchivedSection() {
 
 // ─── Memory tab ──────────────────────────────────────────────────────────────
 
+interface MemoryTextResult {
+  source: string;
+  excerpt: string;
+}
+
+const MemoryTextResultRow = memo(function MemoryTextResultRow({ source, excerpt }: MemoryTextResult) {
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-500)' }}>{source}</div>
+      <Pre>{excerpt}</Pre>
+    </div>
+  );
+}, (prev, next) => prev.source === next.source && prev.excerpt === next.excerpt);
+
 function MemoryTab({ godId, who: controlledWho, onWho }: { godId: string; who?: string; onWho?: (id: string) => void }) {
   const agents = useStore((s) => s.agents);
   // Selection is controllable from the graph tab; falls back to local state.
@@ -1232,6 +1246,14 @@ function MemoryTab({ godId, who: controlledWho, onWho }: { godId: string; who?: 
   const [textResults, setTextResults] = useState<Array<{ source: string; excerpt: string }>>([]);
   const [textSearched, setTextSearched] = useState(false);
   const [textBusy, setTextBusy] = useState(false);
+
+  const agentOptions = useMemo(() => agents.map((a) => (
+    <option key={a.id} value={a.id}>{a.name}</option>
+  )), [agents]);
+
+  const textResultItems = useMemo(() => textResults.map((entry, index) => (
+    <MemoryTextResultRow key={`${entry.source}:${index}`} source={entry.source} excerpt={entry.excerpt} />
+  )), [textResults]);
 
   useEffect(() => {
     window.cth.hiveMemory(who).then(setMem).catch(() => setMem(''));
@@ -1273,12 +1295,7 @@ function MemoryTab({ godId, who: controlledWho, onWho }: { godId: string; who?: 
         </div>
         {textResults.length > 0 && (
           <div style={{ marginTop: 6 }}>
-            {textResults.map((r, i) => (
-              <div key={i} style={{ marginBottom: 4 }}>
-                <div style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-500)' }}>{r.source}</div>
-                <Pre>{r.excerpt}</Pre>
-              </div>
-            ))}
+            {textResultItems}
           </div>
         )}
         {textSearched && textResults.length === 0 && <Muted>Nothing matched.</Muted>}
@@ -1302,7 +1319,7 @@ function MemoryTab({ godId, who: controlledWho, onWho }: { godId: string; who?: 
 
       <Section title="MEMORY FILE">
         <Select value={who} onChange={setWho}>
-          {agents.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+          {agentOptions}
         </Select>
         <Pre>{mem || 'No memory recorded yet.'}</Pre>
       </Section>
