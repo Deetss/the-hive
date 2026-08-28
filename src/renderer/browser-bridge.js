@@ -231,6 +231,16 @@
   const warn = (...args) => console.warn(logPrefix, ...args);
   const info = (...args) => console.info(logPrefix, ...args);
   const error = (...args) => console.error(logPrefix, ...args);
+  const nav = typeof navigator !== 'undefined' ? navigator : undefined;
+  const browserPlatform = nav?.userAgentData?.platform ?? nav?.platform ?? 'browser';
+  const browserArch = nav?.userAgentData?.architecture
+    ?? (nav?.userAgent?.toLowerCase().includes('arm') ? 'arm' : 'unknown');
+
+  const unsupportedError = (method) => {
+    const message = `${method} is not available in the browser bridge yet`;
+    warn(message);
+    return new Error(message);
+  };
 
   function sendSerialized(serialized) {
     if (connected && socket && socket.readyState === WebSocket.OPEN) {
@@ -440,6 +450,40 @@
 
   registerInvokeMethods(cth, INVOKE_CHANNELS);
   registerEventMethods(cth, EVENT_CHANNELS);
+
+  cth.pathForFile = (file) => {
+    if (file && typeof file === 'object') {
+      if (typeof file.path === 'string' && file.path.length > 0) {
+        return file.path;
+      }
+      if (typeof file.webkitRelativePath === 'string' && file.webkitRelativePath.length > 0) {
+        warn('pathForFile is not supported in the browser bridge; returning relative path only');
+        return file.webkitRelativePath;
+      }
+      if (typeof file.name === 'string') {
+        warn('pathForFile is not supported in the browser bridge; returning file name only');
+        return file.name;
+      }
+    }
+    warn('pathForFile is not available in the browser bridge; returning empty string');
+    return '';
+  };
+
+  cth.platform = browserPlatform;
+  cth.arch = browserArch;
+
+  const unsupportedAsync = (method) => (...args) => {
+    const err = unsupportedError(method);
+    return Promise.reject(err);
+  };
+
+  cth.spawnPty = unsupportedAsync('spawnPty');
+  cth.writePty = unsupportedAsync('writePty');
+  cth.resizePty = unsupportedAsync('resizePty');
+  cth.redrawPty = unsupportedAsync('redrawPty');
+  cth.killPty = unsupportedAsync('killPty');
+  cth.listPtys = async () => [];
+  cth.resolveSessionCwd = async () => null;
 
   cth.onPtyData = (id, cb) => {
     if (typeof cb !== 'function') {
