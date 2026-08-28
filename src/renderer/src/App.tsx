@@ -156,7 +156,7 @@ export function App() {
       const withTriggers = c as HarnessConfig;
       useStore.getState().setWebhookTriggers(withTriggers.webhookTriggers ?? []);
       useStore.getState().setOrgTrigger(withTriggers.orgTrigger ?? DEFAULT_ORG_TRIGGER);
-    });
+    }).catch((err: unknown) => { console.error('[app] getConfig failed:', err); });
     // Mirror BYOK OpenAI key presence (boolean only; the key never leaves main) so the
     // Realtime Abathur voice toggle can gate on it. Lives in the secret broker, not
     // config — so fetch it rather than derive from c.

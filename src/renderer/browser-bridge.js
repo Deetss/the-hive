@@ -302,7 +302,8 @@
         return;
       case 'invoke-result': {
         const entry = pendingRequests.get(data.id);
-        if (!entry) return;
+        if (!entry) { warn('invoke-result for unknown id', data.id); return; }
+        info('invoke ←', data.id, entry.channel, data.ok ? 'ok' : ('error: ' + (data.error?.message ?? '?')));
         pendingRequests.delete(data.id);
         clearTimeout(entry.timer);
         if (data.ok) {
@@ -396,6 +397,7 @@
       }, BRIDGE_TIMEOUT_MS);
 
       pendingRequests.set(id, { resolve, reject, timer, channel });
+      info('invoke →', id, channel);
       sendEnvelope({ type: 'invoke', id, channel, args: Array.isArray(args) ? args : [] });
     });
   }
