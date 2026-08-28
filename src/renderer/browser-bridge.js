@@ -1,3 +1,6 @@
+// Guard: skip shim entirely when running inside Electron (preload already
+// defined window.cth via contextBridge). Only install in a plain browser.
+if (typeof window.cth !== 'undefined') { /* Electron — preload handles IPC */ } else
 (() => {
   const INVOKE_CHANNELS = {
   "spawnPty": "pty:spawn",
