@@ -59,7 +59,7 @@ const headStyle: CSSProperties = {
 };
 const linkStyle: CSSProperties = { color: 'var(--cth-ink-900)', textDecoration: 'underline', cursor: 'pointer' };
 
-export function AiEnginesSettings({ config }: { config: HarnessConfig }) {
+export function AiEnginesSettings({ config, onOpenProfileWalkthrough }: { config: HarnessConfig; onOpenProfileWalkthrough?: () => void }) {
   // Keep the global "OpenAI key present" signal (boolean only) live so the Talk
   // button's missing-key warning clears the instant the user saves their OpenAI key
   // here — without it the gate only refreshes on next app start. apikey:openai is
@@ -243,6 +243,13 @@ export function AiEnginesSettings({ config }: { config: HarnessConfig }) {
           once with <code>CLAUDE_CONFIG_DIR=&lt;dir&gt; claude</code>. The dir is a path only; no
           key is stored here, and it must live outside the synced hive repo.
         </div>
+        {onOpenProfileWalkthrough && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+            <PixelButton variant="secondary" size="sm" onClick={onOpenProfileWalkthrough}>
+              Re-run account walkthrough
+            </PixelButton>
+          </div>
+        )}
 
         {profiles.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

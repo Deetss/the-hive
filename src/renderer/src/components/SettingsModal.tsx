@@ -28,6 +28,7 @@ import { CostHud } from '@/realtime/CostHud';
 export interface SettingsModalProps {
   config: HarnessConfig;
   onClose: () => void;
+  onOpenProfileWalkthrough?: () => void;
   /** Open straight to a section instead of General. Used by deep links from
    *  elsewhere in the UI — "set it now" beside a disabled Talk button lands on
    *  the tab that actually holds the field, rather than making the user hunt. */
@@ -160,7 +161,7 @@ function clearLocalState(): void {
 export type Section = 'General' | 'Prerequisites' | 'Agents & Models' | 'Autonomy & Budgets' | 'Connections' | 'Voice' | 'Memory & Knowledge';
 const NAV_SECTIONS: Section[] = ['General', 'Prerequisites', 'Agents & Models', 'Autonomy & Budgets', 'Connections', 'Voice', 'Memory & Knowledge'];
 
-export function SettingsModal({ config, onClose, initialSection }: SettingsModalProps) {
+export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initialSection }: SettingsModalProps) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [activeSection, setActiveSection] = useState<Section>(initialSection ?? 'General');
@@ -1150,7 +1151,7 @@ export function SettingsModal({ config, onClose, initialSection }: SettingsModal
 
                       <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
 
-                      <AiEnginesSettings config={config} />
+                      <AiEnginesSettings config={config} onOpenProfileWalkthrough={onOpenProfileWalkthrough} />
 
                       <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
 
