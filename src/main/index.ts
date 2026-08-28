@@ -1,4 +1,19 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerMonitor, powerSaveBlocker, screen, shell, Notification, type IpcMainInvokeEvent } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Menu,
+  powerMonitor,
+  powerSaveBlocker,
+  screen,
+  shell,
+  Notification,
+  type IpcMainInvokeEvent,
+  type IpcMainInvokeListener,
+  type WebContents
+} from 'electron';
 import { WebSocketServer, WebSocket } from 'ws';
 import { spawn } from 'node:child_process';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
@@ -129,6 +144,239 @@ let browserServer: HttpServer | null = null;
 let browserServerUrl: string | null = null;
 let browserServerStart: Promise<string> | null = null;
 
+type BrowserBridgeClient = {
+  socket: WebSocket;
+  subscriptions: Set<string>;
+  id: number;
+};
+
+const browserBridgeClients = new Set<BrowserBridgeClient>();
+const browserInvokeHandlers = new Map<string, IpcMainInvokeListener>();
+let browserSocketServer: WebSocketServer | null = null;
+let browserBridgeClientSeq = 0;
+const BROWSER_BRIDGE_SEND_SYMBOL = Symbol('browserBridgeOriginalSend');
+
+const originalIpcHandle = ipcMain.handle.bind(ipcMain);
+ipcMain.handle = ((channel: string, listener: IpcMainInvokeListener) => {
+  browserInvokeHandlers.set(channel, listener);
+  return originalIpcHandle(channel, listener);
+}) as typeof ipcMain.handle;
+
+const originalIpcRemoveHandler = ipcMain.removeHandler.bind(ipcMain);
+ipcMain.removeHandler = ((channel: string) => {
+  browserInvokeHandlers.delete(channel);
+  return originalIpcRemoveHandler(channel);
+}) as typeof ipcMain.removeHandler;
+
+type BrowserBridgeInbound =
+  | { type: 'invoke'; id: number; channel: string; args?: unknown[] }
+  | { type: 'subscribe'; channel: string }
+  | { type: 'unsubscribe'; channel: string }
+  | { type: 'ping'; id?: number };
+
+type BrowserBridgeOutbound =
+  | { type: 'hello'; version: number }
+  | { type: 'invoke-result'; id: number; ok: true; value: unknown }
+  | { type: 'invoke-result'; id: number; ok: false; error: { message: string; code?: unknown; stack?: string } }
+  | { type: 'event'; channel: string; args: unknown[] }
+  | { type: 'pong'; id?: number }
+  | { type: 'error'; message: string };
+
+
+type BrowserBridgeInvokeMessage = Extract<BrowserBridgeInbound, { type: 'invoke' }>;
+
+function setupBrowserSocketServer(server: HttpServer): void {
+  if (browserSocketServer) return;
+  const wss = new WebSocketServer({ server, path: '/bridge' });
+  browserSocketServer = wss;
+  wss.on('connection', (socket) => {
+    const client: BrowserBridgeClient = { socket, subscriptions: new Set(), id: ++browserBridgeClientSeq };
+    browserBridgeClients.add(client);
+    browserBridgeSend(client, { type: 'hello', version: 1 });
+    socket.on('message', (data) => { handleBrowserClientMessage(client, data); });
+    socket.on('close', () => { browserBridgeClients.delete(client); });
+    socket.on('error', (err) => { console.error('[browser-bridge] client error:', err); });
+  });
+  wss.on('error', (err) => { console.error('[browser-bridge] server error:', err); });
+  wss.on('close', () => {
+    browserSocketServer = null;
+    browserBridgeClients.clear();
+  });
+}
+
+function teardownBrowserSocketServer(): void {
+  for (const client of browserBridgeClients) {
+    try { client.socket.close(1011, 'server closing'); } catch { /* ignore */ }
+  }
+  browserBridgeClients.clear();
+  if (browserSocketServer) {
+    try { browserSocketServer.close(); } catch { /* ignore */ }
+    browserSocketServer = null;
+  }
+}
+
+function stringifyBridgePayload(payload: BrowserBridgeOutbound): string | null {
+  try {
+    return JSON.stringify(payload, (_key, value) => (typeof value === 'bigint' ? value.toString() : value));
+  } catch (err) {
+    console.error('[browser-bridge] serialize failed:', err);
+    return null;
+  }
+}
+
+function browserBridgeSend(client: BrowserBridgeClient, payload: BrowserBridgeOutbound): void {
+  if (client.socket.readyState !== WebSocket.OPEN) return;
+  const data = stringifyBridgePayload(payload);
+  if (data == null) return;
+  try {
+    client.socket.send(data);
+  } catch (err) {
+    console.error('[browser-bridge] send failed:', err);
+    try { client.socket.close(1011, 'send failed'); } catch { /* ignore */ }
+    browserBridgeClients.delete(client);
+  }
+}
+
+function broadcastBrowserEvent(channel: string, args: unknown[]): void {
+  if (browserBridgeClients.size === 0) return;
+  const payload: BrowserBridgeOutbound = { type: 'event', channel, args };
+  for (const client of browserBridgeClients) {
+    if (client.socket.readyState !== WebSocket.OPEN) continue;
+    if (client.subscriptions.size > 0 && !client.subscriptions.has(channel)) continue;
+    browserBridgeSend(client, payload);
+  }
+}
+
+function toBridgeBuffer(value: Buffer | ArrayBuffer): Buffer {
+  if (Buffer.isBuffer(value)) return value;
+  return Buffer.from(value);
+}
+
+function normalizeBridgeData(data: WebSocket.RawData): string {
+  if (typeof data === 'string') return data;
+  if (Buffer.isBuffer(data)) return data.toString('utf8');
+  if (Array.isArray(data)) {
+    return Buffer.concat(data.map((chunk) => toBridgeBuffer(chunk))).toString('utf8');
+  }
+  return toBridgeBuffer(data as ArrayBuffer).toString('utf8');
+}
+
+function handleBrowserClientMessage(client: BrowserBridgeClient, raw: WebSocket.RawData): void {
+  let parsed: BrowserBridgeInbound;
+  try {
+    parsed = JSON.parse(normalizeBridgeData(raw)) as BrowserBridgeInbound;
+  } catch {
+    browserBridgeSend(client, { type: 'error', message: 'invalid message' });
+    return;
+  }
+  if (!parsed || typeof parsed !== 'object' || typeof (parsed as { type?: unknown }).type !== 'string') {
+    browserBridgeSend(client, { type: 'error', message: 'invalid message' });
+    return;
+  }
+  switch (parsed.type) {
+    case 'invoke': {
+      if (typeof parsed.id !== 'number' || typeof parsed.channel !== 'string' || parsed.channel.length === 0) {
+        browserBridgeSend(client, { type: 'error', message: 'invalid invoke payload' });
+        return;
+      }
+      void handleBrowserInvoke(client, parsed);
+      break;
+    }
+    case 'subscribe':
+      if (typeof parsed.channel === 'string' && parsed.channel.length > 0) {
+        client.subscriptions.add(parsed.channel);
+      }
+      break;
+    case 'unsubscribe':
+      if (typeof parsed.channel === 'string' && parsed.channel.length > 0) {
+        client.subscriptions.delete(parsed.channel);
+      }
+      break;
+    case 'ping':
+      browserBridgeSend(client, { type: 'pong', id: parsed.id });
+      break;
+    default:
+      browserBridgeSend(client, { type: 'error', message: `unknown message type: ${String((parsed as { type: unknown }).type)}` });
+  }
+}
+
+async function handleBrowserInvoke(client: BrowserBridgeClient, msg: BrowserBridgeInvokeMessage): Promise<void> {
+  const handler = browserInvokeHandlers.get(msg.channel);
+  if (!handler) {
+    browserBridgeSend(client, { type: 'invoke-result', id: msg.id, ok: false, error: { message: `No handler registered for ${msg.channel}` } });
+    return;
+  }
+  const args = Array.isArray(msg.args) ? msg.args : [];
+  try {
+    const result = await Promise.resolve(handler(createBrowserInvokeEvent(client), ...args));
+    browserBridgeSend(client, { type: 'invoke-result', id: msg.id, ok: true, value: result });
+  } catch (err) {
+    browserBridgeSend(client, { type: 'invoke-result', id: msg.id, ok: false, error: serializeBridgeError(err) });
+  }
+}
+
+function serializeBridgeError(err: unknown): { message: string; code?: unknown; stack?: string } {
+  if (err instanceof Error) {
+    return { message: err.message, stack: err.stack ?? undefined };
+  }
+  if (typeof err === 'object' && err && 'message' in err && typeof (err as { message: unknown }).message === 'string') {
+    const anyErr = err as { message: string; code?: unknown; stack?: unknown };
+    const payload: { message: string; code?: unknown; stack?: string } = { message: anyErr.message };
+    if ('code' in anyErr) payload.code = anyErr.code;
+    if (typeof anyErr.stack === 'string') payload.stack = anyErr.stack;
+    return payload;
+  }
+  return { message: typeof err === 'string' ? err : 'invoke failed' };
+}
+
+function createBrowserInvokeEvent(client: BrowserBridgeClient): IpcMainInvokeEvent {
+  const existing = liveWebContents() ?? BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !w.webContents.isDestroyed())?.webContents;
+  const sender = existing ?? createBridgeStubWebContents(client);
+  const event: any = {
+    sender,
+    senderFrame: null,
+    frameId: typeof sender?.mainFrame?.routingId === 'number' ? sender.mainFrame.routingId : 0,
+    processId: typeof sender?.getProcessId === 'function' ? sender.getProcessId() : -1,
+    ports: [],
+    returnValue: undefined,
+    defaultPrevented: false,
+    preventDefault() { this.defaultPrevented = true; }
+  };
+  Object.defineProperty(event, 'bridgeClient', { value: client, enumerable: false });
+  return event as IpcMainInvokeEvent;
+}
+
+function createBridgeStubWebContents(client: BrowserBridgeClient): WebContents {
+  const stub: Partial<WebContents> = {
+    id: -client.id,
+    send: (channel: string, ...args: unknown[]) => {
+      browserBridgeSend(client, { type: 'event', channel, args });
+    },
+    isDestroyed: () => client.socket.readyState !== WebSocket.OPEN
+  };
+  return stub as WebContents;
+}
+
+function attachBrowserBridge(wc: WebContents | null | undefined): void {
+  if (!wc) return;
+  const anyWc = wc as unknown as { [key: symbol]: typeof wc.send };
+  if (anyWc[BROWSER_BRIDGE_SEND_SYMBOL]) return;
+  const originalSend = wc.send.bind(wc);
+  anyWc[BROWSER_BRIDGE_SEND_SYMBOL] = originalSend;
+  wc.send = ((channel: string, ...args: unknown[]) => {
+    broadcastBrowserEvent(channel, args);
+    return originalSend(channel, ...args);
+  }) as typeof wc.send;
+  wc.once('destroyed', () => {
+    const saved = anyWc[BROWSER_BRIDGE_SEND_SYMBOL];
+    if (saved) {
+      wc.send = saved;
+      delete anyWc[BROWSER_BRIDGE_SEND_SYMBOL];
+    }
+  });
+}
+
+
 function mimeTypeFor(ext: string): string {
   return BROWSER_SERVER_MIME[ext] ?? 'application/octet-stream';
 }
@@ -222,10 +470,13 @@ function ensureBrowserServer(): Promise<string> {
       }
     });
 
+    setupBrowserSocketServer(server);
+
     const reset = (): void => {
       browserServer = null;
       browserServerUrl = null;
       browserServerStart = null;
+      teardownBrowserSocketServer();
     };
 
     server.once('error', (err) => {
@@ -2472,6 +2723,8 @@ function createWindow(opts: { floor?: boolean } = {}): BrowserWindow {
       ...(isFloor ? { partition: `persist:floor-${++floorSeq}` } : {})
     }
   });
+
+  attachBrowserBridge(win.webContents);
 
   // Capture the webContents once: after 'closed' the window is gone, but this
   // reference stays valid as the per-PTY ownership key.
