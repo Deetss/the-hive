@@ -278,6 +278,7 @@ function handleBrowserClientMessage(client: BrowserBridgeClient, raw: WebSocket.
     browserBridgeSend(client, { type: 'error', message: 'invalid message' });
     return;
   }
+  try { writeFileSync(join(resolveHarnessHome() ?? tmpdir(), 'bridge-debug.log'), `[${Date.now()}] MSG type=${JSON.stringify(parsed.type)} id_type=${typeof (parsed as any).id} id=${JSON.stringify((parsed as any).id)} ch_type=${typeof (parsed as any).channel} ch=${JSON.stringify((parsed as any).channel)}\n`, { flag: 'a' }); } catch { /* ignore */ }
   switch (parsed.type) {
     case 'invoke': {
       if (typeof parsed.id !== 'number' || typeof parsed.channel !== 'string' || parsed.channel.length === 0) {
