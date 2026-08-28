@@ -348,7 +348,7 @@
 
   function connect() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${window.location.host}bridge`;
+    const url = `${protocol}//${window.location.host}/bridge`;
     info('connecting to', url);
     try {
       socket = new WebSocket(url);
