@@ -174,36 +174,97 @@ export interface AutoOffloadConfig {
   holdNotifyIntervalMs?: number;
 }
 
+export type GovernorWindowTripMode = 'pace-or-absolute' | 'pace-only' | 'absolute-only';
+
+export interface GovernorWindowThreshold {
+  enabled?: boolean;
+  tripMode?: GovernorWindowTripMode;
+  paceMarginPts?: number;
+  yellowMarginPts?: number;
+  earlyWindowFloorPct?: number;
+  absoluteBackstopPct?: number;
+}
+
+export interface GovernorCustomWindow {
+  id: string;
+  windowMs: number;
+  tripMode?: GovernorWindowTripMode;
+  paceMarginPts?: number;
+  yellowMarginPts?: number;
+  absoluteBackstopPct?: number;
+  enabled?: boolean;
+}
+
+export interface GovernorWindowPolicy {
+  fiveHour?: GovernorWindowThreshold;
+  sevenDay?: GovernorWindowThreshold;
+  custom?: GovernorCustomWindow[];
+}
+
+export interface GovernorEvaluationPolicy {
+  minimumPaceFloorPct?: number;
+  absoluteBackstopPct?: number;
+  paceMarginPts?: number;
+  yellowMarginPts?: number;
+}
+
+export interface GovernorSpawnGatePolicy {
+  governClaude?: boolean;
+  governModels?: string[];
+  exemptAgents?: string[];
+}
+
+export interface GovernorProfileAllocationPolicy {
+  quotaSharePct?: number;
+  burstAllowancePct?: number;
+}
+
+export interface GovernorGlobalPolicy {
+  windows?: GovernorWindowPolicy;
+  recentAgentWindowMs?: number;
+  evaluation?: GovernorEvaluationPolicy;
+  spawnGate?: GovernorSpawnGatePolicy;
+  autoOffload?: AutoOffloadConfig;
+}
+
+export interface GovernorProfilePolicy {
+  enabled?: boolean;
+  windows?: GovernorWindowPolicy;
+  spawnGate?: GovernorSpawnGatePolicy;
+  allocation?: GovernorProfileAllocationPolicy;
+  autoOffload?: Partial<AutoOffloadConfig>;
+}
+
 /** Usage-cap governor policy. The governor runs on a 60s beat and paces Claude
- *  usage against the 5h rolling and 7d rolling windows reported by Claude Code
- *  via the Status hook's rate_limits field. Trigger is TIME-RELATIVE: RED when
- *  usage is at or ahead of linear pace (usage% >= elapsed%), with an early-window
- *  floor (don't trip until meaningful usage) and an absolute backstop. */
+ *  usage against provider rate-limit windows. Defaults mirror the historic
+ *  single-profile behavior until operators opt into per-profile overrides. */
 export interface GovernorPolicy {
   /** Master switch. Default true. */
   enabled?: boolean;
-  /** Points ahead of linear pace that trigger RED (default 0 = exactly at pace).
-   *  A positive value means "allow slightly ahead before tripping". */
-  paceMarginPts?: number;
-  /** YELLOW fires this many points below RED (default 10). */
-  yellowMarginPts?: number;
-  /** Don't trip RED until usage% >= this, even if ahead of pace (default 15).
-   *  Prevents a couple of early requests from tripping right after a reset. */
-  earlyWindowFloorPct?: number;
-  /** Absolute backstop: RED regardless of pace when usage% >= this (default 90). */
-  absoluteBackstopPct?: number;
-  /** Per-window absolute cap for the 5h window: RED when 5h usage% >= this,
-   *  independent of the 7d window and of pace. Defaults to absoluteBackstopPct. */
-  fiveHourCapPct?: number;
-  /** Per-window absolute cap for the 7d window: RED when 7d usage% >= this,
-   *  independent of the 5h window and of pace. Defaults to absoluteBackstopPct. */
-  sevenDayCapPct?: number;
-  /** Max age of agent rate-limit data to include in aggregation (default 10min). */
-  recentAgentWindowMs?: number;
-  /** Manual override: 'force-green' bypasses computed mode until cleared. */
+  /** Force the governor to hold GREEN regardless of pace. */
   manualOverride?: 'force-green';
-  /** Auto offload targets + limits (default OFF). */
+  /** Global defaults/backstops shared across all Claude profiles. */
+  global?: GovernorGlobalPolicy;
+  /** Per-profile overrides keyed by runtime profile id. */
+  profiles?: Record<string, GovernorProfilePolicy | undefined>;
+  /** Fallback for spawns without a runtime profile id. */
+  defaultProfile?: GovernorProfilePolicy;
+  /** @deprecated Use 'global.autoOffload' instead. Retained for migration. */
   autoOffload?: AutoOffloadConfig;
+  /** @deprecated Top-level pace margin retained for migration. */
+  paceMarginPts?: number;
+  /** @deprecated Top-level yellow margin retained for migration. */
+  yellowMarginPts?: number;
+  /** @deprecated Top-level early window floor retained for migration. */
+  earlyWindowFloorPct?: number;
+  /** @deprecated Top-level absolute backstop retained for migration. */
+  absoluteBackstopPct?: number;
+  /** @deprecated Five-hour cap retained for migration. */
+  fiveHourCapPct?: number;
+  /** @deprecated Seven-day cap retained for migration. */
+  sevenDayCapPct?: number;
+  /** @deprecated Recent-agent freshness window retained for migration. */
+  recentAgentWindowMs?: number;
 }
 
 /** Circuit-breaker thresholds (Lane A #6.6b). The breaker runs inside the
@@ -572,7 +633,7 @@ const DEFAULTS: HarnessConfig = {
   reflectRecentKeep: 12,
   reflectMinBytes: 16_384,
   // Usage governor auto-offload — dark until the operator opts in.
-  governorPolicy: { autoOffload: { enabled: false } },
+  governorPolicy: { global: { autoOffload: { enabled: false } } },
   // Enterprise Knowledge Graph — opt-in; dark until the user enables it.
   // v0.3.4 fix: default OFF, matching the field's own documentation ("Default
   // OFF / dark until enabled") — the true default contradicted it. Existing
@@ -638,6 +699,151 @@ let triggersMigrationRan = false;
  * Wrapped end-to-end in a try/catch: a config that is corrupt in some unrelated
  * way must still boot the app, and a migration is never worth a failed launch.
  */
+function isLegacyGovernorPolicy(policy: GovernorPolicy | undefined): boolean {
+  return !!policy && policy.global == null && policy.profiles == null && policy.defaultProfile == null;
+}
+
+function upconvertLegacyGovernorPolicy(policy: GovernorPolicy): GovernorPolicy {
+  if (!isLegacyGovernorPolicy(policy)) return { ...policy };
+  const {
+    enabled,
+    manualOverride,
+    autoOffload,
+    paceMarginPts,
+    yellowMarginPts,
+    earlyWindowFloorPct,
+    absoluteBackstopPct,
+    fiveHourCapPct,
+    sevenDayCapPct,
+    recentAgentWindowMs
+  } = policy;
+  const global: GovernorGlobalPolicy = {};
+  const evaluation: GovernorEvaluationPolicy = {};
+  if (paceMarginPts !== undefined) evaluation.paceMarginPts = paceMarginPts;
+  if (yellowMarginPts !== undefined) evaluation.yellowMarginPts = yellowMarginPts;
+  if (earlyWindowFloorPct !== undefined) evaluation.minimumPaceFloorPct = earlyWindowFloorPct;
+  if (absoluteBackstopPct !== undefined) evaluation.absoluteBackstopPct = absoluteBackstopPct;
+  if (Object.keys(evaluation).length) global.evaluation = evaluation;
+  if (recentAgentWindowMs !== undefined) global.recentAgentWindowMs = recentAgentWindowMs;
+  const windows: GovernorWindowPolicy = {};
+  const seedWindow = (cap: number | undefined): GovernorWindowThreshold => {
+    const threshold: GovernorWindowThreshold = { enabled: true, tripMode: 'pace-or-absolute' };
+    if (paceMarginPts !== undefined) threshold.paceMarginPts = paceMarginPts;
+    if (yellowMarginPts !== undefined) threshold.yellowMarginPts = yellowMarginPts;
+    if (earlyWindowFloorPct !== undefined) threshold.earlyWindowFloorPct = earlyWindowFloorPct;
+    if (cap !== undefined) threshold.absoluteBackstopPct = cap;
+    else if (absoluteBackstopPct !== undefined) threshold.absoluteBackstopPct = absoluteBackstopPct;
+    return threshold;
+  };
+  windows.fiveHour = seedWindow(fiveHourCapPct ?? absoluteBackstopPct);
+  windows.sevenDay = seedWindow(sevenDayCapPct ?? absoluteBackstopPct);
+  if (Object.keys(windows).length) global.windows = windows;
+  if (autoOffload) global.autoOffload = cloneAutoOffloadConfig(autoOffload);
+  const next: GovernorPolicy = {
+    enabled,
+    manualOverride,
+    global,
+    defaultProfile: {}
+  };
+  return next;
+}
+
+function cloneAutoOffloadConfig(config?: AutoOffloadConfig): AutoOffloadConfig | undefined {
+  if (!config) return undefined;
+  const clone: AutoOffloadConfig = { ...config };
+  if (Array.isArray(config.tryOrder)) clone.tryOrder = [...config.tryOrder];
+  return clone;
+}
+
+function clonePartialAutoOffloadConfig(config?: Partial<AutoOffloadConfig>): Partial<AutoOffloadConfig> | undefined {
+  if (!config) return undefined;
+  const clone: Partial<AutoOffloadConfig> = { ...config };
+  if (Array.isArray(config.tryOrder)) clone.tryOrder = [...config.tryOrder];
+  return clone;
+}
+
+function cloneWindowThreshold(threshold?: GovernorWindowThreshold): GovernorWindowThreshold | undefined {
+  return threshold ? { ...threshold } : undefined;
+}
+
+function cloneWindowPolicy(policy?: GovernorWindowPolicy): GovernorWindowPolicy | undefined {
+  if (!policy) return undefined;
+  return {
+    ...policy,
+    fiveHour: cloneWindowThreshold(policy.fiveHour),
+    sevenDay: cloneWindowThreshold(policy.sevenDay),
+    custom: policy.custom ? policy.custom.map((w) => ({ ...w })) : undefined
+  };
+}
+
+function cloneSpawnGatePolicy(policy?: GovernorSpawnGatePolicy): GovernorSpawnGatePolicy | undefined {
+  if (!policy) return undefined;
+  const clone: GovernorSpawnGatePolicy = { ...policy };
+  if (Array.isArray(policy.governModels)) clone.governModels = policy.governModels.filter((v) => typeof v === 'string' && v.trim()).map((v) => v.trim());
+  if (Array.isArray(policy.exemptAgents)) clone.exemptAgents = policy.exemptAgents.filter((v) => typeof v === 'string' && v.trim()).map((v) => v.trim());
+  return clone;
+}
+
+function cloneAllocationPolicy(policy?: GovernorProfileAllocationPolicy): GovernorProfileAllocationPolicy | undefined {
+  return policy ? { ...policy } : undefined;
+}
+
+function cloneProfilePolicy(policy?: GovernorProfilePolicy): GovernorProfilePolicy | undefined {
+  if (!policy) return undefined;
+  const clone: GovernorProfilePolicy = { ...policy };
+  if (policy.windows) clone.windows = cloneWindowPolicy(policy.windows);
+  if (policy.spawnGate) clone.spawnGate = cloneSpawnGatePolicy(policy.spawnGate);
+  if (policy.allocation) clone.allocation = cloneAllocationPolicy(policy.allocation);
+  if (policy.autoOffload) clone.autoOffload = clonePartialAutoOffloadConfig(policy.autoOffload);
+  return clone;
+}
+
+function cloneGlobalPolicy(policy?: GovernorGlobalPolicy): GovernorGlobalPolicy {
+  const clone: GovernorGlobalPolicy = { ...(policy ?? {}) };
+  if (policy?.windows) clone.windows = cloneWindowPolicy(policy.windows);
+  if (policy?.evaluation) clone.evaluation = { ...policy.evaluation };
+  if (policy?.spawnGate) clone.spawnGate = cloneSpawnGatePolicy(policy.spawnGate);
+  if (policy?.autoOffload) clone.autoOffload = cloneAutoOffloadConfig(policy.autoOffload);
+  return clone;
+}
+
+function cloneProfilesMap(map?: Record<string, GovernorProfilePolicy | undefined>): Record<string, GovernorProfilePolicy> | undefined {
+  if (!map) return undefined;
+  const out: Record<string, GovernorProfilePolicy> = {};
+  for (const [rawKey, value] of Object.entries(map)) {
+    if (!value) continue;
+    const key = rawKey.trim();
+    if (!key) continue;
+    const clone = cloneProfilePolicy(value);
+    if (clone) out[key] = clone;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function normalizeGovernorPolicyShape(policy: GovernorPolicy | undefined): GovernorPolicy | undefined {
+  if (!policy) return undefined;
+  const base = isLegacyGovernorPolicy(policy) ? upconvertLegacyGovernorPolicy(policy) : policy;
+  const global = cloneGlobalPolicy(base.global);
+  const globalAuto = base.global?.autoOffload ?? base.autoOffload;
+  if (globalAuto) global.autoOffload = cloneAutoOffloadConfig(globalAuto);
+  const defaultProfile = cloneProfilePolicy(base.defaultProfile) ?? {};
+  const profiles = cloneProfilesMap(base.profiles);
+  const next: GovernorPolicy = {
+    enabled: base.enabled,
+    manualOverride: base.manualOverride,
+    global,
+    defaultProfile
+  };
+  if (profiles) next.profiles = profiles;
+  return next;
+}
+
+function migrateGovernorPolicyV2(cfg: HarnessConfig): HarnessConfig {
+  if (!cfg.governorPolicy) return cfg;
+  cfg.governorPolicy = normalizeGovernorPolicyShape(cfg.governorPolicy);
+  return cfg;
+}
+
 function migrateTriggersV1(cfg: HarnessConfig): HarnessConfig {
   if (cfg.triggersMigratedV1 || triggersMigrationRan) return cfg;
   triggersMigrationRan = true;
@@ -694,7 +900,7 @@ export function readConfig(): HarnessConfig {
     // migration would never fire.
     if (parsed.overmindProvider == null && parsed.godProvider) merged.overmindProvider = parsed.godProvider;
     if (parsed.overmindModel == null && parsed.godModel) merged.overmindModel = parsed.godModel;
-    return normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults(merged)));
+    return normalizeStoredHomes(migrateGovernorPolicyV2(migrateTriggersV1(withTriggerDefaults(merged))));
   } catch {
     return withTriggerDefaults({ ...DEFAULTS });
   }
@@ -780,6 +986,9 @@ export function writeConfig(patch: Partial<HarnessConfig>): HarnessConfig {
     const { home, recentHives } = normalizeHiveHome(patch.harnessHome, current.recentHives ?? []);
     next.harnessHome = home;
     next.recentHives = recentHives;
+  }
+  if (next.governorPolicy) {
+    next.governorPolicy = normalizeGovernorPolicyShape(next.governorPolicy);
   }
   return persistConfig(next);
 }

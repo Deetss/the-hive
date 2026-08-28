@@ -17,7 +17,7 @@ import {
   readConfig, writeConfig, setAgentTokenCap, resetConfig, ensureHarnessHome, ensureClaudePermissionsAccepted,
   resolveHarnessHome, getRuntimeProfile, listRuntimeProfiles, upsertRuntimeProfile, isSafeHttpUrl,
   listLocalDelegates, upsertLocalDelegate, removeLocalDelegate,
-  modelForRole, OPS_STANDUP_MISSION, HEARTBEAT_MISSION, COMPACT_MAINTENANCE_MISSION, type HarnessConfig, type ScheduledMission
+  modelForRole, OPS_STANDUP_MISSION, HEARTBEAT_MISSION, COMPACT_MAINTENANCE_MISSION, type HarnessConfig, type ScheduledMission, type GovernorPolicy, type GovernorProfilePolicy, type GovernorWindowThreshold, type GovernorWindowTripMode, type AutoOffloadConfig
 } from './config';
 import { attemptGovernorOffloads, releaseOffloadSlot, requeueOffloadObjective, queueOffloadObjective, type OffloadWorkSpec } from './governor-offload';
 import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde } from './fs';
@@ -3229,19 +3229,52 @@ ipcMain.handle('config:get', (): HarnessConfig => {
 });
 ipcMain.handle('fleet:rateLimitsSnapshot', () => hookServer.allRateLimits());
 // Pull the current governor mode (cold-start / reconnect backfill).
-ipcMain.handle('fleet:governorSnapshot', () => ({
-  mode: governorMode,
-  pausedAgents: [...governorPausedAgents]
-}));
+ipcMain.handle('fleet:governorSnapshot', () => {
+  if (governorLastPayload) {
+    return { ...governorLastPayload, mode: governorMode, pausedAgents: [...governorPausedAgents] };
+  }
+  return {
+    mode: governorMode,
+    reason: governorMode === 'green' ? 'all clear' : undefined,
+    fiveHour: null,
+    sevenDay: null,
+    profiles: [],
+    pausedAgents: [...governorPausedAgents]
+  };
+});
 // Manual override: 'force-green' bypasses pace triggers; null clears the override.
 ipcMain.handle('governor:setOverride', (_evt, override: unknown) => {
   const v = override === 'force-green' ? 'force-green' : undefined;
   const cfg = readConfig();
   writeConfig({ governorPolicy: { ...(cfg.governorPolicy ?? {}), manualOverride: v } });
-  if (v === 'force-green' && governorMode !== 'green') {
-    governorMode = 'green';
-    recoverGovernorAgents();
-    try { liveWebContents()?.send('hive:governorMode', { mode: 'green', override: v }); } catch { /* */ }
+  if (v === 'force-green') {
+    if (governorMode !== 'green') {
+      governorMode = 'green';
+      recoverGovernorAgents();
+    } else {
+      recoverGovernorAgents();
+    }
+    const payload: GovernorBroadcastPayload = {
+      mode: 'green',
+      reason: 'manual override: force-green',
+      fiveHour: governorLastPayload?.fiveHour ?? null,
+      sevenDay: governorLastPayload?.sevenDay ?? null,
+      profiles: governorLastPayload?.profiles ?? [],
+      override: 'force-green',
+      pausedAgents: []
+    };
+    governorLastPayload = payload;
+    try { liveWebContents()?.send('hive:governorMode', payload); } catch { /* */ }
+  } else {
+    if (governorLastPayload) {
+      governorLastPayload = {
+        ...governorLastPayload,
+        override: undefined,
+        mode: governorMode,
+        pausedAgents: [...governorPausedAgents]
+      };
+      try { liveWebContents()?.send('hive:governorMode', governorLastPayload); } catch { /* */ }
+    }
   }
   return { ok: true };
 });
@@ -4943,11 +4976,13 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   // reroute work the caller already marked). Tightening this back to strict
   // per-profile precision needs the staleness-aware governor from
   // governor-policy-config (keep last-known RED across stale windows).
-  if (cfgSpawn.governorPolicy?.autoOffload?.enabled === true
+  if (cfgSpawn.governorPolicy?.global?.autoOffload?.enabled === true
       && raw.offloadEligible === true
       && !raw.hive?.offload?.target
       && (governorProfileState(raw.profile).mode === 'red' || governorMode === 'red')) {
     const accountKey = claudeAccountKey(raw.profile);
+    const resolvedAutoOffload = resolveProfileSettings(cfgSpawn.governorPolicy, typeof raw.profile === 'string' ? raw.profile : null);
+    const mergedAutoOffload = resolvedAutoOffload?.autoOffloadMerged;
     const offloadTokenCap = typeof raw.tokenCap === 'number' && Number.isFinite(raw.tokenCap) && raw.tokenCap > 0 ? raw.tokenCap : undefined;
     queueOffloadObjective({
       objective, cwd,
@@ -4959,9 +4994,10 @@ async function processSpawnRequest(filePath: string): Promise<void> {
       accountKey
     });
     void attemptGovernorOffloads({
-      policy: cfgSpawn.governorPolicy.autoOffload,
+      policy: mergedAutoOffload ?? cfgSpawn.governorPolicy?.global?.autoOffload,
       hiveRoot: hive.root(),
       redProfiles: [accountKey],
+      profileConfigs: mergedAutoOffload ? { [accountKey]: mergedAutoOffload } : undefined,
       notify: (subject, body) => informGod(subject, body, slack)
     });
     console.log(`[worker] offloaded ${reqId} (owning account RED) — not spawning Claude`);
@@ -5488,13 +5524,177 @@ const WINDOW_7D_MS = 7 * 24 * 60 * 60 * 1000;
 
 type GovernorLevel = 'green' | 'yellow' | 'red';
 
+type GovernorWindowSnapshot = { pct: number; resetsAt: string; level?: GovernorLevel; reason?: string };
+type GovernorBroadcastProfile = { profileId: string; mode: GovernorLevel; reason: string };
+type GovernorBroadcastPayload = {
+  mode: GovernorLevel;
+  reason?: string;
+  fiveHour: GovernorWindowSnapshot | null;
+  sevenDay: GovernorWindowSnapshot | null;
+  profiles: GovernorBroadcastProfile[];
+  override?: 'force-green';
+  pausedAgents: string[];
+};
+
 /** Current governor mode (persisted across beats; IPC-pushed to renderer). */
 let governorMode: GovernorLevel = 'green';
+let governorLastPayload: GovernorBroadcastPayload | null = null;
 /** Agent ids paused by the governor (so we can un-pause on recovery). */
 const governorPausedAgents = new Set<string>();
 /** Per-profile governor severity (rebuilt each beat). */
 const governorProfileStates = new Map<string, { mode: GovernorLevel; reason: string }>();
 const DEFAULT_CLAUDE_PROFILE_KEY = '__default_claude_profile__';
+
+const DEFAULT_GOVERNOR_PACE_MARGIN = 0;
+const DEFAULT_GOVERNOR_YELLOW_MARGIN = 10;
+const DEFAULT_GOVERNOR_EARLY_FLOOR = 15;
+const DEFAULT_GOVERNOR_ABSOLUTE_BACKSTOP = 90;
+const DEFAULT_GOVERNOR_RECENT_MS = 10 * 60 * 1000;
+const DEFAULT_GOVERNOR_TRIP_MODE: GovernorWindowTripMode = 'pace-or-absolute';
+
+type GovernorWindowKey = 'fiveHour' | 'sevenDay';
+
+interface ResolvedWindowSettings {
+  enabled: boolean;
+  tripMode: GovernorWindowTripMode;
+  paceMarginPts: number;
+  yellowMarginPts: number;
+  earlyWindowFloorPct: number;
+  absoluteBackstopPct: number;
+}
+
+interface ResolvedSpawnGateSettings {
+  governClaude: boolean;
+  governModels: string[];
+  exemptAgents: Set<string>;
+}
+
+interface ResolvedProfileSettings {
+  enabled: boolean;
+  windows: { fiveHour: ResolvedWindowSettings; sevenDay: ResolvedWindowSettings };
+  spawnGate: ResolvedSpawnGateSettings;
+  autoOffloadMerged?: AutoOffloadConfig;
+  autoOffloadOverride?: Partial<AutoOffloadConfig>;
+  recentAgentWindowMs: number;
+}
+
+function firstDefined<T>(...values: Array<T | undefined | null>): T | undefined {
+  for (const value of values) {
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
+function normalizeModelList(values: string[] | undefined): string[] {
+  if (!values) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of values) {
+    const slug = raw?.trim().toLowerCase();
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+    result.push(slug);
+  }
+  return result;
+}
+
+function mergeAutoOffloadConfigs(base?: AutoOffloadConfig, override?: Partial<AutoOffloadConfig> | null): AutoOffloadConfig | undefined {
+  if (!base && !override) return undefined;
+  const merged: AutoOffloadConfig = base
+    ? { ...base, tryOrder: Array.isArray(base.tryOrder) ? [...base.tryOrder] : base.tryOrder }
+    : {};
+  if (override) {
+    if (override.enabled !== undefined) merged.enabled = override.enabled;
+    if (override.targetsFile !== undefined) merged.targetsFile = override.targetsFile;
+    if (Array.isArray(override.tryOrder)) merged.tryOrder = [...override.tryOrder];
+    if (override.maxConcurrent !== undefined) merged.maxConcurrent = override.maxConcurrent;
+    if (override.healthCheckTimeoutMs !== undefined) merged.healthCheckTimeoutMs = override.healthCheckTimeoutMs;
+    if (override.dryRun !== undefined) merged.dryRun = override.dryRun;
+    if (override.defaultTargetMaxConcurrent !== undefined) merged.defaultTargetMaxConcurrent = override.defaultTargetMaxConcurrent;
+    if (override.defaultTokensPerMinute !== undefined) merged.defaultTokensPerMinute = override.defaultTokensPerMinute;
+    if (override.maxRequeues !== undefined) merged.maxRequeues = override.maxRequeues;
+    if (override.holdNotifyIntervalMs !== undefined) merged.holdNotifyIntervalMs = override.holdNotifyIntervalMs;
+  }
+  return merged;
+}
+
+function resolveWindowSettings(
+  policy: GovernorPolicy | undefined,
+  defaultProfile: GovernorProfilePolicy | undefined,
+  profilePolicy: GovernorProfilePolicy | undefined,
+  key: GovernorWindowKey,
+  evalDefaults: { paceMarginPts: number; yellowMarginPts: number; earlyWindowFloorPct: number; absoluteBackstopPct: number }
+): ResolvedWindowSettings {
+  const base: ResolvedWindowSettings = {
+    enabled: true,
+    tripMode: DEFAULT_GOVERNOR_TRIP_MODE,
+    paceMarginPts: evalDefaults.paceMarginPts,
+    yellowMarginPts: evalDefaults.yellowMarginPts,
+    earlyWindowFloorPct: evalDefaults.earlyWindowFloorPct,
+    absoluteBackstopPct: evalDefaults.absoluteBackstopPct
+  };
+  const apply = (threshold?: GovernorWindowThreshold) => {
+    if (!threshold) return;
+    if (threshold.enabled !== undefined) base.enabled = threshold.enabled;
+    if (threshold.tripMode) base.tripMode = threshold.tripMode;
+    if (threshold.paceMarginPts !== undefined) base.paceMarginPts = threshold.paceMarginPts;
+    if (threshold.yellowMarginPts !== undefined) base.yellowMarginPts = threshold.yellowMarginPts;
+    if (threshold.earlyWindowFloorPct !== undefined) base.earlyWindowFloorPct = threshold.earlyWindowFloorPct;
+    if (threshold.absoluteBackstopPct !== undefined) base.absoluteBackstopPct = threshold.absoluteBackstopPct;
+  };
+  apply(policy?.global?.windows?.[key]);
+  apply(defaultProfile?.windows?.[key]);
+  apply(profilePolicy?.windows?.[key]);
+  if (key === 'fiveHour' && policy?.fiveHourCapPct !== undefined && policy?.global?.windows?.fiveHour?.absoluteBackstopPct == null && defaultProfile?.windows?.fiveHour?.absoluteBackstopPct == null && profilePolicy?.windows?.fiveHour?.absoluteBackstopPct == null) {
+    base.absoluteBackstopPct = policy.fiveHourCapPct;
+  }
+  if (key === 'sevenDay' && policy?.sevenDayCapPct !== undefined && policy?.global?.windows?.sevenDay?.absoluteBackstopPct == null && defaultProfile?.windows?.sevenDay?.absoluteBackstopPct == null && profilePolicy?.windows?.sevenDay?.absoluteBackstopPct == null) {
+    base.absoluteBackstopPct = policy.sevenDayCapPct;
+  }
+  return base;
+}
+
+function resolveProfileSettings(policy: GovernorPolicy | undefined, profileId: string | null): ResolvedProfileSettings {
+  const evalDefaults = {
+    paceMarginPts: firstDefined(policy?.global?.evaluation?.paceMarginPts, policy?.paceMarginPts, DEFAULT_GOVERNOR_PACE_MARGIN) ?? DEFAULT_GOVERNOR_PACE_MARGIN,
+    yellowMarginPts: firstDefined(policy?.global?.evaluation?.yellowMarginPts, policy?.yellowMarginPts, DEFAULT_GOVERNOR_YELLOW_MARGIN) ?? DEFAULT_GOVERNOR_YELLOW_MARGIN,
+    earlyWindowFloorPct: firstDefined(policy?.global?.evaluation?.minimumPaceFloorPct, policy?.earlyWindowFloorPct, DEFAULT_GOVERNOR_EARLY_FLOOR) ?? DEFAULT_GOVERNOR_EARLY_FLOOR,
+    absoluteBackstopPct: firstDefined(policy?.global?.evaluation?.absoluteBackstopPct, policy?.absoluteBackstopPct, DEFAULT_GOVERNOR_ABSOLUTE_BACKSTOP) ?? DEFAULT_GOVERNOR_ABSOLUTE_BACKSTOP
+  };
+  const defaultProfile = policy?.defaultProfile;
+  const profilePolicy = profileId ? policy?.profiles?.[profileId] : undefined;
+  const windows = {
+    fiveHour: resolveWindowSettings(policy, defaultProfile, profilePolicy, 'fiveHour', evalDefaults),
+    sevenDay: resolveWindowSettings(policy, defaultProfile, profilePolicy, 'sevenDay', evalDefaults)
+  };
+  const globalGate = policy?.global?.spawnGate;
+  const defaultGate = defaultProfile?.spawnGate;
+  const profileGate = profilePolicy?.spawnGate;
+  const spawnGateGovernClaude = profileGate?.governClaude ?? defaultGate?.governClaude ?? globalGate?.governClaude ?? true;
+  const enabled = profilePolicy?.enabled ?? spawnGateGovernClaude;
+  const exemptAgents = new Set<string>();
+  for (const list of [globalGate?.exemptAgents, defaultGate?.exemptAgents, profileGate?.exemptAgents]) {
+    if (!list) continue;
+    for (const id of list) {
+      if (typeof id === 'string' && id.trim()) exemptAgents.add(id.trim());
+    }
+  }
+  const autoOffloadBase = mergeAutoOffloadConfigs(policy?.global?.autoOffload, defaultProfile?.autoOffload ?? null);
+  const autoOffloadOverride = profilePolicy?.autoOffload ?? undefined;
+  const autoOffloadMerged = mergeAutoOffloadConfigs(autoOffloadBase, autoOffloadOverride);
+  return {
+    enabled,
+    windows,
+    spawnGate: {
+      governClaude: spawnGateGovernClaude,
+      governModels: normalizeModelList(profileGate?.governModels ?? defaultGate?.governModels ?? globalGate?.governModels),
+      exemptAgents
+    },
+    autoOffloadMerged,
+    autoOffloadOverride,
+    recentAgentWindowMs: firstDefined(policy?.global?.recentAgentWindowMs, policy?.recentAgentWindowMs, DEFAULT_GOVERNOR_RECENT_MS) ?? DEFAULT_GOVERNOR_RECENT_MS
+  };
+}
 
 function claudeAccountKey(profileId?: string | null): string {
   if (typeof profileId === 'string') {
@@ -5542,11 +5742,11 @@ function runGovernorBeat(): void {
   if (policy.enabled === false) {
     if (governorMode !== 'green') {
       governorMode = 'green';
+      recoverGovernorAgents();
       try { liveWebContents()?.send('hive:governorMode', { mode: 'green' }); } catch { /* */ }
     }
     return;
   }
-  // Manual override: hold GREEN regardless of pace
   if (policy.manualOverride === 'force-green') {
     if (governorMode !== 'green') {
       governorMode = 'green';
@@ -5556,78 +5756,126 @@ function runGovernorBeat(): void {
     return;
   }
 
-  const paceMargin = policy.paceMarginPts ?? 0;
-  const yellowMargin = policy.yellowMarginPts ?? 10;
-  const earlyFloor = policy.earlyWindowFloorPct ?? 15;
-  const backstop = policy.absoluteBackstopPct ?? 90;
-  const fiveHourCap = policy.fiveHourCapPct ?? backstop;
-  const sevenDayCap = policy.sevenDayCapPct ?? backstop;
-  const recentMs = policy.recentAgentWindowMs ?? 10 * 60 * 1000;
-
-  // Pull rate limits across all recently-active agents; take worst pct per window.
+  const baselineSettings = resolveProfileSettings(policy, null);
+  const recentMs = baselineSettings.recentAgentWindowMs;
   const allLimits = hookServer.allRateLimits();
   const now = Date.now();
   const limitEntries = Object.entries(allLimits);
   const reg = hive.registry();
-  let maxFiveHour: { pct: number; resetsAt: string } | null = null;
-  let maxSevenDay: { pct: number; resetsAt: string } | null = null;
-  for (const [, entry] of limitEntries) {
-    if (now - entry.ts > recentMs) continue; // stale — skip
-    if (entry.fiveHour && (!maxFiveHour || entry.fiveHour.pct > maxFiveHour.pct)) maxFiveHour = entry.fiveHour;
-    if (entry.sevenDay && (!maxSevenDay || entry.sevenDay.pct > maxSevenDay.pct)) maxSevenDay = entry.sevenDay;
-  }
-  // Persist live usage; on a beat with no live data, fall back to the last-known
-  // usage (so a post-restart governor still knows an account is over cap). A window
-  // already past its reset is dropped as stale.
-  if (maxFiveHour || maxSevenDay) {
-    persistGovernorUsage({ fiveHour: maxFiveHour, sevenDay: maxSevenDay });
-  } else {
-    const saved = loadGovernorUsage();
-    if (saved?.fiveHour && new Date(saved.fiveHour.resetsAt).getTime() > now) maxFiveHour = saved.fiveHour;
-    if (saved?.sevenDay && new Date(saved.sevenDay.resetsAt).getTime() > now) maxSevenDay = saved.sevenDay;
-    if (!maxFiveHour && !maxSevenDay) return; // no live OR persisted data — stay put
-  }
+  const runtimeProfiles = new Map((cfg.runtimeProfiles ?? []).map((p) => [p.id, p]));
+  const profileSettingsCache = new Map<string, ResolvedProfileSettings>();
+  profileSettingsCache.set(DEFAULT_CLAUDE_PROFILE_KEY, baselineSettings);
 
-  /** Evaluate one window: returns 'red', 'yellow', or 'green' + the margin. */
-  function evalWindow(pct: number, resetsAt: string, windowMs: number, backstopPct = backstop): { level: 'green' | 'yellow' | 'red'; ahead: number; reason: string } {
-    const resetMs = new Date(resetsAt).getTime();
-    const windowStart = resetMs - windowMs;
-    const elapsed = Math.max(0, Math.min(100, ((now - windowStart) / windowMs) * 100));
-    const ahead = pct - elapsed; // positive = ahead of pace, negative = behind
+  type WindowUsage = { pct: number; resetsAt: string };
+  const profileUsage = new Map<string, { settings: ResolvedProfileSettings; fiveHour: WindowUsage | null; sevenDay: WindowUsage | null }>();
+  let maxFiveHour: WindowUsage | null = null;
+  let maxSevenDay: WindowUsage | null = null;
 
-    // Absolute backstop (per-window cap): govern when over on this window regardless of pace
-    if (pct >= backstopPct) return { level: 'red', ahead, reason: `usage ${pct.toFixed(1)}% >= cap ${backstopPct}%` };
-    // Early-window floor: don't trip until meaningful usage
-    if (pct < earlyFloor) return { level: 'green', ahead, reason: `usage ${pct.toFixed(1)}% < floor ${earlyFloor}%` };
-    // Pace-based
-    if (pct >= elapsed + paceMargin) return { level: 'red', ahead, reason: `usage ${pct.toFixed(1)}% >= pace ${elapsed.toFixed(1)}% (+${paceMargin}pt margin)` };
-    if (pct >= elapsed + paceMargin - yellowMargin) return { level: 'yellow', ahead, reason: `usage ${pct.toFixed(1)}% approaching pace ${elapsed.toFixed(1)}%` };
-    return { level: 'green', ahead, reason: `usage ${pct.toFixed(1)}% < pace ${elapsed.toFixed(1)}%` };
-  }
+  const getProfileSettings = (profileId: string | null): ResolvedProfileSettings => {
+    const key = claudeAccountKey(profileId);
+    let settings = profileSettingsCache.get(key);
+    if (!settings) {
+      settings = resolveProfileSettings(policy, profileId);
+      profileSettingsCache.set(key, settings);
+    }
+    return settings;
+  };
 
-  const five = maxFiveHour ? evalWindow(maxFiveHour.pct, maxFiveHour.resetsAt, WINDOW_5H_MS, fiveHourCap) : null;
-  const seven = maxSevenDay ? evalWindow(maxSevenDay.pct, maxSevenDay.resetsAt, WINDOW_7D_MS, sevenDayCap) : null;
-
-  // Take the more conservative window (highest-severity)
-  const rank = (l: GovernorLevel | undefined) => l === 'red' ? 2 : l === 'yellow' ? 1 : 0;
-  const profileStates = new Map<string, { level: GovernorLevel; reason: string }>();
   for (const [agentId, entry] of limitEntries) {
     if (now - entry.ts > recentMs) continue;
     const meta = reg.agents?.[agentId];
     if (!meta) continue;
     const provider = (meta.provider as AgentProvider | undefined) ?? 'claude';
     if (!isClaudeProvider(provider)) continue;
-    const fiveEval = entry.fiveHour ? evalWindow(entry.fiveHour.pct, entry.fiveHour.resetsAt, WINDOW_5H_MS, fiveHourCap) : null;
-    const sevenEval = entry.sevenDay ? evalWindow(entry.sevenDay.pct, entry.sevenDay.resetsAt, WINDOW_7D_MS, sevenDayCap) : null;
-    let best = fiveEval;
-    if (!best || (sevenEval && rank(sevenEval.level) > rank(best.level))) best = sevenEval;
-    if (!best) continue;
-    const key = claudeAccountKey(meta.profileId);
-    const prev = profileStates.get(key);
-    if (!prev || rank(best.level) > rank(prev.level)) {
-      profileStates.set(key, { level: best.level as GovernorLevel, reason: best.reason });
+
+    const settings = getProfileSettings(meta.profileId ?? null);
+    if (!settings.enabled) continue;
+    if (settings.spawnGate.exemptAgents.has(agentId)) continue;
+
+    const runtimeProfile = meta.profileId ? runtimeProfiles.get(meta.profileId) : undefined;
+    const usageSample = telemetry.getAgentUsage(agentId);
+    const modelSlug = usageSample?.model?.trim().toLowerCase() ?? runtimeProfile?.model?.trim().toLowerCase() ?? '';
+    if (settings.spawnGate.governModels.length && (!modelSlug || !settings.spawnGate.governModels.includes(modelSlug))) continue;
+
+    if (entry.fiveHour) {
+      if (!maxFiveHour || entry.fiveHour.pct > maxFiveHour.pct) maxFiveHour = entry.fiveHour;
     }
+    if (entry.sevenDay) {
+      if (!maxSevenDay || entry.sevenDay.pct > maxSevenDay.pct) maxSevenDay = entry.sevenDay;
+    }
+
+    const key = claudeAccountKey(meta.profileId);
+    let usageState = profileUsage.get(key);
+    if (!usageState) {
+      usageState = { settings, fiveHour: null, sevenDay: null };
+      profileUsage.set(key, usageState);
+    }
+    if (entry.fiveHour && (!usageState.fiveHour || entry.fiveHour.pct > usageState.fiveHour.pct)) usageState.fiveHour = entry.fiveHour;
+    if (entry.sevenDay && (!usageState.sevenDay || entry.sevenDay.pct > usageState.sevenDay.pct)) usageState.sevenDay = entry.sevenDay;
   }
+
+  if (maxFiveHour || maxSevenDay) {
+    persistGovernorUsage({ fiveHour: maxFiveHour, sevenDay: maxSevenDay });
+  } else {
+    const saved = loadGovernorUsage();
+    if (saved?.fiveHour && new Date(saved.fiveHour.resetsAt).getTime() > now) maxFiveHour = saved.fiveHour;
+    if (saved?.sevenDay && new Date(saved.sevenDay.resetsAt).getTime() > now) maxSevenDay = saved.sevenDay;
+    if (!maxFiveHour && !maxSevenDay) return;
+  }
+
+  const evaluateWindowUsage = (usage: WindowUsage, windowMs: number, threshold: ResolvedWindowSettings): { level: GovernorLevel; reason: string } => {
+    if (!threshold.enabled) return { level: 'green', reason: 'window disabled' };
+    const resetMs = new Date(usage.resetsAt).getTime();
+    if (!Number.isFinite(resetMs)) return { level: 'green', reason: 'invalid reset timestamp' };
+    const windowStart = resetMs - windowMs;
+    const elapsed = Math.max(0, Math.min(100, ((now - windowStart) / windowMs) * 100));
+    const absolute = threshold.absoluteBackstopPct ?? DEFAULT_GOVERNOR_ABSOLUTE_BACKSTOP;
+
+    if (threshold.tripMode !== 'pace-only' && usage.pct >= absolute) {
+      return { level: 'red', reason: `usage ${usage.pct.toFixed(1)}% >= cap ${absolute}%` };
+    }
+    if (threshold.tripMode === 'absolute-only') {
+      return { level: 'green', reason: `usage ${usage.pct.toFixed(1)}% < cap ${absolute}%` };
+    }
+    const floor = threshold.earlyWindowFloorPct ?? DEFAULT_GOVERNOR_EARLY_FLOOR;
+    if (usage.pct < floor) {
+      return { level: 'green', reason: `usage ${usage.pct.toFixed(1)}% < floor ${floor}%` };
+    }
+    const paceMargin = threshold.paceMarginPts ?? DEFAULT_GOVERNOR_PACE_MARGIN;
+    const yellowMargin = threshold.yellowMarginPts ?? DEFAULT_GOVERNOR_YELLOW_MARGIN;
+    if (usage.pct >= elapsed + paceMargin) {
+      return { level: 'red', reason: `usage ${usage.pct.toFixed(1)}% >= pace ${elapsed.toFixed(1)}% (+${paceMargin}pt margin)` };
+    }
+    if (usage.pct >= elapsed + paceMargin - yellowMargin) {
+      return { level: 'yellow', reason: `usage ${usage.pct.toFixed(1)}% approaching pace ${elapsed.toFixed(1)}%` };
+    }
+    return { level: 'green', reason: `usage ${usage.pct.toFixed(1)}% < pace ${elapsed.toFixed(1)}%` };
+  };
+
+  const fiveEval = maxFiveHour ? evaluateWindowUsage(maxFiveHour, WINDOW_5H_MS, baselineSettings.windows.fiveHour) : null;
+  const sevenEval = maxSevenDay ? evaluateWindowUsage(maxSevenDay, WINDOW_7D_MS, baselineSettings.windows.sevenDay) : null;
+
+  const rank = (l: GovernorLevel | undefined) => l === 'red' ? 2 : l === 'yellow' ? 1 : 0;
+
+  const profileStates = new Map<string, { level: GovernorLevel; reason: string }>();
+  const redProfiles: string[] = [];
+  const profileAutoOffloadConfigs: Record<string, AutoOffloadConfig> = {};
+
+  for (const [key, usageState] of profileUsage.entries()) {
+    const settings = usageState.settings;
+    const fiveState = usageState.fiveHour ? evaluateWindowUsage(usageState.fiveHour, WINDOW_5H_MS, settings.windows.fiveHour) : null;
+    const sevenState = usageState.sevenDay ? evaluateWindowUsage(usageState.sevenDay, WINDOW_7D_MS, settings.windows.sevenDay) : null;
+    let best = fiveState;
+    if (!best || (sevenState && rank(sevenState.level) > rank(best.level))) best = sevenState;
+    if (!best) continue;
+    profileStates.set(key, { level: best.level, reason: best.reason });
+    if (settings.autoOffloadMerged) profileAutoOffloadConfigs[key] = settings.autoOffloadMerged;
+    if (best.level === 'red') redProfiles.push(key);
+  }
+
+  const globalBest = (sevenEval && rank(sevenEval.level) > rank(fiveEval?.level)) ? sevenEval : fiveEval;
+  if (globalBest) profileStates.set(DEFAULT_CLAUDE_PROFILE_KEY, { level: globalBest.level, reason: globalBest.reason });
+
   governorProfileStates.clear();
   for (const [key, value] of profileStates.entries()) {
     if (value.level === 'green') continue;
@@ -5636,46 +5884,72 @@ function runGovernorBeat(): void {
 
   let newMode: GovernorLevel = 'green';
   let reason = 'all clear';
-  if ((rank(five?.level) >= rank(seven?.level)) && five) { newMode = five.level; reason = `5h: ${five.reason}`; }
-  else if (seven) { newMode = seven.level; reason = `7d: ${seven.reason}`; }
+  if ((rank(fiveEval?.level) >= rank(sevenEval?.level)) && fiveEval) { newMode = fiveEval.level; reason = `5h: ${fiveEval.reason}`; }
+  else if (sevenEval) { newMode = sevenEval.level; reason = `7d: ${sevenEval.reason}`; }
 
   const prevMode = governorMode;
   governorMode = newMode;
 
-  if (newMode === 'red' && prevMode !== 'red') {
-    // Escalate to RED: pause active Claude agents + notify god
-    for (const [id, a] of Object.entries(reg.agents)) {
-      if (a.archived || a.isOvermind) continue;
-      if (!isClaudeProvider(a.provider as AgentProvider ?? 'claude')) continue;
-      if (!ptyForAgent(id)) continue;
-      try { control.pause(id, true); governorPausedAgents.add(id); } catch { /* */ }
+  if (newMode === 'red') {
+    const redSet = new Set(redProfiles);
+    const pauseAll = redSet.size === 0;
+    if (prevMode !== 'red') {
+      for (const [id, a] of Object.entries(reg.agents)) {
+        if (a.archived || a.isOvermind) continue;
+        if (!isClaudeProvider((a.provider as AgentProvider | undefined) ?? 'claude')) continue;
+        const settings = getProfileSettings(a.profileId ?? null);
+        if (!settings.enabled) continue;
+        if (settings.spawnGate.exemptAgents.has(id)) continue;
+        const runtimeProfile = a.profileId ? runtimeProfiles.get(a.profileId) : undefined;
+        const modelSlug = runtimeProfile?.model?.trim().toLowerCase() ?? '';
+        if (settings.spawnGate.governModels.length && (!modelSlug || !settings.spawnGate.governModels.includes(modelSlug))) continue;
+        if (!pauseAll && !redSet.has(claudeAccountKey(a.profileId))) continue;
+        if (!ptyForAgent(id)) continue;
+        try { control.pause(id, true); governorPausedAgents.add(id); } catch { /* */ }
+      }
+      hive.send({
+        to: 'god',
+        act: 'inform',
+        subject: 'Usage governor: RED — degrading to budget',
+        body: `Rate-limit pace exceeded (${reason}). Claude agents paused; new Claude spawns blocked. Route new work to delegate/edgentic until the window resets.`
+      }, 'system');
+      console.log('[governor] RED:', reason);
     }
-    hive.send({
-      to: 'god',
-      act: 'inform',
-      subject: 'Usage governor: RED — degrading to budget',
-      body: `Rate-limit pace exceeded (${reason}). Claude agents paused; new Claude spawns blocked. Route new work to delegate/edgentic until the window resets.`
-    }, 'system');
-    console.log('[governor] RED:', reason);
-    if (policy.autoOffload?.enabled === true) {
-      void attemptGovernorOffloads({ policy: policy.autoOffload, hiveRoot: hive.root() });
+    void attemptGovernorOffloads({
+      policy: baselineSettings.autoOffloadMerged,
+      hiveRoot: hive.root(),
+      redProfiles,
+      profileConfigs: Object.keys(profileAutoOffloadConfigs).length ? profileAutoOffloadConfigs : undefined
+    });
+  } else {
+    if (prevMode === 'red') {
+      recoverGovernorAgents();
+      console.log('[governor] recovered to', newMode);
     }
-  } else if (newMode !== 'red' && prevMode === 'red') {
-    recoverGovernorAgents();
-    console.log('[governor] recovered to', newMode);
   }
 
-  // Push mode + window data to renderer for the StatusBar chip
   try {
-    liveWebContents()?.send('hive:governorMode', {
+    const profilesPayload = Array.from(profileSettingsCache.entries()).map(([profileId, _settings]) => {
+      const state = profileStates.get(profileId);
+      return {
+        profileId,
+        mode: state?.level ?? 'green',
+        reason: state?.reason ?? 'all clear'
+      };
+    });
+    const broadcast: GovernorBroadcastPayload = {
       mode: newMode,
       reason,
-      fiveHour: maxFiveHour ? { pct: maxFiveHour.pct, resetsAt: maxFiveHour.resetsAt, ...(five ?? {}) } : null,
-      sevenDay: maxSevenDay ? { pct: maxSevenDay.pct, resetsAt: maxSevenDay.resetsAt, ...(seven ?? {}) } : null
-    });
+      fiveHour: maxFiveHour ? { pct: maxFiveHour.pct, resetsAt: maxFiveHour.resetsAt, ...(fiveEval ?? {}) } : null,
+      sevenDay: maxSevenDay ? { pct: maxSevenDay.pct, resetsAt: maxSevenDay.resetsAt, ...(sevenEval ?? {}) } : null,
+      profiles: profilesPayload,
+      override: policy.manualOverride === 'force-green' ? 'force-green' : undefined,
+      pausedAgents: [...governorPausedAgents]
+    };
+    governorLastPayload = broadcast;
+    liveWebContents()?.send('hive:governorMode', broadcast);
   } catch { /* window gone */ }
 }
-
 function recoverGovernorAgents(): void {
   for (const id of governorPausedAgents) {
     try { control.pause(id, false); } catch { /* */ }
@@ -5948,3 +6222,5 @@ app.on('will-quit', (e) => {
     new Promise<void>((r) => setTimeout(r, 1200))
   ]).then(finish, finish);
 });
+
+
