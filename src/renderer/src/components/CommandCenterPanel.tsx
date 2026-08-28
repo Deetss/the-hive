@@ -125,7 +125,7 @@ function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean;
  *  and renders the real terminal. The docked instance renders the "open in
  *  fullscreen" placeholder instead — two live xterms on one pty fight over its
  *  cols/rows and corrupt the display. */
-export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent; fullscreen?: boolean }) {
+export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }: { agent: Agent; fullscreen?: boolean; mobile?: boolean }) {
   const [tab, setTab] = useState<CCTab>('terminal');
 
   // The trigger-history ledger has nothing to say until an outside party can
@@ -199,11 +199,18 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
     <PixelPanel
       variant="default"
       noPadding
-      style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: 0, overflow: 'hidden' }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: mobile && !fullscreen ? 'auto' : '100%',
+        padding: 0,
+        overflow: 'hidden'
+      }}
     >
       {/* Header */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
+        display: 'flex', alignItems: 'center', gap: mobile ? 6 : 8,
+        flexWrap: mobile ? 'wrap' : 'nowrap',
         padding: '6px 8px', background: 'var(--cth-cream-100)',
         borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
       }}>
@@ -218,7 +225,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
             sidebar width the old header wrapped its 24-char display-font title
             onto three lines and "runs the floor" word-per-line under the two
             wide buttons — everything here is single-line by construction. */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, order: mobile ? 1 : 0, marginTop: mobile ? 4 : 0 }}>
           <div style={{
             fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '14px', color: 'var(--cth-ink-900)',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
@@ -234,7 +241,17 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
         {/* v0.3.4: floor-wide auto-delivery lives HERE (one switch for every
             agent's queue), and the IDE opens from agent level, not the toolbar.
             Short labels — the tooltips carry the full explanation. */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+        <div style={{
+          display: 'flex',
+          gap: 6,
+          alignItems: 'center',
+          flexShrink: 0,
+          flexWrap: mobile ? 'wrap' : 'nowrap',
+          justifyContent: mobile ? 'flex-start' : 'flex-end',
+          width: mobile ? '100%' : 'auto',
+          order: mobile ? 2 : 0,
+          rowGap: mobile ? 4 : undefined
+        }}>
           <PixelButton
             variant={floorDeliveryPaused ? 'primary' : 'secondary'}
             size="sm"
@@ -294,14 +311,8 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
           stops applying the moment there is only ever one row. */}
       <div className="cth-tabbar" style={{
         display: 'flex', gap: 4,
-        // Docked in the sidebar the panel is narrow, so tabs WRAP: a second row
-        // costs a few pixels of a tall column, while a horizontal scroll there
-        // would hide half the tabs behind a gesture with no affordance.
-        // In focus mode the panel is wide and vertical space is the scarce
-        // resource, so it stays ONE row and scrolls instead. `.cth-tabbar` in
-        // global.css already hides that scrollbar.
-        flexWrap: fullscreen ? 'nowrap' : 'wrap',
-        overflowX: fullscreen ? 'auto' : 'visible',
+        flexWrap: mobile ? 'nowrap' : (fullscreen ? 'nowrap' : 'wrap'),
+        overflowX: mobile || fullscreen ? 'auto' : 'visible',
         padding: '6px 8px', background: 'var(--cth-cream-100)',
         borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
       }}>
@@ -311,7 +322,12 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{
+        flex: 1,
+        minHeight: mobile && !fullscreen ? 'auto' : 0,
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
         {tab === 'terminal' && (
           isFullscreenedHere ? (
             <Centered>Terminal is open in fullscreen. Press Esc to bring it back.</Centered>
@@ -341,7 +357,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
           )
         )}
         {tab === 'floor' && <FloorTab seed={dispatchSeed} onSeedConsumed={resetDispatchSeed} />}
-        {tab === 'tasks' && <TasksKanban />}
+        {tab === 'tasks' && <TasksKanban mobile={mobile} />}
         {tab === 'ask' && <QuickAskPanel />}
         {tab === 'human' && <AskMeTab />}
         {tab === 'triggers' && <TriggersTab />}

@@ -11,9 +11,11 @@ export interface AgentStripProps {
   /** Needed to rebuild a spawn command when a restorable agent predates the
    *  persisted `command` field. Optional so the strip renders without config. */
   config?: HarnessConfig | null;
+  /** When true, render in a stacked, touch-friendly layout for narrow screens. */
+  isMobile?: boolean;
 }
 
-export function AgentStrip({ config }: AgentStripProps) {
+export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
   const agents = useStore(s => s.agents);
   const restorableAgents = useStore(s => s.restorableAgents);
   const selectedId = useStore(s => s.selectedId);
@@ -82,17 +84,17 @@ export function AgentStrip({ config }: AgentStripProps) {
   return (
     <div style={{
       display: 'flex',
-      gap: 12,
-      padding: '14px 16px',
-      overflowX: 'auto',
-      overflowY: 'hidden',
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: isMobile ? 10 : 12,
+      padding: isMobile ? '12px 12px 16px' : '14px 16px',
+      overflowX: isMobile ? 'hidden' : 'auto',
+      overflowY: isMobile ? 'auto' : 'hidden',
       borderTop: '1px solid var(--cth-ink-300)',
       background: 'var(--cth-cream-200)',
-      // Tall enough for the god card to stand proud of the row (it's taller and
-      // rides a drop shadow) plus the hover-lift on every card, without clipping.
-      height: 112,
-      minHeight: 112,
-      alignItems: 'center'
+      height: isMobile ? 'auto' : 112,
+      minHeight: isMobile ? 0 : 112,
+      alignItems: isMobile ? 'stretch' : 'center',
+      maxHeight: isMobile ? '40vh' : undefined
     }}>
       {agents.map(a => (
         // Draggable wrapper: reorder the roster by dragging one card onto another.
@@ -128,7 +130,8 @@ export function AgentStrip({ config }: AgentStripProps) {
             boxShadow: overId === a.id && dragId && dragId !== a.id
               ? 'inset 3px 0 0 0 var(--cth-ink-900)'
               : 'none',
-            transition: 'opacity 120ms ease'
+            transition: 'opacity 120ms ease',
+            width: isMobile ? '100%' : undefined
           }}
         >
           <AgentCard

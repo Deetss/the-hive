@@ -116,7 +116,7 @@ export function parseTasks(raw: unknown): HiveTask[] {
  * is the ledger's writer: new work enters via the dispatch box (mailed to the
  * god), never by the human inserting cards the orchestrator never heard about.
  */
-export function TasksKanban() {
+export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
   const agents = useStore((s) => s.agents);
   const [tasks, setTasks] = useState<HiveTask[]>([]);
   const openTaskDetail = useStore((s) => s.openTaskDetail);
@@ -334,7 +334,14 @@ export function TasksKanban() {
     : '';
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--cth-paper-200)', position: 'relative' }}>
+    <div style={{
+      flex: 1,
+      minHeight: mobile ? 'auto' : 0,
+      display: 'flex',
+      flexDirection: 'column',
+      background: 'var(--cth-paper-200)',
+      position: 'relative'
+    }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', flexShrink: 0,
         borderBottom: '1px solid var(--cth-ink-300)', background: 'var(--cth-paper-50)'
@@ -610,13 +617,22 @@ export function TasksKanban() {
 
       {/* Columns */}
       <div style={{
-        flex: 1, minHeight: 0, display: 'flex', gap: 8, padding: 10, overflowX: 'auto'
+        flex: 1,
+        minHeight: mobile ? 'auto' : 0,
+        display: 'flex',
+        flexDirection: mobile ? 'column' : 'row',
+        gap: 8,
+        padding: 10,
+        overflowX: mobile ? 'hidden' : 'auto',
+        overflowY: mobile ? 'visible' : 'hidden'
       }}>
         {COLUMNS.map((col) => {
           const cards = tasks.filter((t) => t.status === col.key);
           return (
             <div key={col.key} style={{
-              flex: '1 1 0', minWidth: 170, display: 'flex', flexDirection: 'column',
+              flex: mobile ? '1 0 auto' : '1 1 0',
+              minWidth: mobile ? '100%' : 170,
+              display: 'flex', flexDirection: 'column',
               background: 'var(--cth-cream-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
             }}>
               <div style={{
@@ -627,7 +643,13 @@ export function TasksKanban() {
                 {col.label}
                 <span style={{ marginLeft: 'auto', fontSize: 11, fontFamily: 'var(--cth-font-ui)' }}>{cards.length}</span>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{
+                flex: 1,
+                minHeight: mobile ? 'auto' : 0,
+                overflowY: 'auto',
+                padding: 6,
+                display: 'flex', flexDirection: 'column', gap: 6
+              }}>
                 {cards.length === 0 && (
                   <div style={{ fontSize: 12, color: 'var(--cth-ink-300)', textAlign: 'center', padding: '8px 0' }}>—</div>
                 )}
