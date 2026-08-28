@@ -1,4 +1,5 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerMonitor, powerSaveBlocker, screen, shell, Notification } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerMonitor, powerSaveBlocker, screen, shell, Notification, type IpcMainInvokeEvent } from 'electron';
+import { WebSocketServer, WebSocket } from 'ws';
 import { spawn } from 'node:child_process';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import {
