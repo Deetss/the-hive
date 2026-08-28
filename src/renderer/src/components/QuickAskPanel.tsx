@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { PixelButton } from './PixelButton';
+import { Markdown } from './Markdown';
 import { useStore, type QAEntry } from '@/store/store';
 
 /**
@@ -92,7 +93,7 @@ export function QuickAskPanel() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submit(); }
   };
 
-  const renderAnswer = (e: QAEntry) => {
+  const renderAnswer = (e: QAEntry): JSX.Element => {
     if (e.waiting) {
       return <span style={{ color: 'var(--cth-ink-500)', fontStyle: 'italic' }}>waiting for the Overmind…</span>;
     }
@@ -113,7 +114,7 @@ export function QuickAskPanel() {
         </span>
       );
     }
-    return e.answer ?? '';
+    return <Markdown text={e.answer ?? ''} style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-900)', wordBreak: 'break-word' }} />;
   };
 
   return (
@@ -145,7 +146,7 @@ export function QuickAskPanel() {
               padding: '6px 10px 4px', fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-900)',
               whiteSpace: 'pre-wrap', wordBreak: 'break-word'
             }}>
-              {e.question}
+              <Markdown text={e.question} style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-900)', wordBreak: 'break-word' }} />
             </div>
             {/* Answer bubble */}
             <div style={{
@@ -153,7 +154,7 @@ export function QuickAskPanel() {
               background: 'var(--cth-lilac-light, #ece2f5)',
               boxShadow: 'inset 0 -1px 0 var(--cth-ink-700)',
               padding: '6px 10px 4px', fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-900)',
-              whiteSpace: 'pre-wrap', wordBreak: 'break-word'
+              wordBreak: 'break-word'
             }}>
               {renderAnswer(e)}
             </div>
