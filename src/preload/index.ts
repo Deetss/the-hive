@@ -1468,6 +1468,8 @@ const api = {
   /** v0.3.4: app self-knowledge — version + newest changelog sections. */
   appInfo: (): Promise<{ version: string; changelog: string }> =>
     ipcRenderer.invoke('app:info'),
+  openInBrowser: (): Promise<{ ok: boolean; url?: string; error?: string }> =>
+    ipcRenderer.invoke('app:openInBrowser'),
   // ─── Roster mirror (agents + notes + queues, shared dev ↔ packaged) ─────────
   /** Read the roster file beside the hive. SYNCHRONOUS on purpose: the zustand
    *  store is created at module load, so an async read would arrive after the
