@@ -1,4 +1,4 @@
-import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { PixelBadge } from './PixelBadge';
@@ -120,6 +120,7 @@ export function parseTasks(raw: unknown): HiveTask[] {
 export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
   const agents = useStore((s) => s.agents);
   const [tasks, setTasks] = useState<HiveTask[]>([]);
+  const lastTasksSerialized = useRef<string>('');
   const openTaskDetail = useStore((s) => s.openTaskDetail);
   const setAssignedPending = useStore((s) => s.setAssignedPending);
   const activeTaskSession = useStore((s) => s.activeTaskSession);
@@ -144,15 +145,29 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
   );
   const readOnly = !viewingActive;
 
+  const tasksByStatus = useMemo(() => {
+    const buckets = new Map<Status, HiveTask[]>(COLUMNS.map((col) => [col.key, []] as [Status, HiveTask[]]));
+    for (const task of tasks) {
+      const bucket = buckets.get(task.status) ?? buckets.get('todo');
+      bucket?.push(task);
+    }
+    return buckets;
+  }, [tasks]);
+
   const loadLiveTasks = useCallback(async (): Promise<HiveTask[] | null> => {
     try {
       const next = parseTasks(await window.cth.hiveTasks());
-      setTasks(next);
+      const serialized = JSON.stringify(next);
+      setTasks((prev) => {
+        if (lastTasksSerialized.current === serialized) return prev;
+        lastTasksSerialized.current = serialized;
+        return next;
+      });
       return next;
     } catch {
       return null;
     }
-  }, []);
+  }, [lastTasksSerialized]);
 
   const dismissTask = useCallback(async (id: string) => {
     if (readOnly) return;
@@ -240,6 +255,11 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
     renameTaskSession(sessionId, trimmed);
   }, [renameTaskSession]);
 
+  const handleOpenTask = useCallback((taskId: string) => {
+    if (readOnly) return;
+    openTaskDetail(taskId);
+  }, [openTaskDetail, readOnly]);
+
   const handleDeleteArchived = useCallback((sessionId: string) => {
     const ok = window.confirm('Delete this archived session? This removes its task snapshot permanently.');
     if (!ok) return;
@@ -260,18 +280,20 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
       void loadLiveTasks();
       timer.current = setInterval(() => { void loadLiveTasks(); }, POLL_MS);
     } else {
-      setTasks(selectedArchivedSession?.tasks ?? []);
+      const snapshot = selectedArchivedSession?.tasks ?? [];
+      lastTasksSerialized.current = JSON.stringify(snapshot);
+      setTasks(snapshot);
     }
     return () => {
       if (timer.current) { clearInterval(timer.current); timer.current = null; }
     };
   }, [loadLiveTasks, selectedArchivedSession, viewingActive]);
 
-  const pendingItems = tasks.flatMap((t) =>
-    (t.humanQA ?? [])
+  const pendingItems = useMemo(() => tasks
+    .flatMap((t) => (t.humanQA ?? [])
       .map((qa, qi) => ({ task: t, qa, key: `${t.id}:${qi}` }))
-      .filter((item) => isPendingHumanQA(item.qa))
-  ).sort((a, b) => (a.qa.askedAt ?? '') < (b.qa.askedAt ?? '') ? -1 : 1);
+      .filter((item) => isPendingHumanQA(item.qa)))
+    .sort((a, b) => (a.qa.askedAt ?? '') < (b.qa.askedAt ?? '') ? -1 : 1), [tasks]);
 
   useEffect(() => {
     if (viewingActive) setAssignedPending(pendingItems.length);
@@ -628,7 +650,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
         overflowY: mobile ? 'visible' : 'hidden'
       }}>
         {COLUMNS.map((col) => {
-          const cards = tasks.filter((t) => t.status === col.key);
+          const cards = tasksByStatus.get(col.key) ?? [];
           return (
             <div key={col.key} style={{
               flex: mobile ? '1 0 auto' : '1 1 0',
@@ -660,8 +682,8 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
                     task={t}
                     accent={col.accent}
                     assigneeName={nameFor(t.assignee)}
-                    onOpen={readOnly ? undefined : () => openTaskDetail(t.id)}
-                    onDismiss={readOnly ? undefined : () => dismissTask(t.id)}
+                    onOpen={readOnly ? undefined : handleOpenTask}
+                    onDismiss={readOnly ? undefined : dismissTask}
                     readOnly={readOnly}
                   />
                 ))}
@@ -686,18 +708,20 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
 // assignee. Everything else (the full contract, deps, controls) lives in the
 // detail view a click away: a kanban card can carry a title at most.
 
-function TaskCard({ task, accent, assigneeName, onOpen, onDismiss, readOnly }: {
+interface TaskCardProps {
   task: HiveTask;
   accent: string;
   assigneeName?: string;
-  onOpen?: () => void;
-  onDismiss?: () => void;
+  onOpen?: (taskId: string) => void;
+  onDismiss?: (taskId: string) => void;
   readOnly: boolean;
-}) {
+}
+
+const TaskCard = memo(function TaskCard({ task, accent, assigneeName, onOpen, onDismiss, readOnly }: TaskCardProps) {
   return (
     <div style={{ position: 'relative', display: 'flex' }}>
       <button
-        onClick={readOnly ? undefined : onOpen}
+        onClick={readOnly || !onOpen ? undefined : () => onOpen(task.id)}
         title={readOnly ? 'Session history view (read-only)' : 'open task details'}
         style={{
           flex: 1, minWidth: 0,
@@ -731,7 +755,7 @@ function TaskCard({ task, accent, assigneeName, onOpen, onDismiss, readOnly }: {
       </button>
       {!readOnly && onDismiss && (
         <button
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+          onClick={(e) => { e.stopPropagation(); onDismiss(task.id); }}
           title="dismiss this task (removes it from the board)"
           aria-label="dismiss task"
           style={{
@@ -746,7 +770,13 @@ function TaskCard({ task, accent, assigneeName, onOpen, onDismiss, readOnly }: {
       )}
     </div>
   );
-}
+}, (prev, next) =>
+  prev.task === next.task
+  && prev.accent === next.accent
+  && prev.assigneeName === next.assigneeName
+  && prev.readOnly === next.readOnly
+  && prev.onOpen === next.onOpen
+  && prev.onDismiss === next.onDismiss);
 
 // ─── Detail view ─────────────────────────────────────────────────────────────
 // The full breakdown of one task: status, assignee, priority, the complete
