@@ -23,7 +23,7 @@ import {
 } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { join, resolve, sep, basename, dirname, extname } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { request as httpsRequest } from 'node:https';
 import { PtyManager, type SpawnOptions } from './pty';
 import { resolveCommand as resolveCliCommand } from './shellEnv';
@@ -196,6 +196,7 @@ function setupBrowserSocketServer(server: HttpServer): void {
   wss.on('connection', (socket: WebSocket) => {
     const client: BrowserBridgeClient = { socket, subscriptions: new Set(), id: ++browserBridgeClientSeq };
     browserBridgeClients.add(client);
+    try { writeFileSync(join(resolveHarnessHome() ?? tmpdir(), 'bridge-debug.log'), `[${Date.now()}] CONNECT id=${client.id} handlers=${browserInvokeHandlers.size} hasConfigGet=${browserInvokeHandlers.has('config:get')}\n`, { flag: 'a' }); } catch { /* ignore */ }
     browserBridgeSend(client, { type: 'hello', version: 1 });
     socket.on('message', (data: WebSocket.Data) => { handleBrowserClientMessage(client, data); });
     socket.on('close', () => { browserBridgeClients.delete(client); });
@@ -305,16 +306,23 @@ function handleBrowserClientMessage(client: BrowserBridgeClient, raw: WebSocket.
 }
 
 async function handleBrowserInvoke(client: BrowserBridgeClient, msg: BrowserBridgeInvokeMessage): Promise<void> {
+  const dbg = (line: string): void => { try { writeFileSync(join(resolveHarnessHome() ?? tmpdir(), 'bridge-debug.log'), `[${Date.now()}] ${line}\n`, { flag: 'a' }); } catch { /* ignore */ } };
   const handler = browserInvokeHandlers.get(msg.channel);
+  dbg(`INVOKE id=${msg.id} ch=${msg.channel} found=${!!handler}`);
   if (!handler) {
     browserBridgeSend(client, { type: 'invoke-result', id: msg.id, ok: false, error: { message: `No handler registered for ${msg.channel}` } });
+    dbg(`INVOKE id=${msg.id} sent NOT_FOUND`);
     return;
   }
   const args = Array.isArray(msg.args) ? msg.args : [];
   try {
     const result = await Promise.resolve(handler(createBrowserInvokeEvent(client), ...args));
+    const serialized = stringifyBridgePayload({ type: 'invoke-result', id: msg.id, ok: true, value: result });
+    dbg(`INVOKE id=${msg.id} result_len=${serialized?.length ?? 'null'} socket=${client.socket.readyState}`);
     browserBridgeSend(client, { type: 'invoke-result', id: msg.id, ok: true, value: result });
+    dbg(`INVOKE id=${msg.id} sent OK`);
   } catch (err) {
+    dbg(`INVOKE id=${msg.id} handler_threw=${String(err)}`);
     browserBridgeSend(client, { type: 'invoke-result', id: msg.id, ok: false, error: serializeBridgeError(err) });
   }
 }
