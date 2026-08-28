@@ -247,7 +247,7 @@ function broadcastBrowserEvent(channel: string, args: unknown[]): void {
   const payload: BrowserBridgeOutbound = { type: 'event', channel, args };
   for (const client of browserBridgeClients) {
     if (client.socket.readyState !== WebSocket.OPEN) continue;
-    if (client.subscriptions.size > 0 && !client.subscriptions.has(channel)) continue;
+    if (!client.subscriptions.has(channel)) continue;
     browserBridgeSend(client, payload);
   }
 }
