@@ -21,9 +21,10 @@ import { usePtyParser } from '@/hooks/usePtyParser';
 
 export interface AgentDetailPanelProps {
   agent: Agent;
+  isMobile?: boolean;
 }
 
-export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
+export function AgentDetailPanel({ agent, isMobile = false }: AgentDetailPanelProps) {
   const [openTerminalState, setOpenTerminalState] = useState<'idle' | 'opening' | 'ok' | 'error'>('idle');
   const [openTerminalError, setOpenTerminalError] = useState<string | undefined>();
   const [editOpen, setEditOpen] = useState(false);
@@ -91,7 +92,7 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
   const onPtyStream = usePtyParser(agent.id);
 
   // Abathur gets the full command-center dashboard instead of the plain panel.
-  if (agent.isOvermind) return <CommandCenterPanel agent={agent} />;
+  if (agent.isOvermind) return <CommandCenterPanel agent={agent} mobile={isMobile} />;
 
   const openTerminal = async () => {
     setOpenTerminalState('opening');

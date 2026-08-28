@@ -6,6 +6,7 @@ import { Icon } from './Icon';
 import { UatPanel } from './UatPanel';
 import { useStore } from '@/store/store';
 import { HumanQA, HiveTask } from '@/types/tasks';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 /** The card's currently open question for the human, if any. An entry the human
  *  dismissed (dismissedAt) counts as resolved, same as an answered one.
@@ -116,7 +117,7 @@ export function parseTasks(raw: unknown): HiveTask[] {
  * is the ledger's writer: new work enters via the dispatch box (mailed to the
  * god), never by the human inserting cards the orchestrator never heard about.
  */
-export function TasksKanban() {
+export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
   const agents = useStore((s) => s.agents);
   const [tasks, setTasks] = useState<HiveTask[]>([]);
   const openTaskDetail = useStore((s) => s.openTaskDetail);
@@ -334,7 +335,14 @@ export function TasksKanban() {
     : '';
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--cth-paper-200)', position: 'relative' }}>
+    <div style={{
+      flex: 1,
+      minHeight: mobile ? 'auto' : 0,
+      display: 'flex',
+      flexDirection: 'column',
+      background: 'var(--cth-paper-200)',
+      position: 'relative'
+    }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', flexShrink: 0,
         borderBottom: '1px solid var(--cth-ink-300)', background: 'var(--cth-paper-50)'
@@ -610,13 +618,22 @@ export function TasksKanban() {
 
       {/* Columns */}
       <div style={{
-        flex: 1, minHeight: 0, display: 'flex', gap: 8, padding: 10, overflowX: 'auto'
+        flex: 1,
+        minHeight: mobile ? 'auto' : 0,
+        display: 'flex',
+        flexDirection: mobile ? 'column' : 'row',
+        gap: 8,
+        padding: 10,
+        overflowX: mobile ? 'hidden' : 'auto',
+        overflowY: mobile ? 'visible' : 'hidden'
       }}>
         {COLUMNS.map((col) => {
           const cards = tasks.filter((t) => t.status === col.key);
           return (
             <div key={col.key} style={{
-              flex: '1 1 0', minWidth: 170, display: 'flex', flexDirection: 'column',
+              flex: mobile ? '1 0 auto' : '1 1 0',
+              minWidth: mobile ? '100%' : 170,
+              display: 'flex', flexDirection: 'column',
               background: 'var(--cth-cream-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
             }}>
               <div style={{
@@ -627,7 +644,13 @@ export function TasksKanban() {
                 {col.label}
                 <span style={{ marginLeft: 'auto', fontSize: 11, fontFamily: 'var(--cth-font-ui)' }}>{cards.length}</span>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{
+                flex: 1,
+                minHeight: mobile ? 'auto' : 0,
+                overflowY: 'auto',
+                padding: 6,
+                display: 'flex', flexDirection: 'column', gap: 6
+              }}>
                 {cards.length === 0 && (
                   <div style={{ fontSize: 12, color: 'var(--cth-ink-300)', textAlign: 'center', padding: '8px 0' }}>—</div>
                 )}
@@ -742,6 +765,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose 
   onAssign: () => void;
   onClose: () => void;
 }) {
+  const isMobile = useMediaQuery('(max-width: 480px)');
   const col = COLUMNS.find((c) => c.key === task.status) ?? COLUMNS[0];
   // Belt + suspenders: parseTasks normalizes these, but the ledger is a
   // hand-written file — never trust a card's shape at the point of use.
@@ -755,10 +779,22 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose 
       style={{
         position: 'fixed', inset: 0, zIndex: 280,
         background: 'rgba(26, 19, 32, 0.6)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24
+        display: 'flex',
+        alignItems: isMobile ? 'flex-end' : 'center',
+        justifyContent: 'center',
+        padding: isMobile ? 0 : 24
       }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 720, maxWidth: '94vw', maxHeight: '90vh', display: 'flex' }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: isMobile ? '100%' : 720,
+          maxWidth: '100%',
+          maxHeight: isMobile ? '100%' : '90vh',
+          height: isMobile ? '100%' : 'auto',
+          display: 'flex'
+        }}
+      >
         <PixelPanel variant="dialog" title="TASK" noPadding style={{ display: 'flex', flexDirection: 'column', width: '100%', minHeight: 0 }}>
           <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
             {/* Title under a status-colored bar */}

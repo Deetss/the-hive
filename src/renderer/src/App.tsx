@@ -31,6 +31,7 @@ import { IdePanel } from '@/ide/IdePanel';
 import { useHoldOptionToTalk } from '@/freeflow/holdOption';
 import brandLogo from '@brand/logo.png?url';
 import { cancelQaTimer } from '@/components/QuickAskPanel';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 // Injected at build time from package.json (see electron.vite.config.ts).
 declare const __APP_VERSION__: string;
@@ -50,6 +51,7 @@ export function App() {
   const ideOpen = useStore(s => s.ideOpen);
   const setIdeOpen = useStore(s => s.setIdeOpen);
 
+  const isMobile = useMediaQuery('(max-width: 480px)');
   const [config, setConfig] = useState<HarnessConfig | null>(null);
   // Whether the user has passed the launch-time hive picker this session. Starts
   // true (skip the picker) right after a hive SWITCH — changeHome relaunches and
@@ -471,10 +473,16 @@ export function App() {
       <div style={{
         flex: 1, minHeight: 0,
         display: 'flex',
-        padding: 16,
-        gap: 0
+        flexDirection: isMobile ? 'column' : 'row',
+        padding: isMobile ? 12 : 16,
+        gap: isMobile ? 12 : 0
       }}>
-        <div style={{ flex: 1, minHeight: 0, minWidth: 0, position: 'relative' }}>
+        <div style={{
+          flex: 1,
+          minHeight: isMobile ? 260 : 0,
+          minWidth: 0,
+          position: 'relative'
+        }}>
           <OfficeFloor />
           <MemoryPanel />
           {agentCount === 0 && godStatus === 'booting' && <AbathurBooting />}
@@ -502,18 +510,23 @@ export function App() {
           )}
         </div>
 
-        <SidebarSplitter
-          width={sidebarWidth}
-          onChange={setSidebarWidth}
-          viewportWidth={vpWidth}
-        />
+        {!isMobile && (
+          <SidebarSplitter
+            width={sidebarWidth}
+            onChange={setSidebarWidth}
+            viewportWidth={vpWidth}
+          />
+        )}
 
         <div style={{
-          width: sidebarWidth, flexShrink: 0,
-          minHeight: 0, display: 'flex', flexDirection: 'column'
+          width: isMobile ? '100%' : sidebarWidth,
+          flexShrink: 0,
+          minHeight: isMobile ? 'auto' : 0,
+          display: 'flex',
+          flexDirection: 'column'
         }}>
           {agent ? (
-            <AgentDetailPanel agent={agent} />
+            <AgentDetailPanel agent={agent} isMobile={isMobile} />
           ) : godStatus === 'booting' ? (
             <PixelPanel variant="default" noPadding style={{
               padding: 16, height: '100%',
@@ -553,7 +566,7 @@ export function App() {
         </div>
       </div>
 
-      <AgentStrip config={config} />
+      <AgentStrip config={config} isMobile={isMobile} />
 
       {/* Only mount StatusBar in normal view — FullscreenTerminal mounts its own copy
           so we don't run two instances of useFleetTelemetry / useRateLimits
