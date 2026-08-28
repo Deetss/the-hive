@@ -181,6 +181,8 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
   // Seeded from the god's own control state (the floor is kept in sync by
   // this single control, so any agent's state reflects the floor's).
   const [floorDeliveryPaused, setFloorDeliveryPaused] = useState(false);
+  const [openBrowserPending, setOpenBrowserPending] = useState(false);
+  const [openBrowserUrl, setOpenBrowserUrl] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     window.cth.controlSnapshot(agent.id)
@@ -194,6 +196,26 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
     const all = useStore.getState().agents;
     await Promise.all(all.map((a) => window.cth.controlAutoDelivery(a.id, next).catch(() => null)));
   };
+  const openBrowser = useCallback(async () => {
+    if (openBrowserPending) return;
+    if (!window.cth.openInBrowser) {
+      console.warn('[command-center] openInBrowser bridge missing');
+      return;
+    }
+    setOpenBrowserPending(true);
+    try {
+      const result = await window.cth.openInBrowser();
+      if (result && result.ok && result.url) {
+        setOpenBrowserUrl(result.url);
+      } else if (result && 'error' in result && result.error) {
+        console.error('[command-center] openInBrowser failed:', result.error);
+      }
+    } catch (err) {
+      console.error('[command-center] openInBrowser error:', err);
+    } finally {
+      setOpenBrowserPending(false);
+    }
+  }, [openBrowserPending]);
 
   return (
     <PixelPanel
@@ -266,6 +288,23 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
               <Icon name="code" /> IDE
+            </span>
+          </PixelButton>
+          <PixelButton
+            variant="secondary"
+            size="sm"
+            disabled={openBrowserPending}
+            onClick={() => { void openBrowser(); }}
+          >
+            <span
+              className="cth-tip cth-tip-wrap"
+              data-tip={openBrowserUrl
+                ? `Open the UI in your browser (last served at ${openBrowserUrl}).`
+                : 'Serve the UI on localhost and open it in your browser.'}
+              aria-label="Open the UI in your browser"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              <Icon name="web" /> {openBrowserPending ? 'opening…' : 'browser'}
             </span>
           </PixelButton>
         </div>

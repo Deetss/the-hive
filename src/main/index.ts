@@ -1,12 +1,13 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerMonitor, powerSaveBlocker, screen, shell, Notification } from 'electron';
 import { spawn } from 'node:child_process';
+import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import {
   rmSync, existsSync, readFileSync, readdirSync, statSync, cpSync, writeFileSync,
-  unlinkSync, mkdirSync, renameSync, createWriteStream, copyFileSync, lstatSync,
+  unlinkSync, mkdirSync, renameSync, createWriteStream, createReadStream, copyFileSync, lstatSync,
   readlinkSync, symlinkSync
 } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
-import { join, resolve, sep, basename, dirname } from 'node:path';
+import { join, resolve, sep, basename, dirname, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { request as httpsRequest } from 'node:https';
 import { PtyManager, type SpawnOptions } from './pty';
@@ -98,6 +99,167 @@ import {
 } from '../shared/codexRemote';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
+
+const BROWSER_SERVER_HOST = '127.0.0.1';
+const BROWSER_SERVER_PORT = 48003;
+const BROWSER_SERVER_ROOT = join(__dirname, '../renderer');
+const BROWSER_SERVER_MIME: Record<string, string> = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.txt': 'text/plain; charset=utf-8',
+  '.wasm': 'application/wasm'
+};
+
+let browserServer: HttpServer | null = null;
+let browserServerUrl: string | null = null;
+let browserServerStart: Promise<string> | null = null;
+
+function mimeTypeFor(ext: string): string {
+  return BROWSER_SERVER_MIME[ext] ?? 'application/octet-stream';
+}
+
+function ensureBrowserServer(): Promise<string> {
+  if (browserServerStart) return browserServerStart;
+
+  browserServerStart = new Promise<string>((resolve, reject) => {
+    if (!existsSync(BROWSER_SERVER_ROOT)) {
+      const err = new Error(`Renderer assets not found at ${BROWSER_SERVER_ROOT}`);
+      browserServerStart = null;
+      reject(err);
+      return;
+    }
+
+    const server = createHttpServer((req, res) => {
+      if (!req.url) {
+        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Bad Request');
+        return;
+      }
+
+      const method = req.method?.toUpperCase() ?? 'GET';
+      if (method !== 'GET' && method !== 'HEAD') {
+        res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Method Not Allowed');
+        return;
+      }
+
+      let pathname: string;
+      try {
+        const url = new URL(req.url, `http://${BROWSER_SERVER_HOST}:${BROWSER_SERVER_PORT}`);
+        pathname = decodeURIComponent(url.pathname);
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Bad Request');
+        return;
+      }
+
+      if (!pathname || pathname === '/') pathname = '/index.html';
+
+      let filePath = join(BROWSER_SERVER_ROOT, pathname);
+      if (!filePath.startsWith(BROWSER_SERVER_ROOT)) {
+        res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Forbidden');
+        return;
+      }
+
+      const hasExtension = extname(pathname) !== '';
+      try {
+        const stats = statSync(filePath);
+        if (stats.isDirectory()) {
+          filePath = join(filePath, 'index.html');
+        }
+      } catch {
+        if (!hasExtension) {
+          filePath = join(BROWSER_SERVER_ROOT, 'index.html');
+        } else {
+          res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('Not Found');
+          return;
+        }
+      }
+
+      let status = 200;
+      let contentType = mimeTypeFor(extname(filePath));
+      const cacheControl = contentType.startsWith('text/html') ? 'no-cache' : 'public, max-age=3600';
+
+      try {
+        if (method === 'HEAD') {
+          res.writeHead(status, { 'Content-Type': contentType, 'Cache-Control': cacheControl });
+          res.end();
+          return;
+        }
+        const stream = createReadStream(filePath);
+        stream.once('open', () => {
+          res.writeHead(status, { 'Content-Type': contentType, 'Cache-Control': cacheControl });
+        });
+        stream.once('error', (err) => {
+          console.error('[browser-server] stream error:', err);
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          }
+          res.end('Internal Server Error');
+        });
+        stream.pipe(res);
+      } catch (err) {
+        console.error('[browser-server] failed to read', filePath, err);
+        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Internal Server Error');
+      }
+    });
+
+    const reset = (): void => {
+      browserServer = null;
+      browserServerUrl = null;
+      browserServerStart = null;
+    };
+
+    server.once('error', (err) => {
+      console.error('[browser-server] failed to start:', err);
+      server.close();
+      reset();
+      reject(err);
+    });
+    server.once('close', () => {
+      reset();
+    });
+
+    server.listen(BROWSER_SERVER_PORT, BROWSER_SERVER_HOST, () => {
+      const url = `http://${BROWSER_SERVER_HOST}:${BROWSER_SERVER_PORT}/`;
+      browserServerUrl = url;
+      console.log('[browser-server] serving renderer at', url);
+      resolve(url);
+    });
+
+    browserServer = server;
+  });
+
+  return browserServerStart;
+}
+
+async function openRendererInBrowser(): Promise<string> {
+  try {
+    const url = await ensureBrowserServer();
+    await shell.openExternal(url);
+    return url;
+  } catch (err) {
+    console.error('[browser-server] unable to open browser view:', err);
+    throw err;
+  }
+}
 
 // Keep the main process alive on an unexpected throw/rejection. The harness is a
 // multi-agent supervisor — a single stray throw (e.g. node-pty's ConPTY console
@@ -2467,13 +2629,23 @@ function installAppMenu(): void {
     accelerator: 'CmdOrCtrl+Shift+N',
     click: () => { openFloor(); }
   };
+  const openBrowserItem = {
+    label: 'Open in Browser',
+    accelerator: 'CmdOrCtrl+Shift+B',
+    click: () => {
+      void openRendererInBrowser().catch((err) => {
+        console.error('[browser-server] menu launch failed:', err);
+        dialog.showErrorBox('Open in Browser failed', err instanceof Error ? err.message : String(err));
+      });
+    }
+  } satisfies Electron.MenuItemConstructorOptions;
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac ? [{ role: 'appMenu' as const }] : []),
     {
       label: 'File',
       submenu: isMac
-        ? [newFloorItem, { type: 'separator' as const }, { role: 'close' as const }]
-        : [newFloorItem, { type: 'separator' as const }, { role: 'quit' as const }]
+        ? [openBrowserItem, newFloorItem, { type: 'separator' as const }, { role: 'close' as const }]
+        : [openBrowserItem, newFloorItem, { type: 'separator' as const }, { role: 'quit' as const }]
     },
     // The Edit menu is spelled out rather than `{ role: 'editMenu' }` for one
     // reason: `registerAccelerator: false` on the clipboard items.
@@ -3874,6 +4046,7 @@ function teardownAndQuit(): void {
   try { reflector.stop(); } catch (e) { console.error('[quit] reflector.stop:', e); }
   try { persist.close(); } catch (e) { console.error('[quit] persist.close:', e); }
   try { hive.stopAllProxyBridges(); } catch (e) { console.error('[quit] stopAllProxyBridges:', e); }
+  try { if (browserServer) browserServer.close(); } catch (e) { console.error('[quit] browserServer.close:', e); }
   try { ptyManager.killAll(); } catch (e) { console.error('[quit] killAll:', e); }
   // Release the cross-device advisory lock, then (best-effort) push the released
   // hive so the next device sees "free" and no stale-owner TTL wait is needed.
@@ -4807,6 +4980,17 @@ ipcMain.handle('app:info', () => {
     ? changelog.split(/\n## /).slice(1, 3).map((s) => `## ${s}`).join('\n').slice(0, 8000)
     : '';
   return { version: app.getVersion(), changelog: top };
+});
+ipcMain.handle('app:openInBrowser', async () => {
+  try {
+    const url = await openRendererInBrowser();
+    return { ok: true as const, url };
+  } catch (err) {
+    return {
+      ok: false as const,
+      error: err instanceof Error ? err.message : String(err)
+    };
+  }
 });
 ipcMain.handle('realtime:drainCompletions', () => completionWatcher.drainQueuedCompletions());
 ipcMain.handle('realtime:waitFor', (_e, taskId: unknown, timeoutMs: unknown) =>
