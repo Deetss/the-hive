@@ -191,7 +191,7 @@ type BrowserBridgeInvokeMessage = Extract<BrowserBridgeInbound, { type: 'invoke'
 
 function setupBrowserSocketServer(server: HttpServer): void {
   if (browserSocketServer) return;
-  const wss = new WebSocket.Server({ server, path: '/bridge' });
+  const wss = new WebSocket.Server({ server, path: '/bridge', perMessageDeflate: false });
   browserSocketServer = wss;
   wss.on('connection', (socket: WebSocket) => {
     const client: BrowserBridgeClient = { socket, subscriptions: new Set(), id: ++browserBridgeClientSeq };
