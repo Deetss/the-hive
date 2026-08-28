@@ -3229,19 +3229,52 @@ ipcMain.handle('config:get', (): HarnessConfig => {
 });
 ipcMain.handle('fleet:rateLimitsSnapshot', () => hookServer.allRateLimits());
 // Pull the current governor mode (cold-start / reconnect backfill).
-ipcMain.handle('fleet:governorSnapshot', () => ({
-  mode: governorMode,
-  pausedAgents: [...governorPausedAgents]
-}));
+ipcMain.handle('fleet:governorSnapshot', () => {
+  if (governorLastPayload) {
+    return { ...governorLastPayload, mode: governorMode, pausedAgents: [...governorPausedAgents] };
+  }
+  return {
+    mode: governorMode,
+    reason: governorMode === 'green' ? 'all clear' : undefined,
+    fiveHour: null,
+    sevenDay: null,
+    profiles: [],
+    pausedAgents: [...governorPausedAgents]
+  };
+});
 // Manual override: 'force-green' bypasses pace triggers; null clears the override.
 ipcMain.handle('governor:setOverride', (_evt, override: unknown) => {
   const v = override === 'force-green' ? 'force-green' : undefined;
   const cfg = readConfig();
   writeConfig({ governorPolicy: { ...(cfg.governorPolicy ?? {}), manualOverride: v } });
-  if (v === 'force-green' && governorMode !== 'green') {
-    governorMode = 'green';
-    recoverGovernorAgents();
-    try { liveWebContents()?.send('hive:governorMode', { mode: 'green', override: v }); } catch { /* */ }
+  if (v === 'force-green') {
+    if (governorMode !== 'green') {
+      governorMode = 'green';
+      recoverGovernorAgents();
+    } else {
+      recoverGovernorAgents();
+    }
+    const payload: GovernorBroadcastPayload = {
+      mode: 'green',
+      reason: 'manual override: force-green',
+      fiveHour: governorLastPayload?.fiveHour ?? null,
+      sevenDay: governorLastPayload?.sevenDay ?? null,
+      profiles: governorLastPayload?.profiles ?? [],
+      override: 'force-green',
+      pausedAgents: []
+    };
+    governorLastPayload = payload;
+    try { liveWebContents()?.send('hive:governorMode', payload); } catch { /* */ }
+  } else {
+    if (governorLastPayload) {
+      governorLastPayload = {
+        ...governorLastPayload,
+        override: undefined,
+        mode: governorMode,
+        pausedAgents: [...governorPausedAgents]
+      };
+      try { liveWebContents()?.send('hive:governorMode', governorLastPayload); } catch { /* */ }
+    }
   }
   return { ok: true };
 });
@@ -5491,8 +5524,21 @@ const WINDOW_7D_MS = 7 * 24 * 60 * 60 * 1000;
 
 type GovernorLevel = 'green' | 'yellow' | 'red';
 
+type GovernorWindowSnapshot = { pct: number; resetsAt: string; level?: GovernorLevel; reason?: string };
+type GovernorBroadcastProfile = { profileId: string; mode: GovernorLevel; reason: string };
+type GovernorBroadcastPayload = {
+  mode: GovernorLevel;
+  reason?: string;
+  fiveHour: GovernorWindowSnapshot | null;
+  sevenDay: GovernorWindowSnapshot | null;
+  profiles: GovernorBroadcastProfile[];
+  override?: 'force-green';
+  pausedAgents: string[];
+};
+
 /** Current governor mode (persisted across beats; IPC-pushed to renderer). */
 let governorMode: GovernorLevel = 'green';
+let governorLastPayload: GovernorBroadcastPayload | null = null;
 /** Agent ids paused by the governor (so we can un-pause on recovery). */
 const governorPausedAgents = new Set<string>();
 /** Per-profile governor severity (rebuilt each beat). */
@@ -5891,13 +5937,17 @@ function runGovernorBeat(): void {
         reason: state?.reason ?? 'all clear'
       };
     });
-    liveWebContents()?.send('hive:governorMode', {
+    const broadcast: GovernorBroadcastPayload = {
       mode: newMode,
       reason,
       fiveHour: maxFiveHour ? { pct: maxFiveHour.pct, resetsAt: maxFiveHour.resetsAt, ...(fiveEval ?? {}) } : null,
       sevenDay: maxSevenDay ? { pct: maxSevenDay.pct, resetsAt: maxSevenDay.resetsAt, ...(sevenEval ?? {}) } : null,
-      profiles: profilesPayload
-    });
+      profiles: profilesPayload,
+      override: policy.manualOverride === 'force-green' ? 'force-green' : undefined,
+      pausedAgents: [...governorPausedAgents]
+    };
+    governorLastPayload = broadcast;
+    liveWebContents()?.send('hive:governorMode', broadcast);
   } catch { /* window gone */ }
 }
 function recoverGovernorAgents(): void {
