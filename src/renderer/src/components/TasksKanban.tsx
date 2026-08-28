@@ -6,6 +6,7 @@ import { Icon } from './Icon';
 import { UatPanel } from './UatPanel';
 import { useStore } from '@/store/store';
 import { HumanQA, HiveTask } from '@/types/tasks';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 /** The card's currently open question for the human, if any. An entry the human
  *  dismissed (dismissedAt) counts as resolved, same as an answered one.
@@ -764,6 +765,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose 
   onAssign: () => void;
   onClose: () => void;
 }) {
+  const isMobile = useMediaQuery('(max-width: 480px)');
   const col = COLUMNS.find((c) => c.key === task.status) ?? COLUMNS[0];
   // Belt + suspenders: parseTasks normalizes these, but the ledger is a
   // hand-written file — never trust a card's shape at the point of use.
@@ -777,10 +779,22 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose 
       style={{
         position: 'fixed', inset: 0, zIndex: 280,
         background: 'rgba(26, 19, 32, 0.6)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24
+        display: 'flex',
+        alignItems: isMobile ? 'flex-end' : 'center',
+        justifyContent: 'center',
+        padding: isMobile ? 0 : 24
       }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 720, maxWidth: '94vw', maxHeight: '90vh', display: 'flex' }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: isMobile ? '100%' : 720,
+          maxWidth: '100%',
+          maxHeight: isMobile ? '100%' : '90vh',
+          height: isMobile ? '100%' : 'auto',
+          display: 'flex'
+        }}
+      >
         <PixelPanel variant="dialog" title="TASK" noPadding style={{ display: 'flex', flexDirection: 'column', width: '100%', minHeight: 0 }}>
           <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
             {/* Title under a status-colored bar */}
