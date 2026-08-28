@@ -24,6 +24,31 @@ const defineMain = {
 // missing from out/main — which crashed the packaged app (#66) AND `npm run
 // dev` (#67). A writeBundle hook runs after the main build in BOTH dev and
 // build, so the sidecar is emitted from a single place for every path.
+// Copy static renderer sidecars that Vite does not bundle or copy automatically.
+// browser-bridge.js is a plain-JS preload shim served by the in-app HTTP server
+// (port 48003); it must land at out/renderer/browser-bridge.js so the browser
+// can fetch it as /browser-bridge.js.
+function copyRendererSidecars() {
+  const ASSETS: Array<[string, string]> = [
+    ['src/renderer/browser-bridge.js', 'out/renderer/browser-bridge.js']
+  ];
+  return {
+    name: 'copy-renderer-sidecars',
+    writeBundle() {
+      for (const [fromRel, toRel] of ASSETS) {
+        const from = resolve(__dirname, fromRel);
+        const to = resolve(__dirname, toRel);
+        mkdirSync(dirname(to), { recursive: true });
+        copyFileSync(from, to);
+        const copied = statSync(to);
+        if (!copied.isFile() || copied.size === 0) {
+          throw new Error(`Failed to copy renderer sidecar: ${fromRel} -> ${toRel}`);
+        }
+      }
+    }
+  };
+}
+
 function copyMainSidecars() {
   const ASSETS: Array<[string, string]> = [
     ['src/main/slack-trigger.cjs', 'out/main/slack-trigger.cjs'],
@@ -76,7 +101,7 @@ export default defineConfig({
         input: { index: resolve(__dirname, 'src/renderer/index.html') }
       }
     },
-    plugins: [react()],
+    plugins: [react(), copyRendererSidecars()],
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src/renderer/src'),
