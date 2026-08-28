@@ -286,6 +286,7 @@ export interface HarnessConfig {
   autoMode: boolean;
   defaultCommand: string;
   defaultModel?: string;
+  defaultSpawnProfileId?: string;
   /** Which provider+model powers the Overmind orchestrator ("Abathur"). Default
    *  'claude' / 'claude-opus-4-8'. Mirrors src/main/config.ts. */
   overmindProvider?: AgentProvider;

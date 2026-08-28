@@ -594,6 +594,14 @@ export function App() {
       {fullscreenAgentId && <FullscreenTerminal config={config} />}
       {ideOpen && <IdePanel />}
       <TaskDetailOverlay />
+      {profileWalkthroughOpen && (
+        <ProfileWalkthrough
+          config={config}
+          mandatory={profileWalkthroughMandatory}
+          onComplete={handleProfileWalkthroughComplete}
+          onCancel={handleProfileWalkthroughCancel}
+        />
+      )}
     </div>
   );
 }
