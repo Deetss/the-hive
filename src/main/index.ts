@@ -1430,12 +1430,66 @@ const ptyToAgent = new Map<string, string>();
 const lastFleetWriteMs = new Map<string, number>();
 /** Epoch ms of the latest PTY stdout activity per agent. */
 const lastAgentPtyActivityMs = new Map<string, number>();
+/** Latest tool detected from PTY stdout or hooks per agent. */
+const lastAgentTool = new Map<string, string>();
+/** Derived working/idle status per agent. */
+const lastAgentStatus = new Map<string, 'working' | 'idle'>();
+/** Debounce timers to transition agent to idle after 3s of silence. */
+const agentIdleTimers = new Map<string, NodeJS.Timeout>();
 
-function notifyAgentPtyActivity(ptyId: string): void {
+const AGY_TOOL_RE = /(?:(?:\[?\b(?:Tool|Calling tool|Running tool|Executing|Tool call|Tool Call|Action)\b\]?)\s*[:\s]\s*([A-Za-z0-9_.:-]+)|●\s+([A-Za-z][A-Za-z0-9_]*))/i;
+
+function stripAnsiText(str: string): string {
+  return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
+}
+
+function notifyAgentPtyActivity(ptyId: string, chunk?: string): void {
   const agentId = ptyToAgent.get(ptyId);
   if (!agentId) return;
   const now = Date.now();
   lastAgentPtyActivityMs.set(agentId, now);
+  lastAgentStatus.set(agentId, 'working');
+
+  let detectedTool: string | null = null;
+  if (chunk) {
+    const plain = stripAnsiText(chunk);
+    const m = AGY_TOOL_RE.exec(plain);
+    if (m) {
+      detectedTool = (m[1] || m[2] || '').trim();
+      if (detectedTool) {
+        lastAgentTool.set(agentId, detectedTool);
+      }
+    }
+  }
+
+  // Push live status update to the renderer
+  const toolName = detectedTool || lastAgentTool.get(agentId);
+  try {
+    liveWebContents()?.send('hive:hookEvent', {
+      agentId,
+      event: 'PreToolUse',
+      tool: toolName || 'working'
+    });
+  } catch { /* ignore */ }
+
+  // Reset 3.5s idle debounce timer
+  const existingTimer = agentIdleTimers.get(agentId);
+  if (existingTimer) clearTimeout(existingTimer);
+  const idleTimer = setTimeout(() => {
+    agentIdleTimers.delete(agentId);
+    if (Date.now() - (lastAgentPtyActivityMs.get(agentId) ?? 0) >= 3000) {
+      lastAgentStatus.set(agentId, 'idle');
+      try {
+        liveWebContents()?.send('hive:hookEvent', {
+          agentId,
+          event: 'PostInvocation'
+        });
+      } catch { /* ignore */ }
+      writeFleetSnapshot();
+    }
+  }, 3500);
+  agentIdleTimers.set(agentId, idleTimer);
+
   const lastWrite = lastFleetWriteMs.get(agentId) ?? 0;
   if (now - lastWrite >= 2000) {
     lastFleetWriteMs.set(agentId, now);
@@ -1723,6 +1777,13 @@ function teardownPty(id: string): void {
     ptyToAgent.delete(id);
     lastFleetWriteMs.delete(agentId);
     lastAgentPtyActivityMs.delete(agentId);
+    lastAgentTool.delete(agentId);
+    lastAgentStatus.delete(agentId);
+    const timer = agentIdleTimers.get(agentId);
+    if (timer) {
+      clearTimeout(timer);
+      agentIdleTimers.delete(agentId);
+    }
     // Drop watchdog state so a dead agent can't get nudged or leak its grace.
     try { workerWake.forget(agentId, id); } catch { /* best-effort */ }
     // Drop breaker state so a dead agent can't leak/zombie a tripped level.
@@ -1874,8 +1935,8 @@ ptyManager.setExitHandler((id, exitCode) => {
   teardownPty(id);
 });
 
-ptyManager.setDataHandler((id) => {
-  notifyAgentPtyActivity(id);
+ptyManager.setDataHandler((id, data) => {
+  notifyAgentPtyActivity(id, data);
 });
 
 /** Keep the system from suspending the harness while agents are running.
@@ -2504,6 +2565,9 @@ function writeFleetSnapshot(): void {
         const ptyLastOutput = ptyId ? ptyManager.lastOutputAt(ptyId) : undefined;
         const lastPty = Math.max(ptyLastOutput ?? 0, lastAgentPtyActivityMs.get(id) ?? 0);
         const lastActiveMs = Math.max(u?.ts ?? 0, lastPty);
+        const isWorking = lastActiveMs > 0 && (now - lastActiveMs) <= 3000;
+        const agentStatus = isWorking ? 'working' : (lastAgentStatus.get(id) ?? (a.status || 'idle'));
+        const agentLastTool = lastAgentTool.get(id) ?? (spans.length ? spans[spans.length - 1].tool : null);
         return {
           id,
           name: a.name,
@@ -2514,7 +2578,8 @@ function writeFleetSnapshot(): void {
           tokens,
           usd: lifetime === null ? sessionUsd : Number(lifetime.toFixed(4)),
           sessionUsd,
-          lastTool: spans.length ? spans[spans.length - 1].tool : null,
+          status: agentStatus,
+          lastTool: agentLastTool,
           lastActiveSecAgo: lastActiveMs > 0 ? Math.round((now - lastActiveMs) / 1000) : null,
           inboxBacklog: hive.inboxBacklog(id),
           onHold: !!a.onHold,
@@ -5255,13 +5320,20 @@ ipcMain.handle('hive:agentDirectory', () => {
     const spans = snap.spans[id] ?? [];
     const tokens = u ? u.input + u.output + u.cacheRead + u.cacheCreation : 0;
     const ctx = hookServer.contextFor(id);
+    const ptyId = ptyForAgent(id);
+    const ptyLastOutput = ptyId ? ptyManager.lastOutputAt(ptyId) : undefined;
+    const lastPty = Math.max(ptyLastOutput ?? 0, lastAgentPtyActivityMs.get(id) ?? 0);
+    const lastActiveMs = Math.max(u?.ts ?? 0, lastPty);
+    const isWorking = lastActiveMs > 0 && (now - lastActiveMs) <= 3000;
+    const agentStatus = isWorking ? 'working' : (lastAgentStatus.get(id) ?? (a.status || 'idle'));
+    const agentLastTool = lastAgentTool.get(id) ?? (spans.length ? spans[spans.length - 1].tool : null);
     return {
       id,
       name: a.name,
       role: a.role ?? (a.isOvermind ? 'orchestrator' : 'agent'),
       provider: a.provider ?? 'claude',
       model: u?.model ?? null,
-      status: a.status ?? 'idle',
+      status: agentStatus,
       cwd: a.cwd ?? null,
       cwdValid: a.cwdValid ?? null,
       archived: !!a.archived,
@@ -5273,8 +5345,8 @@ ipcMain.handle('hive:agentDirectory', () => {
       breaker: breaker.levelFor(id),
       tokens,
       usd: u ? Number(u.usd.toFixed(4)) : 0,
-      lastTool: spans.length ? spans[spans.length - 1].tool : null,
-      lastActiveSecAgo: u ? Math.round((now - u.ts) / 1000) : null,
+      lastTool: agentLastTool,
+      lastActiveSecAgo: lastActiveMs > 0 ? Math.round((now - lastActiveMs) / 1000) : null,
       contextTokens: ctx?.tokens ?? null,
       contextLimit: ctx?.limit ?? null,
       contextPct: ctx && ctx.limit > 0 ? Math.round((ctx.tokens / ctx.limit) * 100) : null,
