@@ -1019,6 +1019,33 @@ export class HiveManager {
     }
   }
 
+  patchAgentEngine(
+    id: string,
+    patch: { provider?: AgentProvider | null; profileId?: string | null }
+  ): { ok: boolean; provider?: AgentProvider; profileId?: string; error?: string } {
+    const root = this.root();
+    if (!root) return { ok: false, error: 'hive disabled' };
+    const reg = this.registry();
+    const entry = reg.agents[id];
+    if (!entry) return { ok: false, error: 'agent not found' };
+
+    const next: RegistryAgent = { ...entry };
+    if (Object.prototype.hasOwnProperty.call(patch, 'provider')) {
+      const provider = patch.provider ?? undefined;
+      if (provider && typeof provider === 'string') next.provider = provider;
+      else delete next.provider;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'profileId')) {
+      const trimmed = (patch.profileId ?? '').trim();
+      if (trimmed) next.profileId = trimmed;
+      else delete next.profileId;
+    }
+
+    reg.agents[id] = next;
+    this.atomicWriteJson(join(root, 'registry.json'), reg);
+    return { ok: true, provider: next.provider, profileId: next.profileId };
+  }
+
   /**
    * Flip an agent's archived flag and persist the registry. Closing a terminal
    * tab archives the agent (retained + flagged, NOT deleted); a (re)spawn clears

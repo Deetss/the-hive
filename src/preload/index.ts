@@ -774,6 +774,11 @@ const api = {
   /** Persist a hire/job role to hive registry.json + identity.md (no respawn). */
   hivePatchAgentRole: (id: string, role: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('hive:patchAgentRole', id, role),
+  hivePatchAgentEngine: (
+    id: string,
+    patch: { provider?: AgentProvider | null; profileId?: string | null }
+  ): Promise<{ ok: boolean; provider?: AgentProvider; profileId?: string; error?: string }> =>
+    ipcRenderer.invoke('hive:patchAgentEngine', id, patch),
   /** Rename an agent's display name. Its id, hive directory, and PTY are unchanged. */
   hiveRenameAgent: (id: string, name: string): Promise<{ ok: boolean; name?: string; error?: string }> =>
     ipcRenderer.invoke('hive:renameAgent', id, name),

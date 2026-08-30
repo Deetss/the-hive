@@ -77,7 +77,7 @@ test('the roster line carries the whole floor and its state', async (t) => {
   assert.match(line, /\$4\.22/);
   assert.match(line, /inbox 2/);
   assert.match(line, /breaker warn/);
-  assert.match(line, /god-1[^;]*you/, 'god has to be able to spot itself');
+  assert.match(line, /god-1 "Michael" \(orchestrator/, 'god line identifies the orchestrator explicitly');
   assert.match(line, /no activity yet/, 'an agent that never ran must not read as "active never"');
   assert.match(line, /SUPERSEDES/, 'the point is to override what god remembers');
   assert.ok(line.length < 1200, `too long for a 3-agent floor: ${line.length} chars`);
@@ -221,4 +221,27 @@ test('the hold survives a restart, because the registry is the record', async (t
   const reg = JSON.parse(fs.readFileSync(path.join(home, 'hive', 'registry.json'), 'utf8'));
   assert.equal(reg.agents['jim-1'].onHold, true,
     'a hold that evaporated on restart would hand the agent back to Michael silently');
+});
+test('patchAgentEngine persists provider/profile changes on the registry', async (t) => {
+  const { hive } = await floor(t);
+
+  const before = hive.registry().agents['jim-1'];
+  assert.equal(before.provider, 'claude');
+  assert.equal(before.profileId, undefined);
+
+  assert.deepEqual(
+    hive.patchAgentEngine('jim-1', { provider: 'codex', profileId: 'work-profile' }),
+    { ok: true, provider: 'codex', profileId: 'work-profile' }
+  );
+  const after = hive.registry().agents['jim-1'];
+  assert.equal(after.provider, 'codex');
+  assert.equal(after.profileId, 'work-profile');
+
+  assert.deepEqual(
+    hive.patchAgentEngine('jim-1', { profileId: null }),
+    { ok: true, provider: 'codex', profileId: undefined }
+  );
+  assert.equal(hive.registry().agents['jim-1'].profileId, undefined);
+
+  assert.equal(hive.patchAgentEngine('nobody-here', { provider: 'codex' }).ok, false);
 });

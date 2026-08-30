@@ -4073,6 +4073,13 @@ ipcMain.handle('hive:patchAgentRole', (_evt, id: unknown, role: unknown) => {
   if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
   return hive.patchAgentRole(id, role);
 });
+ipcMain.handle('hive:patchAgentEngine', (_evt, id: unknown, patch: unknown) => {
+  if (typeof id !== 'string') return { ok: false, error: 'invalid id' };
+  if (!patch || typeof patch !== 'object') return { ok: false, error: 'invalid patch' };
+  if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
+  const { provider, profileId } = patch as { provider?: AgentProvider | null; profileId?: string | null };
+  return hive.patchAgentEngine(id, { provider: provider ?? undefined, profileId: profileId ?? undefined });
+});
 
 // ─── IPC: Settings hero payload (remote data, cached) ───────────────────────
 /** Plan copy and sponsor, fetched from the repo so they can change without a
