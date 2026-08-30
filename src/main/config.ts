@@ -2,6 +2,7 @@ import { app } from 'electron';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
+import { randomBytes } from 'node:crypto';
 import {
   autoModeFlagForProvider,
   defaultCommandForProvider,
@@ -599,6 +600,9 @@ export interface HarnessConfig {
   /** Never condense a file smaller than this; also the section-trigger byte floor.
    *  DECIDED: 16 KB. */
   reflectMinBytes?: number;
+  /** Shared secret for Mobile API bearer authentication (Tailscale remote control).
+   *  Auto-generated 32-char hex string on first run if unset. */
+  mobileApiSecret?: string;
 }
 
 const DEFAULTS: HarnessConfig = {
@@ -649,6 +653,7 @@ const DEFAULTS: HarnessConfig = {
   webhookEnabled: false,
   webhookSecret: undefined,
   webhookPort: undefined,
+  mobileApiSecret: undefined,
   // Triggers. These three are the ONLY object/array defaults that get handed
   // straight back out of `readConfig` for a config that never persisted them, so
   // `withTriggerDefaults` re-copies them on every read — see the note there.
@@ -1154,6 +1159,18 @@ export function writeConfig(patch: Partial<HarnessConfig>): HarnessConfig {
     next.governorPolicy = normalizeGovernorPolicyShape(next.governorPolicy);
   }
   return persistConfig(next);
+}
+
+/** Ensure a 32-character hex secret exists in config.json for Mobile API auth.
+ *  Generates and persists one if missing or empty. */
+export function ensureMobileApiSecret(): string {
+  const current = readConfig();
+  if (typeof current.mobileApiSecret === 'string' && current.mobileApiSecret.trim().length > 0) {
+    return current.mobileApiSecret.trim();
+  }
+  const secret = randomBytes(16).toString('hex');
+  writeConfig({ mobileApiSecret: secret });
+  return secret;
 }
 
 /** Set or clear one agent's token ceiling against the latest config on disk.

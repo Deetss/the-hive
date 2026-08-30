@@ -15,7 +15,7 @@ import {
 } from 'electron';
 import WebSocket from 'ws';
 import { spawn } from 'node:child_process';
-import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
+import { createServer as createHttpServer, type Server as HttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import {
   rmSync, existsSync, readFileSync, readdirSync, statSync, cpSync, writeFileSync,
   unlinkSync, mkdirSync, renameSync, createWriteStream, createReadStream, copyFileSync, lstatSync,
@@ -23,7 +23,7 @@ import {
 } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { join, resolve, sep, basename, dirname, extname } from 'node:path';
-import { homedir, tmpdir } from 'node:os';
+import { homedir, tmpdir, hostname } from 'node:os';
 import { request as httpsRequest } from 'node:https';
 import { PtyManager, type SpawnOptions } from './pty';
 import { resolveCommand as resolveCliCommand } from './shellEnv';
@@ -32,7 +32,7 @@ import { RealtimeFloorWatcher } from './realtimeFloorWatcher';
 import {
   readConfig, writeConfig, setAgentTokenCap, resetConfig, ensureHarnessHome, ensureClaudePermissionsAccepted,
   resolveHarnessHome, getRuntimeProfile, listRuntimeProfiles, upsertRuntimeProfile, isSafeHttpUrl,
-  listLocalDelegates, upsertLocalDelegate, removeLocalDelegate,
+  listLocalDelegates, upsertLocalDelegate, removeLocalDelegate, ensureMobileApiSecret,
   modelForRole, OPS_STANDUP_MISSION, HEARTBEAT_MISSION, COMPACT_MAINTENANCE_MISSION,
   DEFAULT_GOVERNOR_PACE_MARGIN, DEFAULT_GOVERNOR_YELLOW_MARGIN, DEFAULT_GOVERNOR_EARLY_FLOOR,
   DEFAULT_GOVERNOR_ABSOLUTE_BACKSTOP, DEFAULT_GOVERNOR_RECENT_MS,
@@ -119,7 +119,7 @@ import {
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 
-const BROWSER_SERVER_HOST = '127.0.0.1';
+const BROWSER_SERVER_HOST = '0.0.0.0';
 const BROWSER_SERVER_PORT = 48003;
 const BROWSER_SERVER_ROOT = join(__dirname, '../renderer');
 const BROWSER_SERVER_MIME: Record<string, string> = {
@@ -191,33 +191,16 @@ type BrowserBridgeInvokeMessage = Extract<BrowserBridgeInbound, { type: 'invoke'
 
 function setupBrowserSocketServer(server: HttpServer): void {
   if (browserSocketServer) return;
-  const dbgLog = (line: string): void => { try { writeFileSync(join(resolveHarnessHome() ?? tmpdir(), 'bridge-debug.log'), `[${Date.now()}] ${line}\n`, { flag: 'a' }); } catch { /* ignore */ } };
-
-  // Intercept upgrade requests to log Chrome's headers and monitor raw socket data.
-  // Must be registered before ws attaches its own upgrade listener.
-  server.on('upgrade', (req, socket, head) => {
-    const ext = req.headers['sec-websocket-extensions'] ?? '(none)';
-    const origin = req.headers['origin'] ?? '(none)';
-    dbgLog(`UPGRADE path=${req.url} ext="${ext}" origin="${origin}" headLen=${(head as Buffer).length}`);
-    // Monitor raw socket data to see if data arrives at the TCP level.
-    const rawListener = (chunk: Buffer) => {
-      dbgLog(`RAW_DATA len=${chunk.length} bytes=${chunk.slice(0, 4).toString('hex')}`);
-    };
-    socket.on('data', rawListener);
-    // Remove our monitor after 10s (once ws takes over it no longer matters).
-    setTimeout(() => { try { socket.removeListener('data', rawListener); } catch { /* ignore */ } }, 10_000);
-  });
 
   const wss = new WebSocket.Server({ server, path: '/bridge', perMessageDeflate: false });
   browserSocketServer = wss;
   wss.on('connection', (socket: WebSocket) => {
     const client: BrowserBridgeClient = { socket, subscriptions: new Set(), id: ++browserBridgeClientSeq };
     browserBridgeClients.add(client);
-    dbgLog(`CONNECT id=${client.id} handlers=${browserInvokeHandlers.size} hasConfigGet=${browserInvokeHandlers.has('config:get')}`);
     browserBridgeSend(client, { type: 'hello', version: 1 });
     socket.on('message', (data: WebSocket.Data) => { handleBrowserClientMessage(client, data); });
-    socket.on('close', () => { browserBridgeClients.delete(client); dbgLog(`CLOSE id=${client.id}`); });
-    socket.on('error', (err: Error) => { console.error('[browser-bridge] client error:', err); dbgLog(`ERROR id=${client.id} ${err.message}`); });
+    socket.on('close', () => { browserBridgeClients.delete(client); });
+    socket.on('error', (err: Error) => { console.error('[browser-bridge] client error:', err); });
   });
   wss.on('error', (err: Error) => { console.error('[browser-bridge] server error:', err); });
   wss.on('close', () => {
@@ -284,7 +267,6 @@ function normalizeBridgeData(data: WebSocket.Data): string {
 }
 
 function handleBrowserClientMessage(client: BrowserBridgeClient, raw: WebSocket.Data): void {
-  try { writeFileSync(join(resolveHarnessHome() ?? tmpdir(), 'bridge-debug.log'), `[${Date.now()}] MSG_ENTRY id=${client.id} rawType=${typeof raw} isBuffer=${Buffer.isBuffer(raw)}\n`, { flag: 'a' }); } catch { /* ignore */ }
   let parsed: BrowserBridgeInbound;
   try {
     parsed = JSON.parse(normalizeBridgeData(raw)) as BrowserBridgeInbound;
@@ -296,7 +278,6 @@ function handleBrowserClientMessage(client: BrowserBridgeClient, raw: WebSocket.
     browserBridgeSend(client, { type: 'error', message: 'invalid message' });
     return;
   }
-  try { writeFileSync(join(resolveHarnessHome() ?? tmpdir(), 'bridge-debug.log'), `[${Date.now()}] MSG type=${JSON.stringify(parsed.type)} id_type=${typeof (parsed as any).id} id=${JSON.stringify((parsed as any).id)} ch_type=${typeof (parsed as any).channel} ch=${JSON.stringify((parsed as any).channel)}\n`, { flag: 'a' }); } catch { /* ignore */ }
   switch (parsed.type) {
     case 'invoke': {
       if (typeof parsed.id !== 'number' || typeof parsed.channel !== 'string' || parsed.channel.length === 0) {
@@ -325,23 +306,16 @@ function handleBrowserClientMessage(client: BrowserBridgeClient, raw: WebSocket.
 }
 
 async function handleBrowserInvoke(client: BrowserBridgeClient, msg: BrowserBridgeInvokeMessage): Promise<void> {
-  const dbg = (line: string): void => { try { writeFileSync(join(resolveHarnessHome() ?? tmpdir(), 'bridge-debug.log'), `[${Date.now()}] ${line}\n`, { flag: 'a' }); } catch { /* ignore */ } };
   const handler = browserInvokeHandlers.get(msg.channel);
-  dbg(`INVOKE id=${msg.id} ch=${msg.channel} found=${!!handler}`);
   if (!handler) {
     browserBridgeSend(client, { type: 'invoke-result', id: msg.id, ok: false, error: { message: `No handler registered for ${msg.channel}` } });
-    dbg(`INVOKE id=${msg.id} sent NOT_FOUND`);
     return;
   }
   const args = Array.isArray(msg.args) ? msg.args : [];
   try {
     const result = await Promise.resolve(handler(createBrowserInvokeEvent(client), ...args));
-    const serialized = stringifyBridgePayload({ type: 'invoke-result', id: msg.id, ok: true, value: result });
-    dbg(`INVOKE id=${msg.id} result_len=${serialized?.length ?? 'null'} socket=${client.socket.readyState}`);
     browserBridgeSend(client, { type: 'invoke-result', id: msg.id, ok: true, value: result });
-    dbg(`INVOKE id=${msg.id} sent OK`);
   } catch (err) {
-    dbg(`INVOKE id=${msg.id} handler_threw=${String(err)}`);
     browserBridgeSend(client, { type: 'invoke-result', id: msg.id, ok: false, error: serializeBridgeError(err) });
   }
 }
@@ -412,6 +386,147 @@ function mimeTypeFor(ext: string): string {
   return BROWSER_SERVER_MIME[ext] ?? 'application/octet-stream';
 }
 
+function isMobileAuthed(req: IncomingMessage): boolean {
+  const secret = ensureMobileApiSecret();
+  if (!secret) return false;
+
+  const authHeader = req.headers['authorization'];
+  let token = '';
+  if (typeof authHeader === 'string') {
+    const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+    if (match) {
+      token = match[1].trim();
+    } else {
+      token = authHeader.trim();
+    }
+  }
+  if (!token && typeof req.headers['x-hive-secret'] === 'string') {
+    token = (req.headers['x-hive-secret'] as string).trim();
+  }
+
+  if (!token) return false;
+
+  const expectedBuf = Buffer.from(secret, 'utf8');
+  const tokenBuf = Buffer.from(token, 'utf8');
+  if (expectedBuf.length !== tokenBuf.length) {
+    return false;
+  }
+  try {
+    return timingSafeEqual(expectedBuf, tokenBuf);
+  } catch {
+    return false;
+  }
+}
+
+function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathname: string, url: URL): boolean {
+  if (!pathname.startsWith('/api/')) return false;
+
+  if (!isMobileAuthed(req)) {
+    res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'unauthorized' }));
+    return true;
+  }
+
+  const method = req.method?.toUpperCase() ?? 'GET';
+  if (method !== 'GET') {
+    res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+    return true;
+  }
+
+  const hiveRoot = hive.root() ?? (resolveHarnessHome() ? join(resolveHarnessHome()!, 'hive') : null);
+
+  if (pathname === '/api/health') {
+    const uptimeSec = Math.floor(process.uptime());
+    const payload = {
+      ok: true,
+      machine: hostname(),
+      version: app.getVersion(),
+      uptimeSec,
+      hiveRoot: resolveHarnessHome()
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(payload));
+    return true;
+  }
+
+  if (pathname === '/api/fleet') {
+    let fleetData: { ts?: number; agents?: any[] } = { ts: Date.now(), agents: [] };
+    if (hiveRoot && existsSync(join(hiveRoot, 'fleet.json'))) {
+      try {
+        fleetData = JSON.parse(readFileSync(join(hiveRoot, 'fleet.json'), 'utf8'));
+      } catch {
+        fleetData = { ts: Date.now(), agents: [] };
+      }
+    }
+    const agents = Array.isArray(fleetData.agents) ? fleetData.agents : [];
+    const activeCount = agents.filter((a) => !a.onHold && !a.archived).length;
+    const totalUsd = agents.reduce((sum, a) => sum + (typeof a.usd === 'number' ? a.usd : 0), 0);
+    const payload = {
+      ts: typeof fleetData.ts === 'number' ? fleetData.ts : Date.now(),
+      agents,
+      totals: {
+        activeCount,
+        totalUsd: Number(totalUsd.toFixed(4))
+      }
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(payload));
+    return true;
+  }
+
+  if (pathname === '/api/board') {
+    let content = '';
+    let updatedAt = new Date().toISOString();
+    if (hiveRoot && existsSync(join(hiveRoot, 'board.md'))) {
+      try {
+        const p = join(hiveRoot, 'board.md');
+        content = readFileSync(p, 'utf8');
+        updatedAt = statSync(p).mtime.toISOString();
+      } catch {
+        content = '';
+      }
+    }
+    const payload = {
+      ok: true,
+      content,
+      updatedAt
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(payload));
+    return true;
+  }
+
+  if (pathname === '/api/tasks') {
+    let tasks: any[] = [];
+    if (hiveRoot && existsSync(join(hiveRoot, 'tasks.json'))) {
+      try {
+        const raw = JSON.parse(readFileSync(join(hiveRoot, 'tasks.json'), 'utf8'));
+        if (Array.isArray(raw.tasks)) tasks = raw.tasks;
+      } catch {
+        tasks = [];
+      }
+    }
+    const statusParam = url.searchParams.get('status');
+    if (statusParam) {
+      const allowed = new Set(statusParam.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
+      if (allowed.size > 0) {
+        tasks = tasks.filter((t) => t && typeof t.status === 'string' && allowed.has(t.status.toLowerCase()));
+      }
+    }
+    const payload = {
+      tasks
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(payload));
+    return true;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({ error: 'Not Found' }));
+  return true;
+}
+
 function ensureBrowserServer(): Promise<string> {
   if (browserServerStart) return browserServerStart;
 
@@ -430,6 +545,22 @@ function ensureBrowserServer(): Promise<string> {
         return;
       }
 
+      let url: URL;
+      try {
+        url = new URL(req.url, `http://${req.headers.host || '127.0.0.1:48003'}`);
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Bad Request');
+        return;
+      }
+
+      const pathname = decodeURIComponent(url.pathname);
+
+      if (pathname.startsWith('/api/')) {
+        handleMobileApiRequest(req, res, pathname, url);
+        return;
+      }
+
       const method = req.method?.toUpperCase() ?? 'GET';
       if (method !== 'GET' && method !== 'HEAD') {
         res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -437,19 +568,7 @@ function ensureBrowserServer(): Promise<string> {
         return;
       }
 
-      let pathname: string;
-      try {
-        const url = new URL(req.url, `http://${BROWSER_SERVER_HOST}:${BROWSER_SERVER_PORT}`);
-        pathname = decodeURIComponent(url.pathname);
-      } catch {
-        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('Bad Request');
-        return;
-      }
-
-      if (!pathname || pathname === '/') pathname = '/index.html';
-
-      let filePath = join(BROWSER_SERVER_ROOT, pathname);
+      let filePath = join(BROWSER_SERVER_ROOT, pathname === '/' ? 'index.html' : pathname);
       if (!filePath.startsWith(BROWSER_SERVER_ROOT)) {
         res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Forbidden');
@@ -533,9 +652,9 @@ function ensureBrowserServer(): Promise<string> {
     });
 
     server.listen(BROWSER_SERVER_PORT, BROWSER_SERVER_HOST, () => {
-      const url = `http://${BROWSER_SERVER_HOST}:${BROWSER_SERVER_PORT}/`;
+      const url = `http://127.0.0.1:${BROWSER_SERVER_PORT}/`;
       browserServerUrl = url;
-      console.log('[browser-server] serving renderer at', url);
+      console.log('[browser-server] serving renderer at', url, `(listening on ${BROWSER_SERVER_HOST})`);
       resolve(url);
     });
 
@@ -6599,6 +6718,11 @@ app.whenReady().then(() => {
       else console.log('[webhook] listening', r.url ? `(tunnel: ${r.url})` : '(no tunnel)');
     });
   }
+  // Mobile API secret & background HTTP server startup (bound on 0.0.0.0:48003 for Tailscale)
+  const mobileSecret = ensureMobileApiSecret();
+  console.log('[mobile-api] secret:', mobileSecret);
+  void ensureBrowserServer().catch((err) => console.error('[browser-server] auto-start failed:', err));
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
