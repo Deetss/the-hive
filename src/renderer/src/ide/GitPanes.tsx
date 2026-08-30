@@ -32,7 +32,7 @@ const noteStyle: React.CSSProperties = {
   padding: '6px 12px', fontSize: 12, color: 'var(--cth-ink-500)'
 };
 const smallBtn: React.CSSProperties = {
-  padding: '0 6px', height: 20, fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+  padding: '0 6px', height: 20, fontFamily: 'var(--cth-font-ui)', fontSize: 13,
   color: 'var(--cth-ink-900)', background: 'var(--cth-cream-100)', border: 'none',
   boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', cursor: 'pointer',
   display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0
@@ -196,7 +196,7 @@ export function ComparePane({ gitRoot, onOpenRevDiff }: {
   };
 
   const sel: React.CSSProperties = {
-    flex: 1, minWidth: 0, height: 22, fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+    flex: 1, minWidth: 0, height: 22, fontFamily: 'var(--cth-font-ui)', fontSize: 13,
     background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
     border: 'none', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
   };
@@ -214,7 +214,7 @@ export function ComparePane({ gitRoot, onOpenRevDiff }: {
             {branches.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--cth-ink-500)' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: 'var(--cth-ink-500)' }}>
           {result && (
             <span title={`'${head}' is ${result.ahead} ahead and ${result.behind} behind '${base}'`}>
               ↑{result.ahead} ↓{result.behind}

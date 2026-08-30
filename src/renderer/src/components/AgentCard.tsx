@@ -214,7 +214,7 @@ export function AgentCard({
             boxShadow: 'inset 0 0 0 1px var(--cth-ink-300), 1px 2px 0 rgba(26,19,32,0.18)',
             transform: 'rotate(4deg)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-ink-900)',
+            fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)',
             cursor: 'pointer'
           }}
         >
@@ -287,7 +287,7 @@ export function AgentCard({
             <div
               title={`${project}${action && status !== 'idle' ? ` — ${action}` : ''}`}
               style={{
-                fontSize: 11, lineHeight: '14px',
+                fontSize: 13, lineHeight: '14px',
                 color: 'var(--cth-ink-500)',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
               }}
@@ -373,7 +373,7 @@ export function AgentCard({
                     style={{
                       flexShrink: 0, width: 15, height: 14,
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 10, lineHeight: 1, cursor: 'pointer',
+                      fontSize: 13, lineHeight: 1, cursor: 'pointer',
                       // Quiet until the card is hovered — discoverable, not noisy.
                       color: hover ? 'var(--cth-ink-500)' : 'var(--cth-ink-300)'
                     }}

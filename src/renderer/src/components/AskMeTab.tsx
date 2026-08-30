@@ -28,7 +28,7 @@ export function AskMeTab() {
       {unresolvedMessages.length === 0 && (
         <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--cth-ink-500)', fontSize: 12 }}>
           Nothing needs you right now. 🌿<br />
-          <span style={{ fontSize: 11, color: 'var(--cth-ink-300)' }}>
+          <span style={{ fontSize: 13, color: 'var(--cth-ink-300)' }}>
             Direct messages from agents show up here. Task-blocked questions and actions
             live in the Tasks tab under "Assigned to me".
           </span>
@@ -38,13 +38,13 @@ export function AskMeTab() {
       {unresolvedMessages.map((msg) => (
         <div key={msg.id} style={{ background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-sky)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px', background: 'var(--cth-sky)', boxShadow: 'inset 0 -1px 0 var(--cth-ink-700)' }}>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-ink-900)', background: 'var(--cth-lemon)', padding: '1px 4px' }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', background: 'var(--cth-lemon)', padding: '1px 4px' }}>
               {msg.act === 'query' ? 'QUERY' : msg.act === 'prompt' ? 'PROMPT' : 'MESSAGE'}
             </span>
             <span style={{ flex: 1, fontFamily: 'var(--cth-font-ui)', fontSize: 14, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {msg.subject || `from ${nameFor(msg.from)}`}
             </span>
-            <span style={{ fontSize: 10, color: 'var(--cth-ink-700)', flexShrink: 0 }}>
+            <span style={{ fontSize: 13, color: 'var(--cth-ink-700)', flexShrink: 0 }}>
               {new Date(msg.arrivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>

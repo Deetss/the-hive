@@ -88,7 +88,7 @@ export function HivePicker({ config, onOpenCurrent }: HivePickerProps) {
             {/* CURRENT — the last-used home, the one-click default. */}
             {current && (
               <div>
-                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 9, color: 'var(--cth-ink-500)', marginBottom: 4 }}>
+                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', marginBottom: 4 }}>
                   CURRENT
                 </div>
                 <div style={{
@@ -97,11 +97,11 @@ export function HivePicker({ config, onOpenCurrent }: HivePickerProps) {
                 }}>
                   <Icon name="folder" />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, lineHeight: '15px' }}>
+                    <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px' }}>
                       {folderName(current)}
                     </div>
                     <div style={{
-                      fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', direction: 'rtl', textAlign: 'left'
                     }}>{current}</div>
                   </div>
@@ -115,7 +115,7 @@ export function HivePicker({ config, onOpenCurrent }: HivePickerProps) {
             {/* RECENTS — other homes this install has opened before. */}
             {recents.length > 0 && (
               <div>
-                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 9, color: 'var(--cth-ink-500)', marginBottom: 4 }}>
+                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', marginBottom: 4 }}>
                   RECENT
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
@@ -138,11 +138,11 @@ export function HivePicker({ config, onOpenCurrent }: HivePickerProps) {
                           {folderName(h)}
                         </div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)',
                           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', direction: 'rtl', textAlign: 'left'
                         }}>{h}</div>
                       </div>
-                      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
+                      <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
                         {busy === h ? 'opening…' : 'switch →'}
                       </span>
                     </button>

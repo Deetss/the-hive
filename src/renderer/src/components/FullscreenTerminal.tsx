@@ -442,7 +442,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                 title={m === 'ide' ? 'Show diff/file panel for the focused agent' : 'Show the agent roster'}
                 style={{
                   padding: '1px 7px', border: 'none', cursor: 'pointer',
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '14px', textTransform: 'uppercase',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px', textTransform: 'uppercase',
                   color: 'var(--cth-ink-700)',
                   background: sidePanel === m ? 'var(--cth-sky-light)' : 'transparent',
                   boxShadow: sidePanel === m ? 'inset 0 0 0 1px var(--cth-ink-300)' : 'none'
@@ -458,7 +458,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                     onClick={() => setSideIdeTab(t)}
                     style={{
                       padding: '1px 6px', border: 'none', cursor: 'pointer',
-                      fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '14px', textTransform: 'uppercase',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px', textTransform: 'uppercase',
                       color: 'var(--cth-ink-500)',
                       background: sideIdeTab === t ? 'var(--cth-lemon-light)' : 'transparent',
                       boxShadow: sideIdeTab === t ? 'inset 0 0 0 1px var(--cth-ink-200)' : 'none'
@@ -562,7 +562,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '4px 8px',
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 13,
                   color: 'var(--cth-ink-900)',
                   background: 'var(--cth-status-working)',
                   boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
@@ -593,7 +593,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 2,
                         height: 20, padding: '0 2px 0 6px',
-                        fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 13,
                         color: 'var(--cth-ink-700)', background: 'var(--cth-paper-100)',
                         boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
                       }}
@@ -606,7 +606,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                         style={{
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                           width: 14, height: 14, padding: 0, lineHeight: 1,
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13,
                           color: 'var(--cth-ink-500)', background: 'transparent',
                           border: 'none', cursor: 'pointer'
                         }}
@@ -706,7 +706,7 @@ function ContextBar({ tokens, limit, accent }: { tokens?: number; limit?: number
       }}>
         <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: color }} />
       </span>
-      <span style={{ flexShrink: 0, fontSize: 9, color: 'var(--cth-ink-500)' }}>{pct}%</span>
+      <span style={{ flexShrink: 0, fontSize: 13, color: 'var(--cth-ink-500)' }}>{pct}%</span>
     </div>
   );
 }
@@ -992,7 +992,7 @@ function SidebarRow({
             }}
           />
           <div style={{
-            marginTop: 5, fontSize: 10, color: 'var(--cth-ink-500)'
+            marginTop: 5, fontSize: 13, color: 'var(--cth-ink-500)'
           }}>one line = one bullet · esc to close</div>
         </div>
         </>,
@@ -1042,7 +1042,7 @@ function Header({ agent, onEdit }: { agent: Agent; onEdit: () => void }) {
       boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
     }}>
       <span style={{
-        fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '16px',
+        fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '16px',
         color: 'var(--cth-ink-900)'
       }}>{agent.name.toUpperCase()}</span>
       {/* Edit belongs with the NAME, not with the action cluster on the right:

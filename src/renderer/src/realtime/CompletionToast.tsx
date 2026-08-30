@@ -116,7 +116,7 @@ export function CompletionToast(): JSX.Element | null {
               alignItems: 'center',
               gap: 8,
               fontFamily: 'var(--cth-font-ui)',
-              fontSize: 8,
+              fontSize: 13,
               lineHeight: '12px',
               color: 'var(--cth-ink-900)',
               textTransform: 'uppercase'
@@ -133,7 +133,7 @@ export function CompletionToast(): JSX.Element | null {
                 background: 'transparent',
                 cursor: 'pointer',
                 fontFamily: 'var(--cth-font-ui)',
-                fontSize: 10,
+                fontSize: 13,
                 lineHeight: '10px',
                 color: 'var(--cth-ink-700)',
                 padding: 0

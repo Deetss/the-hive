@@ -33,7 +33,7 @@ const wrap: React.CSSProperties = {
 };
 const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--cth-font-ui)',
-  fontSize: 8,
+  fontSize: 13,
   lineHeight: '12px',
   color: 'var(--cth-ink-500)',
   textTransform: 'uppercase'
@@ -127,22 +127,22 @@ export function CostHud({ compact = false }: CostHudProps): React.ReactElement |
           <span style={{ color: meterColor, fontWeight: 600 }}>
             {formatUsd(usd)} this session{capUsd != null ? ` / ${formatUsd(capUsd)}` : ''}
           </span>
-          <span style={{ color: 'var(--cth-ink-500)', fontSize: 11 }}>
+          <span style={{ color: 'var(--cth-ink-500)', fontSize: 13 }}>
             {inputTokens.toLocaleString()} in · {outputTokens.toLocaleString()} out audio tokens
           </span>
           {overCap && (
-            <span style={{ color: 'var(--cth-danger, #c0392b)', fontSize: 11 }}>
+            <span style={{ color: 'var(--cth-danger, #c0392b)', fontSize: 13 }}>
               Over the spend cap — time to wrap up.
             </span>
           )}
           {near && (
-            <span style={{ color: 'var(--cth-warn, #b8860b)', fontSize: 11 }}>
+            <span style={{ color: 'var(--cth-warn, #b8860b)', fontSize: 13 }}>
               Approaching the spend cap.
             </span>
           )}
         </div>
       ) : (
-        <span style={{ color: 'var(--cth-ink-500)', fontSize: 11 }}>
+        <span style={{ color: 'var(--cth-ink-500)', fontSize: 13 }}>
           {usd > 0 ? `Last session: ${formatUsd(usd)}` : 'No active voice session.'}
         </span>
       )}

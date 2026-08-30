@@ -74,7 +74,7 @@ const slackInputStyle: CSSProperties = {
 
 const slackLabelStyle: CSSProperties = {
   fontFamily: 'var(--cth-font-ui)',
-  fontSize: 8,
+  fontSize: 13,
   lineHeight: '12px',
   color: 'var(--cth-ink-700)',
   textTransform: 'uppercase'
@@ -873,7 +873,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                           background: active ? 'var(--cth-ink-900)' : 'transparent',
                           color: active ? 'var(--cth-cream-50)' : 'var(--cth-ink-700)',
                           fontFamily: 'var(--cth-font-ui)',
-                          fontSize: 8,
+                          fontSize: 13,
                           lineHeight: '12px',
                           cursor: 'pointer',
                           letterSpacing: 0
@@ -916,7 +916,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       {/* Home folder */}
                       <div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
                         }}>
                           Home folder
@@ -932,7 +932,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 16 }}>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase'
                         }}>
                           Default profile for new agents
@@ -976,7 +976,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       {/* Environment — settings that used to be trapped in onboarding */}
                       <div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
                         }}>
                           Environment
@@ -1012,7 +1012,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       {/* Desktop notifications toggle */}
                       <div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
                         }}>
                           Notifications
@@ -1041,7 +1041,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       {/* Scheduled auto-compact (compact-maintenance mission) */}
                       <div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
                         }}>
                           Maintenance
@@ -1121,7 +1121,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                     <>
                       <div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
                         }}>
                           Default agent model
@@ -1158,7 +1158,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       {/* Advanced */}
                       <div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
                         }}>
                           Advanced
@@ -1183,7 +1183,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                     <>
                       <div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
                         }}>
                           Autonomy
@@ -1228,7 +1228,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       {/* Circuit breaker — the FULL unit (v0.3.4: all fields have UI) */}
                       <div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
                         }}>
                           Circuit breaker
@@ -1252,7 +1252,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                 placeholder="e.g. 1000000"
                                 style={{ ...slackInputStyle, width: 180 }}
                               />
-                              <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>
+                              <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>
                                 {fmtBudgetTokens(agentBudget) ? `= ${fmtBudgetTokens(agentBudget)} tokens` : 'total tokens across the floor'}
                               </span>
                             </label>
@@ -1310,7 +1310,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                     <>
                       <div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
                         }}>
                           Semantic memory
@@ -1333,7 +1333,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       {/* Knowledge Graph — enterprise multimodal context for agents */}
                       <div>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
                         }}>
                           Knowledge Graph
@@ -1392,7 +1392,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       {/* Slack integration */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
                         }}>
                           Slack
@@ -1413,7 +1413,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                   border: 'none', borderRadius: '50%',
                                   background: showSlackHelp ? 'var(--cth-ink-700)' : 'var(--cth-ink-300)',
                                   color: showSlackHelp ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)',
-                                  fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '16px'
+                                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '16px'
                                 }}
                               >i</button>
                             </span>
@@ -1446,7 +1446,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                             margin: 0, padding: 10, whiteSpace: 'pre-wrap',
                             background: 'var(--cth-paper-100)',
                             boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                            fontFamily: 'var(--cth-font-mono)', fontSize: 11, lineHeight: '16px',
+                            fontFamily: 'var(--cth-font-mono)', fontSize: 13, lineHeight: '16px',
                             color: 'var(--cth-ink-700)'
                           }}>{SLACK_CONNECT_STEPS}</pre>
                         )}
@@ -1573,7 +1573,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                           other way round). */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
                         }}>
                           Webhook triggers
@@ -1593,7 +1593,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                   border: 'none', borderRadius: '50%',
                                   background: showWebhookHelp ? 'var(--cth-ink-700)' : 'var(--cth-ink-300)',
                                   color: showWebhookHelp ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)',
-                                  fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '16px'
+                                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '16px'
                                 }}
                               >i</button>
                             </span>
@@ -1620,7 +1620,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                             margin: 0, padding: 10, whiteSpace: 'pre-wrap',
                             background: 'var(--cth-paper-100)',
                             boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                            fontFamily: 'var(--cth-font-mono)', fontSize: 11, lineHeight: '16px',
+                            fontFamily: 'var(--cth-font-mono)', fontSize: 13, lineHeight: '16px',
                             color: 'var(--cth-ink-700)'
                           }}>{WEBHOOK_API_DOC}</pre>
                         )}
@@ -1777,7 +1777,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                           Persisted + mirrored; no transport reads the key yet. */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
                         }}>
                           Organisation
@@ -1867,7 +1867,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       {/* Free Flow (voice dictation) */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
                         }}>
                           Free Flow
@@ -1948,7 +1948,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       {/* Realtime Abathur — voice device selection (rt-8) */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
                         }}>
                           Realtime Abathur
@@ -1977,7 +1977,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                           boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
                         }}>
                           <span style={{
-                            fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                            fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                             color: 'var(--cth-ink-500)', textTransform: 'uppercase'
                           }}>
                             OpenAI API key · voice
@@ -2064,7 +2064,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                   {activeSection === 'General' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       <div style={{
-                        fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px',
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px',
                         color: '#6E1423'
                       }}>DANGER ZONE</div>
                       <p style={{ margin: 0, fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-700)' }}>

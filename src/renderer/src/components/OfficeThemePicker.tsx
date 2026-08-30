@@ -93,7 +93,7 @@ export function OfficeThemePicker({ config }: { config: HarnessConfig }) {
   return (
     <div>
       <div style={{
-        fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+        fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
         color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
       }}>
         Office Theme
@@ -154,7 +154,7 @@ export function OfficeThemePicker({ config }: { config: HarnessConfig }) {
                       </span>
                     )}
                   </span>
-                  <span style={{ fontSize: 11, lineHeight: '14px', color: 'var(--cth-ink-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{ fontSize: 13, lineHeight: '14px', color: 'var(--cth-ink-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {t.blurb}
                   </span>
                 </span>

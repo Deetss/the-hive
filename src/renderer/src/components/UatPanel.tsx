@@ -265,7 +265,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
           }}
         />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)' }}>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
             pending: {pendingCount}
           </span>
           <PixelButton variant="secondary" size="sm" onClick={() => void loadDoc()}>
@@ -341,7 +341,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
                         cursor: 'pointer',
                         padding: '4px 10px',
                         fontFamily: 'var(--cth-font-ui)',
-                        fontSize: 11,
+                        fontSize: 13,
                         background: active ? STATUS_META[status].color : 'var(--cth-cream-100)',
                         color: active ? 'var(--cth-ink-900)' : 'var(--cth-ink-600)',
                         boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)'
@@ -353,7 +353,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
                 })}
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, color: 'var(--cth-ink-500)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13, color: 'var(--cth-ink-500)' }}>
                 <span>
                   created {formatTimestamp(item.createdAt)}{item.createdBy ? ` by ${item.createdBy}` : ''}
                 </span>
@@ -375,7 +375,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
           background: 'var(--cth-paper-100)',
           boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)'
         }}>
-          <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 9, color: 'var(--cth-ink-500)' }}>Add checklist item</div>
+          <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>Add checklist item</div>
           <input
             value={draftText}
             onChange={(e) => setDraftText(e.target.value)}
@@ -429,7 +429,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
         alignItems: 'center'
       }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 9, color: 'var(--cth-ink-500)' }}>your initials</span>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>your initials</span>
           <input
             value={verifier}
             onChange={(e) => setVerifier(e.target.value)}
@@ -446,12 +446,12 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
             }}
           />
         </div>
-        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-500)' }}>
+        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
           last updated: {formatTimestamp(doc?.updatedAt)}
         </span>
         {saving && <PixelBadge label="saving…" status="thinking" />}
         {error && (
-          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-coral)' }}>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-coral)' }}>
             {error}
           </span>
         )}

@@ -126,7 +126,7 @@ export function UpdateBadge() {
           Download the latest version and replace the app you have. Prefer the app to update itself? Settings &rarr; Updates.
         </div>
         <div style={{
-          marginTop: 8, fontFamily: 'var(--cth-font-ui)', fontSize: 9,
+          marginTop: 8, fontFamily: 'var(--cth-font-ui)', fontSize: 13,
           letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--cth-ink-500)'
         }}>On {steps.os}</div>
         <ol style={{ margin: '4px 0 0', paddingLeft: 18, color: 'var(--cth-ink-700)' }}>

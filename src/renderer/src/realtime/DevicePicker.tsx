@@ -43,7 +43,7 @@ async function listDevices(kind: 'audioinput' | 'audiooutput'): Promise<AudioDev
 
 const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--cth-font-ui)',
-  fontSize: 8,
+  fontSize: 13,
   lineHeight: '12px',
   color: 'var(--cth-ink-500)',
   textTransform: 'uppercase'

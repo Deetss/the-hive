@@ -13,7 +13,7 @@ const URL_RE = /^https?:\/\/.+/;
 
 const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--cth-font-ui)',
-  fontSize: 8,
+  fontSize: 13,
   lineHeight: '12px',
   color: 'var(--cth-ink-500)',
   textTransform: 'uppercase' as const
@@ -269,31 +269,31 @@ export function LocalDelegateSettings() {
           <div key={d.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={rowStyle}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-900)' }}>
+                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)' }}>
                   {d.label}{' '}
-                  <span style={{ fontSize: 9, color: 'var(--cth-ink-400)' }}>{d.id}</span>
-                  {d.secretRef && <span style={{ fontSize: 9, color: '#3d8c3d', marginLeft: 4 }}>● key</span>}
+                  <span style={{ fontSize: 13, color: 'var(--cth-ink-400)' }}>{d.id}</span>
+                  {d.secretRef && <span style={{ fontSize: 13, color: '#3d8c3d', marginLeft: 4 }}>● key</span>}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>
+                <div style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>
                   {transportLabel(d.transport, d.model)} · {d.providerKind}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--cth-ink-400)', marginTop: 2 }}>
+                <div style={{ fontSize: 13, color: 'var(--cth-ink-400)', marginTop: 2 }}>
                   {[...d.capabilities, ...d.apiCapabilities].join('  ') || '—'}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                 {h && (
-                  <span style={{ fontSize: 10, fontFamily: 'var(--cth-font-ui)', color: h.checking ? 'var(--cth-ink-400)' : h.ok ? '#3d8c3d' : '#c0392b' }}>
+                  <span style={{ fontSize: 13, fontFamily: 'var(--cth-font-ui)', color: h.checking ? 'var(--cth-ink-400)' : h.ok ? '#3d8c3d' : '#c0392b' }}>
                     {h.checking ? 'pinging…' : h.ok ? `OK ${h.latencyMs}ms` : 'OFFLINE'}
                   </span>
                 )}
-                <button style={{ fontSize: 10, padding: '2px 6px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-600)' }}
+                <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-600)' }}
                   onClick={() => checkHealth(d.id)}>ping</button>
-                <button style={{ fontSize: 10, padding: '2px 6px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-600)' }}
+                <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-600)' }}
                   onClick={() => openForm(d)}>edit</button>
-                <button style={{ fontSize: 10, padding: '2px 6px', cursor: 'pointer', background: d.enabled ? 'var(--cth-ink-100)' : 'var(--cth-ink-200)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-600)' }}
+                <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: d.enabled ? 'var(--cth-ink-100)' : 'var(--cth-ink-200)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-600)' }}
                   onClick={() => toggleEnabled(d)}>{d.enabled ? 'enabled' : 'disabled'}</button>
-                <button style={{ fontSize: 10, padding: '2px 6px', cursor: 'pointer', background: 'transparent', border: '1px solid #c0392b', borderRadius: 3, color: '#c0392b' }}
+                <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'transparent', border: '1px solid #c0392b', borderRadius: 3, color: '#c0392b' }}
                   onClick={() => remove(d.id)}>remove</button>
               </div>
             </div>
@@ -303,7 +303,7 @@ export function LocalDelegateSettings() {
 
       {!showForm && (
         <div>
-          <button style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-400)', borderRadius: 4, color: 'var(--cth-ink-700)' }}
+          <button style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-400)', borderRadius: 4, color: 'var(--cth-ink-700)' }}
             onClick={() => openForm()}>+ add delegate</button>
         </div>
       )}
@@ -314,12 +314,12 @@ export function LocalDelegateSettings() {
           {/* ─── Identity ─────────────────────────────────────────────── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>ID (slug)</label>
+              <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>ID (slug)</label>
               <input style={inp()} value={form.id} placeholder="edgentic1"
                 onChange={(e) => setForm((f) => ({ ...f, id: e.target.value.replace(/[^A-Za-z0-9._-]/g, '-') }))} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>Label</label>
+              <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Label</label>
               <input style={inp()} value={form.label} placeholder="Jetson Thor (edgentic)"
                 onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} />
             </div>
@@ -332,7 +332,7 @@ export function LocalDelegateSettings() {
               {(['wsl-exec', 'ssh', 'http'] as const).map((k) => (
                 <button key={k}
                   onClick={() => setTransportKind(k)}
-                  style={{ fontSize: 11, padding: '3px 10px', cursor: 'pointer', borderRadius: 4, border: '1px solid var(--cth-ink-300)', fontFamily: 'var(--cth-font-ui)', background: form.transport.kind === k ? 'var(--cth-ink-900)' : 'var(--cth-ink-100)', color: form.transport.kind === k ? 'var(--cth-bg)' : 'var(--cth-ink-700)' }}>
+                  style={{ fontSize: 13, padding: '3px 10px', cursor: 'pointer', borderRadius: 4, border: '1px solid var(--cth-ink-300)', fontFamily: 'var(--cth-font-ui)', background: form.transport.kind === k ? 'var(--cth-ink-900)' : 'var(--cth-ink-100)', color: form.transport.kind === k ? 'var(--cth-bg)' : 'var(--cth-ink-700)' }}>
                   {k}
                 </button>
               ))}
@@ -341,12 +341,12 @@ export function LocalDelegateSettings() {
             {form.transport.kind === 'wsl-exec' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>WSL distro</label>
+                  <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>WSL distro</label>
                   <input style={inp()} value={form.transport.distro} placeholder="Ubuntu"
                     onChange={(e) => setForm((f) => f.transport.kind === 'wsl-exec' ? { ...f, transport: { ...f.transport, distro: e.target.value } } : f)} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>Script prefix (inside WSL)</label>
+                  <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Script prefix (inside WSL)</label>
                   <input style={inp()} value={form.transport.scriptPrefix} placeholder="/home/user/.local/scripts"
                     onChange={(e) => setForm((f) => f.transport.kind === 'wsl-exec' ? { ...f, transport: { ...f.transport, scriptPrefix: e.target.value } } : f)} />
                 </div>
@@ -357,28 +357,28 @@ export function LocalDelegateSettings() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>Host</label>
+                    <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Host</label>
                     <input style={inp()} value={form.transport.host} placeholder="edgentic1.local"
                       onChange={(e) => setForm((f) => f.transport.kind === 'ssh' ? { ...f, transport: { ...f.transport, host: e.target.value } } : f)} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>Port</label>
+                    <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Port</label>
                     <input style={inp()} type="number" min={1} max={65535} value={form.transport.port}
                       onChange={(e) => setForm((f) => f.transport.kind === 'ssh' ? { ...f, transport: { ...f.transport, port: parseInt(e.target.value) || 22 } } : f)} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>User</label>
+                    <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>User</label>
                     <input style={inp()} value={form.transport.user} placeholder="deetss"
                       onChange={(e) => setForm((f) => f.transport.kind === 'ssh' ? { ...f, transport: { ...f.transport, user: e.target.value } } : f)} />
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>Identity file (absolute path, optional)</label>
+                  <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Identity file (absolute path, optional)</label>
                   <input style={inp()} value={form.transport.identityFile ?? ''} placeholder="/home/deetss/.ssh/id_ed25519"
                     onChange={(e) => setForm((f) => f.transport.kind === 'ssh' ? { ...f, transport: { ...f.transport, identityFile: e.target.value || undefined } } : f)} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>Script prefix (on remote)</label>
+                  <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Script prefix (on remote)</label>
                   <input style={inp()} value={form.transport.scriptPrefix} placeholder="/home/user/.local/scripts"
                     onChange={(e) => setForm((f) => f.transport.kind === 'ssh' ? { ...f, transport: { ...f.transport, scriptPrefix: e.target.value } } : f)} />
                 </div>
@@ -388,11 +388,11 @@ export function LocalDelegateSettings() {
             {form.transport.kind === 'http' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>Base URL</label>
+                  <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Base URL</label>
                   <input style={inp()} value={form.transport.baseUrl} placeholder="http://localhost:11434"
                     onChange={(e) => setForm((f) => f.transport.kind === 'http' ? { ...f, transport: { ...f.transport, baseUrl: e.target.value } } : f)} />
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', color: 'var(--cth-ink-700)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', color: 'var(--cth-ink-700)' }}>
                   <input type="checkbox" checked={!!form.transport.allowPrivate}
                     onChange={(e) => setForm((f) => f.transport.kind === 'http' ? { ...f, transport: { ...f.transport, allowPrivate: e.target.checked } } : f)} />
                   Allow private / LAN IP ranges (needed for local Jetson/DGX)
@@ -406,7 +406,7 @@ export function LocalDelegateSettings() {
             <span style={sectionLabel}>Model</span>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>Provider kind</label>
+                <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Provider kind</label>
                 <select style={sel()} value={form.providerKind}
                   onChange={(e) => setForm((f) => ({ ...f, providerKind: e.target.value as LdaProviderKind }))}>
                   <option value="edgentic-script">edgentic-script</option>
@@ -416,7 +416,7 @@ export function LocalDelegateSettings() {
                 </select>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>Model</label>
+                <label style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Model</label>
                 <input style={inp()} value={form.model} placeholder="llama-3.2-8b"
                   onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))} />
               </div>
@@ -430,7 +430,7 @@ export function LocalDelegateSettings() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, fontFamily: 'var(--cth-font-ui)', color: '#3d8c3d' }}>● key set (encrypted)</span>
                 <button onClick={clearApiKey}
-                  style={{ fontSize: 10, padding: '2px 8px', cursor: 'pointer', background: 'transparent', border: '1px solid #c0392b', borderRadius: 3, color: '#c0392b' }}>
+                  style={{ fontSize: 13, padding: '2px 8px', cursor: 'pointer', background: 'transparent', border: '1px solid #c0392b', borderRadius: 3, color: '#c0392b' }}>
                   clear key
                 </button>
               </div>
@@ -441,11 +441,11 @@ export function LocalDelegateSettings() {
                   onChange={(e) => setKeyDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') void setApiKey(); if (e.key === 'Escape') setKeyStatus('none'); }} />
                 <button onClick={() => void setApiKey()} disabled={!keyDraft.trim()}
-                  style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer', background: 'var(--cth-ink-900)', border: 'none', borderRadius: 4, color: 'var(--cth-bg)', opacity: keyDraft.trim() ? 1 : 0.5 }}>
+                  style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'var(--cth-ink-900)', border: 'none', borderRadius: 4, color: 'var(--cth-bg)', opacity: keyDraft.trim() ? 1 : 0.5 }}>
                   store
                 </button>
                 <button onClick={() => { setKeyDraft(''); setKeyStatus('none'); }}
-                  style={{ fontSize: 11, padding: '4px 8px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-300)', borderRadius: 4, color: 'var(--cth-ink-600)' }}>
+                  style={{ fontSize: 13, padding: '4px 8px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-300)', borderRadius: 4, color: 'var(--cth-ink-600)' }}>
                   cancel
                 </button>
               </div>
@@ -455,12 +455,12 @@ export function LocalDelegateSettings() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, color: 'var(--cth-ink-400)' }}>no key set</span>
                 <button onClick={() => setKeyStatus('setting')}
-                  style={{ fontSize: 10, padding: '2px 8px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-700)' }}>
+                  style={{ fontSize: 13, padding: '2px 8px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-700)' }}>
                   set key
                 </button>
               </div>
             )}
-            <div style={{ fontSize: 10, color: 'var(--cth-ink-400)', marginTop: 4 }}>
+            <div style={{ fontSize: 13, color: 'var(--cth-ink-400)', marginTop: 4 }}>
               Keys are encrypted by the OS keychain. The key is never stored in plain text or sent over IPC.
             </div>
           </div>
@@ -470,12 +470,12 @@ export function LocalDelegateSettings() {
             <span style={sectionLabel}>Capabilities</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div>
-                <div style={{ fontSize: 10, color: isScript ? 'var(--cth-ink-500)' : 'var(--cth-ink-300)', marginBottom: 4 }}>
+                <div style={{ fontSize: 13, color: isScript ? 'var(--cth-ink-500)' : 'var(--cth-ink-300)', marginBottom: 4 }}>
                   Script verbs (wsl-exec / ssh)
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {ALL_SCRIPT_CAPS.map((cap) => (
-                    <label key={cap} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: isScript ? 'pointer' : 'not-allowed', color: isScript ? 'var(--cth-ink-700)' : 'var(--cth-ink-300)', opacity: isScript ? 1 : 0.5 }}>
+                    <label key={cap} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: isScript ? 'pointer' : 'not-allowed', color: isScript ? 'var(--cth-ink-700)' : 'var(--cth-ink-300)', opacity: isScript ? 1 : 0.5 }}>
                       <input type="checkbox" disabled={!isScript} checked={form.capabilities.includes(cap)}
                         onChange={() => toggleCap(cap)} />
                       {cap}
@@ -484,12 +484,12 @@ export function LocalDelegateSettings() {
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: isHttp ? 'var(--cth-ink-500)' : 'var(--cth-ink-300)', marginBottom: 4 }}>
+                <div style={{ fontSize: 13, color: isHttp ? 'var(--cth-ink-500)' : 'var(--cth-ink-300)', marginBottom: 4 }}>
                   Model API (http)
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {ALL_API_CAPS.map((cap) => (
-                    <label key={cap} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: isHttp ? 'pointer' : 'not-allowed', color: isHttp ? 'var(--cth-ink-700)' : 'var(--cth-ink-300)', opacity: isHttp ? 1 : 0.5 }}>
+                    <label key={cap} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: isHttp ? 'pointer' : 'not-allowed', color: isHttp ? 'var(--cth-ink-700)' : 'var(--cth-ink-300)', opacity: isHttp ? 1 : 0.5 }}>
                       <input type="checkbox" disabled={!isHttp} checked={form.apiCapabilities.includes(cap)}
                         onChange={() => toggleApiCap(cap)} />
                       {cap}
@@ -503,27 +503,27 @@ export function LocalDelegateSettings() {
           {/* ─── Actions ─────────────────────────────────────────────── */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
             <button onClick={save}
-              style={{ fontSize: 11, padding: '4px 14px', cursor: 'pointer', background: 'var(--cth-ink-900)', border: 'none', borderRadius: 4, color: 'var(--cth-bg)' }}>
+              style={{ fontSize: 13, padding: '4px 14px', cursor: 'pointer', background: 'var(--cth-ink-900)', border: 'none', borderRadius: 4, color: 'var(--cth-bg)' }}>
               save
             </button>
             <button onClick={() => void testConnection()}
-              style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-400)', borderRadius: 4, color: 'var(--cth-ink-700)' }}>
+              style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-400)', borderRadius: 4, color: 'var(--cth-ink-700)' }}>
               test connection
             </button>
             {testResult && (
-              <span style={{ fontSize: 11, fontFamily: 'var(--cth-font-ui)', color: testResult.ok ? '#3d8c3d' : '#c0392b' }}>
+              <span style={{ fontSize: 13, fontFamily: 'var(--cth-font-ui)', color: testResult.ok ? '#3d8c3d' : '#c0392b' }}>
                 {testResult.ok ? `✓ ${testResult.msg}` : `✗ ${testResult.msg}`}
               </span>
             )}
             <button onClick={closeForm}
-              style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-300)', borderRadius: 4, color: 'var(--cth-ink-500)', marginLeft: 'auto' }}>
+              style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-300)', borderRadius: 4, color: 'var(--cth-ink-500)', marginLeft: 'auto' }}>
               cancel
             </button>
           </div>
         </div>
       )}
 
-      {note && <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>{note}</span>}
+      {note && <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>{note}</span>}
     </div>
   );
 }

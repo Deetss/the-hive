@@ -193,7 +193,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{
-                      fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                       color: 'var(--cth-ink-500)'
                     }}>PRIVATE NOTE · {a.name.toUpperCase()}</span>
                     <button
@@ -203,7 +203,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
                       style={{
                         flexShrink: 0, width: 18, height: 18, padding: 0, lineHeight: 1,
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 13,
                         color: 'var(--cth-ink-500)', background: 'transparent',
                         border: 'none', cursor: 'pointer'
                       }}
@@ -229,7 +229,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
                       lineHeight: '18px', color: 'var(--cth-ink-900)'
                     }}
                   />
-                  <span style={{ fontSize: 10, color: 'var(--cth-ink-500)' }}>
+                  <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>
                     one line = one bullet · esc to close
                   </span>
                 </div>
@@ -291,7 +291,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
             fontFamily: 'var(--cth-font-ui)'
           }}>
             <span style={{
-              fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+              fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
               color: 'var(--cth-ink-500)', textTransform: 'uppercase'
             }}>
               previous session
@@ -314,7 +314,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {a.name}
                 </span>
-                <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', whiteSpace: 'nowrap' }}>
                   {a.description ? a.description.slice(0, 24) : ''}
                 </span>
                 <button

@@ -147,7 +147,7 @@ export function FileTree({ root, activeRel, onOpenFile, onCopyPath }: FileTreePr
             title="Copy path to clipboard"
             style={{
               padding: '0 4px',
-              fontSize: 10,
+              fontSize: 13,
               fontFamily: 'var(--cth-font-ui)',
               color: 'var(--cth-ink-500)',
               background: 'transparent', border: 'none', cursor: 'pointer'

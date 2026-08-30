@@ -97,14 +97,14 @@ export function SettingsHeroCard() {
               }}>v{version}</span>
             )}
             <span style={{
-              fontFamily: FONT, fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase',
+              fontFamily: FONT, fontSize: 13, letterSpacing: '.12em', textTransform: 'uppercase',
               padding: '2px 7px', background: 'var(--cth-mint-light)',
               boxShadow: 'inset 0 0 0 1px var(--cth-mint)', color: INK
             }}>{PLAN.label}</span>
             {pending && (
               <>
                 <span style={{ flex: 1 }} />
-                <span style={{ fontFamily: FONT, fontSize: 11, color: 'var(--cth-ink-700)' }}>
+                <span style={{ fontFamily: FONT, fontSize: 13, color: 'var(--cth-ink-700)' }}>
                   v{pending} is out
                 </span>
                 <PixelButton variant="primary" size="sm" onClick={downloadManually}
@@ -134,7 +134,7 @@ export function SettingsHeroCard() {
           border: `2px solid ${INK}`
         }}>
           <span style={{
-            display: 'inline-block', fontFamily: FONT, fontSize: 9, letterSpacing: '.18em',
+            display: 'inline-block', fontFamily: FONT, fontSize: 13, letterSpacing: '.18em',
             textTransform: 'uppercase', padding: '2px 7px',
             background: INK, color: 'var(--cth-paper-100)'
           }}>Announcement</span>
@@ -161,7 +161,7 @@ export function SettingsHeroCard() {
             letterSpacing: '-.05em', color: 'var(--cth-lemon)', textAlign: 'center', flexShrink: 0
           }}>
             50<span style={{
-              display: 'block', fontSize: 8, letterSpacing: '.2em', fontWeight: 500,
+              display: 'block', fontSize: 13, letterSpacing: '.2em', fontWeight: 500,
               color: 'var(--cth-paper-100)', opacity: 0.7, marginTop: 5
             }}>% OFF</span>
           </div>
@@ -191,7 +191,7 @@ export function SettingsHeroCard() {
             border: `2px solid ${INK}`
           }}>
             <span style={{
-              fontFamily: FONT, fontSize: 9, letterSpacing: '.18em',
+              fontFamily: FONT, fontSize: 13, letterSpacing: '.18em',
               textTransform: 'uppercase', color: 'var(--cth-ink-500)', flexShrink: 0
             }}>Sponsored by</span>
             <span style={{ fontSize: 13, color: INK, flexShrink: 0 }}>{SPONSOR.name}</span>

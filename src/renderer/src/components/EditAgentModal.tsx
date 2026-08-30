@@ -307,7 +307,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
                         }}>
                           <SpritePortrait character={c.name} scale={1.5} />
                         </div>
-                        <span style={{ fontSize: 10, color: 'var(--cth-ink-700)' }}>{c.displayName}</span>
+                        <span style={{ fontSize: 13, color: 'var(--cth-ink-700)' }}>{c.displayName}</span>
                       </button>
                     );
                   })}
@@ -390,7 +390,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
                       ))}
                     </select>
                     {selectedProfile?.model && (
-                      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
+                      <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
                         {selectedProfile.model}
                       </span>
                     )}
@@ -517,11 +517,11 @@ function Section({
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
         <span style={{
           fontFamily: 'var(--cth-font-ui)',
-          fontSize: 9, lineHeight: '12px',
+          fontSize: 13, lineHeight: '12px',
           color: 'var(--cth-ink-900)',
           textTransform: 'uppercase'
         }}>{label}</span>
-        <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>{hint}</span>
+        <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>{hint}</span>
       </div>
       {children}
     </div>
@@ -533,7 +533,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <span style={{
         fontFamily: 'var(--cth-font-ui)',
-        fontSize: 8, lineHeight: '12px',
+        fontSize: 13, lineHeight: '12px',
         color: 'var(--cth-ink-700)',
         textTransform: 'uppercase'
       }}>{label}</span>
