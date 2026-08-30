@@ -19,7 +19,7 @@ import { PixelButton } from './PixelButton';
 type WorkersData = Awaited<ReturnType<typeof window.cth.listWorkers>>;
 type WorkerSnapshot = WorkersData['live'][number];
 type PreservedWorktreeSnapshot = WorkersData['preserved'][number];
-type WorkerHistoryEntry = WorkersData['history'][number];
+type WorkerHistoryEntry = WorkersData['recent'][number];
 
 const POLL_MS = 2000;
 /** Chars of PTY tail to fetch on open / retain client-side as new chunks stream in. */
@@ -32,11 +32,8 @@ function stripAnsi(s: string): string {
   return s.replace(ANSI_RE, '');
 }
 
-const REASON_LABEL: Record<WorkerHistoryEntry['reason'], string> = {
-  done: 'done', 'manual-stop': 'stopped', idle: 'idle timeout', 'token-cap': 'token cap'
-};
-function isCompletedReason(reason: WorkerHistoryEntry['reason']): boolean {
-  return reason === 'done' || reason === 'manual-stop';
+function isCompletedStatus(status: WorkerHistoryEntry['status']): boolean {
+  return status === 'done' || status === 'stopped';
 }
 
 function relAge(ms: number): string {
@@ -84,8 +81,8 @@ function StatusBadge({ w }: { w: WorkerSnapshot }) {
   );
 }
 
-function ReasonBadge({ reason }: { reason: WorkerHistoryEntry['reason'] }) {
-  const completed = isCompletedReason(reason);
+function ReasonBadge({ status }: { status: WorkerHistoryEntry['status'] }) {
+  const completed = isCompletedStatus(status);
   return (
     <span style={{
       fontFamily: 'var(--cth-font-ui)', fontSize: 10, padding: '1px 6px',
@@ -93,7 +90,7 @@ function ReasonBadge({ reason }: { reason: WorkerHistoryEntry['reason'] }) {
       background: completed ? 'var(--cth-green, #2f8f4e)' : 'var(--cth-salmon, #f47d55)',
       boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
     }}>
-      {REASON_LABEL[reason]}
+      {status}
     </span>
   );
 }
@@ -110,8 +107,8 @@ function WorkerLogPanel({ workerId }: { workerId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    window.cth.getPtyTail(workerId, TAIL_CHARS)
-      .then((t) => { if (!cancelled) setTail(t ? stripAnsi(t) : ''); })
+    window.cth.workersGetTail(workerId)
+      .then((lines) => { if (!cancelled) setTail(lines.length ? stripAnsi(lines.join('\n')) : ''); })
       .catch(() => { /* worker's pty already gone */ });
     const unsub = window.cth.onPtyData(workerId, (chunk) => {
       setTail((prev) => (prev + stripAnsi(chunk)).slice(-TAIL_CHARS));
@@ -198,10 +195,10 @@ export function WorkersTab() {
 
   const live = data?.live ?? [];
   const preserved = data?.preserved ?? [];
-  const history = data?.history ?? [];
+  const history = data?.recent ?? [];
   const max = data?.maxWorkers ?? 4;
-  const completedHistory = history.filter((h) => isCompletedReason(h.reason));
-  const reapedHistory = history.filter((h) => !isCompletedReason(h.reason));
+  const completedHistory = history.filter((h) => h.status === 'done' || h.status === 'stopped');
+  const reapedHistory = history.filter((h) => h.status === 'reaped' || h.status === 'failed');
   const shownHistory = filter === 'completed' ? completedHistory : filter === 'reaped' ? reapedHistory : [];
 
   return (
@@ -274,7 +271,7 @@ export function WorkersTab() {
                     <span title="cumulative tokens (input+output+cache)">
                       tokens {fmtTokens(w.tokensUsed)}{w.tokenCap !== null ? ` / ${fmtTokens(w.tokenCap)}` : ' · uncapped'}
                     </span>
-                    <span title="most recent tool call">tool: {w.lastTool ?? '—'}</span>
+                    <span title="agent status">{w.status}</span>
                   </div>
                   {expanded[w.workerId] && <WorkerLogPanel workerId={w.workerId} />}
                 </div>
@@ -306,14 +303,13 @@ export function WorkersTab() {
                     <span style={{
                       fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 600, color: 'var(--cth-ink-900)'
                     }}>{h.name}</span>
-                    <ReasonBadge reason={h.reason} />
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--cth-ink-700)' }}>{h.status}</span>
                   </div>
                   <div style={metaRow}>
                     <span title="worker / PTY id">{h.workerId}</span>
                     <span title="base branch the worktree was cut from">base: {h.baseBranch}</span>
                     <span title="wall-clock time it ran">ran {relAge(Math.max(0, h.endedAt - h.spawnedAt))}</span>
                     <span title="time since it ended">ended {relAge(Math.max(0, Date.now() - h.endedAt))} ago</span>
-                    {h.hasSlack && <span>slack</span>}
                   </div>
                 </div>
               ))}
