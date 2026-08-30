@@ -464,6 +464,18 @@ function ensureBrowserServer(): Promise<string> {
           res.end();
           return;
         }
+        // Inject browser-bridge.js into index.html — Vite strips the <script> tag
+        // during build, so we add it back server-side before the page is served.
+        if (contentType.startsWith('text/html')) {
+          const html = readFileSync(filePath, 'utf8');
+          const injected = html.includes('browser-bridge.js')
+            ? html
+            : html.replace('</head>', '<script type="module" src="/browser-bridge.js"></script></head>');
+          const buf = Buffer.from(injected, 'utf8');
+          res.writeHead(status, { 'Content-Type': contentType, 'Cache-Control': cacheControl, 'Content-Length': buf.byteLength });
+          res.end(buf);
+          return;
+        }
         const stream = createReadStream(filePath);
         stream.once('open', () => {
           res.writeHead(status, { 'Content-Type': contentType, 'Cache-Control': cacheControl });
