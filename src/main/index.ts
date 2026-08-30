@@ -6348,7 +6348,7 @@ function recoverGovernorAgents(): void {
 function armAlwaysOnBeats(): void {
   if (fleetTimer) clearInterval(fleetTimer);
   writeFleetSnapshot();
-  fleetTimer = setInterval(writeFleetSnapshot, 8_000);
+  fleetTimer = setInterval(writeFleetSnapshot, 3_000);
   if (breakerBeatTimer) clearInterval(breakerBeatTimer);
   breakerBeatTimer = setInterval(() => { try { runBreakerBeat(300_000); } catch (e) { console.error('[breaker beat]', e); } }, 30_000);
   if (governorBeatTimer) clearInterval(governorBeatTimer);

@@ -40,7 +40,7 @@ const REMOTE_CONTROL_SETTLE_MS = 1500;
 // working; only true silence drifts it idle. Hook events still win — a fresh
 // PreToolUse/Stop refreshes status on the next event. Checked on QUIESCE_POLL_MS.
 const QUIESCE_IDLE_MS = 12000;
-const QUIESCE_POLL_MS = 4000;
+const QUIESCE_POLL_MS = 1500;
 // After a god/agent spawn, hold off the inbox-wake + queue-drain typers for this
 // long while the readiness handshake + provider-specific boot sequence runs.
 const BOOT_GRACE_MS = 35_000;
