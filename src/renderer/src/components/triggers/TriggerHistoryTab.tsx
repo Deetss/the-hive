@@ -127,7 +127,7 @@ function clampBody(body: string): { text: string; clipped: boolean } {
 /* ───────────────────────────────── styles ────────────────────────────────── */
 
 const tinyCaps: CSSProperties = {
-  fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '12px',
+  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
   color: 'var(--cth-ink-500)'
 };
 const uiText: CSSProperties = {
@@ -157,13 +157,13 @@ const bodyBox: CSSProperties = {
 };
 const linkButton: CSSProperties = {
   background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-  fontFamily: 'var(--cth-font-ui)', fontSize: 11, lineHeight: '16px',
+  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '16px',
   color: 'var(--cth-ink-700)', textDecoration: 'underline', textAlign: 'left'
 };
 
 function badgeStyle(fill: string, line: string): CSSProperties {
   return {
-    fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '12px',
+    fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
     padding: '3px 5px 2px', background: fill, boxShadow: `inset 0 0 0 1px ${line}`,
     color: 'var(--cth-ink-900)', flexShrink: 0
   };
@@ -270,7 +270,7 @@ function ExchangeCard({
           </span>
           <span style={{ ...tinyCaps, flexShrink: 0 }}>{relTime(Date.now() - ex.latestAt)}</span>
         </div>
-        <div style={{ ...muted, ...ellipsis, fontSize: 11 }} title={head.peer}>
+        <div style={{ ...muted, ...ellipsis, fontSize: 13 }} title={head.peer}>
           {hasInbound ? 'from' : 'to'} {head.peer || 'unknown'}
         </div>
         {head.title && (
@@ -297,7 +297,7 @@ function ExchangeCard({
 
       {pending && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ ...uiText, fontSize: 11, lineHeight: '16px', color: 'var(--cth-ink-700)' }}>
+          <div style={{ ...uiText, fontSize: 13, lineHeight: '16px', color: 'var(--cth-ink-700)' }}>
             {pending.kind === 'directive'
               ? 'Approve and this goes to Abathur, who will put the hive to work on it. Reject and it is dropped — nothing runs.'
               : 'Approve and Abathur reads this. Reject and it is dropped — nothing runs.'}
@@ -325,7 +325,7 @@ function ExchangeCard({
         </div>
       )}
 
-      {tail && <div style={{ ...muted, fontSize: 11 }}>{tail}</div>}
+      {tail && <div style={{ ...muted, fontSize: 13 }}>{tail}</div>}
 
       {taskId && (
         <div style={{ ...tinyCaps, ...ellipsis }} title={taskId}>TASK {taskId}</div>
@@ -340,7 +340,7 @@ function EmptyState({ title, body }: { title: string; body: string }) {
   return (
     <div style={{ ...cardStyle, gap: 4 }}>
       <div style={uiText}>{title}</div>
-      <div style={{ ...muted, fontSize: 11, lineHeight: '16px' }}>{body}</div>
+      <div style={{ ...muted, fontSize: 13, lineHeight: '16px' }}>{body}</div>
     </div>
   );
 }
@@ -458,7 +458,7 @@ export function TriggerHistoryTab() {
                 flex: 1, height: 32, padding: '0 8px', border: 'none', cursor: 'pointer',
                 background: active ? 'var(--cth-paper-200)' : 'transparent',
                 boxShadow: active ? 'inset 0 -2px 0 var(--cth-ink-900)' : 'none',
-                fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '12px',
+                fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                 color: active ? 'var(--cth-ink-900)' : 'var(--cth-ink-500)',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                 minWidth: 0
@@ -480,12 +480,12 @@ export function TriggerHistoryTab() {
         flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
         padding: 8, display: 'flex', flexDirection: 'column', gap: 8
       }}>
-        <div style={{ ...muted, fontSize: 11, lineHeight: '16px' }}>{section.blurb}</div>
+        <div style={{ ...muted, fontSize: 13, lineHeight: '16px' }}>{section.blurb}</div>
 
         {pendingCount > 0 && (
           <div style={{
             background: 'var(--cth-lemon-light)', boxShadow: 'inset 0 0 0 1px var(--cth-lemon)',
-            padding: '6px 8px', ...uiText, fontSize: 11, lineHeight: '16px'
+            padding: '6px 8px', ...uiText, fontSize: 13, lineHeight: '16px'
           }}>
             {pendingCount === 1
               ? 'One message is held, waiting on your yes or no.'
@@ -496,7 +496,7 @@ export function TriggerHistoryTab() {
         {error && (
           <div style={{
             background: 'var(--cth-coral-light)', boxShadow: 'inset 0 0 0 1px var(--cth-coral)',
-            padding: '6px 8px', ...uiText, fontSize: 11, lineHeight: '16px'
+            padding: '6px 8px', ...uiText, fontSize: 13, lineHeight: '16px'
           }}>{error}</div>
         )}
 
@@ -533,7 +533,7 @@ export function TriggerHistoryTab() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
             {confirmClear ? (
               <>
-                <div style={{ ...muted, fontSize: 11, lineHeight: '16px' }}>
+                <div style={{ ...muted, fontSize: 13, lineHeight: '16px' }}>
                   Delete all {counts[source].total} {section.label.toLowerCase()} messages? The record
                   is gone for good.
                 </div>

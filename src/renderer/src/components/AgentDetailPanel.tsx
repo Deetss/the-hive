@@ -302,7 +302,7 @@ function EmptyTab({ title, children }: { title: string; children: React.ReactNod
       background: 'var(--cth-paper-200)'
     }}>
       <div style={{
-        fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px',
+        fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px',
         color: 'var(--cth-ink-500)'
       }}>{title.toUpperCase()}</div>
       <p style={{

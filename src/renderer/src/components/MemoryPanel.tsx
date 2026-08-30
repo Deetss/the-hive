@@ -157,7 +157,7 @@ export function MemoryPanel() {
             {/* Model: a benefit-framed choice, not a codename dump. */}
             {status?.available && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   Search language
                 </span>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -183,7 +183,7 @@ export function MemoryPanel() {
                           }} />
                           {m.title}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--cth-ink-500)', marginTop: 3 }}>{m.detail}</div>
+                        <div style={{ fontSize: 13, color: 'var(--cth-ink-500)', marginTop: 3 }}>{m.detail}</div>
                       </button>
                     );
                   })}

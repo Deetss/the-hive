@@ -126,7 +126,7 @@ export function ReleaseDrop({ version, html, onDismiss }: ReleaseDropProps) {
             </span>
           </span>
           <span aria-hidden style={{
-            flexShrink: 0, fontSize: 11, fontWeight: 500, letterSpacing: '.12em',
+            flexShrink: 0, fontSize: 13, fontWeight: 500, letterSpacing: '.12em',
             color: INK_FAINT, textTransform: 'uppercase'
           }}>
             esc

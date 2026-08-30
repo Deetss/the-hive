@@ -534,7 +534,7 @@ export function App() {
               justifyContent: 'center', alignItems: 'center', gap: 12
             }}>
               <div style={{
-                fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px',
+                fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px',
                 color: 'var(--cth-ink-500)'
               }}>WAKING THE FLOOR</div>
               <p style={{ margin: 0, fontSize: 13, textAlign: 'center', color: 'var(--cth-ink-700)' }}>
@@ -549,7 +549,7 @@ export function App() {
               justifyContent: 'center', alignItems: 'center', gap: 12
             }}>
               <div style={{
-                fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px',
+                fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px',
                 color: 'var(--cth-ink-500)'
               }}>NO AGENT SELECTED</div>
               <p style={{ margin: 0, fontSize: 13, textAlign: 'center', color: 'var(--cth-ink-700)' }}>

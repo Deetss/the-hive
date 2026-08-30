@@ -123,7 +123,7 @@ export function SchedulesSection({ onSummary }: { onSummary?: (s: string) => voi
       )}
       {adding && (
         <SubCard>
-          <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-ink-500)' }}>NEW SCHEDULE</div>
+          <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>NEW SCHEDULE</div>
           <Field label="LABEL">
             <input
               value={mLabel}
@@ -260,7 +260,7 @@ function MissionRow({ mission, targetName, agents, onPatch, onDelete }: {
         <div style={{
           marginTop: 6, padding: '4px 6px',
           background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-          fontFamily: 'var(--cth-font-ui)', fontSize: 11, lineHeight: '15px',
+          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px',
           color: 'var(--cth-ink-700)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
         }}>{mission.body.trim() || 'No prompt set.'}</div>
       )}

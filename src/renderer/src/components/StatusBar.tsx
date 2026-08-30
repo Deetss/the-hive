@@ -246,7 +246,7 @@ export function StatusBar() {
         <>
           <Chip title={`Account: ${displayBadge} (from CLAUDE_CONFIG_DIR${focusAgent?.profileId ? ' via agent profile' : ''})`}>
             <Dot color={displayBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)'} />
-            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 9, color: displayBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)' }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: displayBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)' }}>
               {displayBadge}
             </span>
           </Chip>
@@ -260,7 +260,7 @@ export function StatusBar() {
             <span style={{ fontWeight: 600, color: 'var(--cth-ink-900)' }}>
               {engineInfo.engineName}
             </span>
-            <span style={{ color: 'var(--cth-ink-400)', fontSize: 10 }}>·</span>
+            <span style={{ color: 'var(--cth-ink-400)', fontSize: 13 }}>·</span>
             <span style={{ color: 'var(--cth-ink-800)' }}>
               {engineInfo.modelName}
             </span>
@@ -273,7 +273,7 @@ export function StatusBar() {
         <>
           <Chip
             title={`${focusAgent.name} · ${focusAgent.worktreePath ?? focusAgent.cwd}`}
-            style={{ padding: '0 6px', fontSize: 11 }}
+            style={{ padding: '0 6px', fontSize: 13 }}
           >
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-sky)' }}>
               {tail(focusAgent.worktreePath ?? focusAgent.cwd)}
@@ -316,7 +316,7 @@ export function StatusBar() {
           {billingMode === 'api' ? fmtUsd(usd) : `~${fmtUsd(usd)}`}
         </span>
         {billingMode !== 'api' && (
-          <span style={{ color: 'var(--cth-ink-500)', fontSize: 11 }}>est.</span>
+          <span style={{ color: 'var(--cth-ink-500)', fontSize: 13 }}>est.</span>
         )}
       </Chip>
 
@@ -331,7 +331,7 @@ export function StatusBar() {
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
               {worstFiveHour.pct}%
             </span>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
               {fmtReset(worstFiveHour.resetsAt)}
             </span>
           </Chip>
@@ -349,7 +349,7 @@ export function StatusBar() {
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
               {worstSevenDay.pct}%
             </span>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
               {fmtReset(worstSevenDay.resetsAt)}
             </span>
           </Chip>
@@ -380,7 +380,7 @@ export function StatusBar() {
             <Dot color={govColor(governor.mode)} />
             <span style={{ color: govColor(governor.mode) }}>gov</span>
             {governor.mode === 'red' && govWindow(governor.reason) && (
-              <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+              <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
                 {govWindow(governor.reason)}
               </span>
             )}

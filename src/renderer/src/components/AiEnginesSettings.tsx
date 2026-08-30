@@ -48,13 +48,13 @@ const inputStyle: CSSProperties = {
 };
 const labelStyle: CSSProperties = {
   fontFamily: 'var(--cth-font-ui)',
-  fontSize: 8,
+  fontSize: 13,
   lineHeight: '12px',
   color: 'var(--cth-ink-700)',
   textTransform: 'uppercase'
 };
 const headStyle: CSSProperties = {
-  fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
   color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
 };
 const linkStyle: CSSProperties = { color: 'var(--cth-ink-900)', textDecoration: 'underline', cursor: 'pointer' };
@@ -187,7 +187,7 @@ export function AiEnginesSettings({ config, onOpenProfileWalkthrough }: { config
                 <PixelButton variant="secondary" size="sm" onClick={() => clearKey(b.id)}>Clear</PixelButton>
               )}
             </div>
-            {note[b.id] && <div style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>{note[b.id]}</div>}
+            {note[b.id] && <div style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>{note[b.id]}</div>}
           </div>
         ))}
       </div>
@@ -261,7 +261,7 @@ export function AiEnginesSettings({ config, onOpenProfileWalkthrough }: { config
                 <ProviderLogo provider={p.provider} size={14} />
                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                   <span style={{ fontSize: 13, color: 'var(--cth-ink-900)', fontFamily: 'var(--cth-font-ui)' }}>{p.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {p.provider}{p.model ? ` · ${p.model}` : ''}{p.claudeConfigDir ? ` · ${p.claudeConfigDir}` : ''}
                   </span>
                 </div>

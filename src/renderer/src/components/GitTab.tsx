@@ -112,7 +112,7 @@ export function GitTab({ cwd }: GitTabProps) {
         borderBottom: '1px solid var(--cth-ink-700)'
       }}>
         <span style={{
-          fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px',
+          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px',
           padding: '2px 6px',
           background: 'var(--cth-sky-light)',
           boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
@@ -203,7 +203,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div style={{ marginBottom: 4 }}>
       <div style={{
-        fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+        fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
         textTransform: 'uppercase',
         color: 'var(--cth-ink-700)',
         padding: '8px 10px 4px',
@@ -223,7 +223,7 @@ function StatusGroup({ label, entries }: {
   return (
     <div style={{ padding: '4px 0' }}>
       <div style={{
-        padding: '0 12px', fontSize: 11, color: 'var(--cth-ink-500)',
+        padding: '0 12px', fontSize: 13, color: 'var(--cth-ink-500)',
         textTransform: 'uppercase', letterSpacing: 0
       }}>{label}</div>
       {entries.map(e => (
@@ -242,7 +242,7 @@ function StatusGroup({ label, entries }: {
             flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             fontFamily: 'var(--cth-font-ui)', fontSize: 13
           }} title={e.path}>{e.path}</span>
-          <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>{statusLabel(e.code)}</span>
+          <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>{statusLabel(e.code)}</span>
           <button
             onClick={() => navigator.clipboard.writeText(e.path).catch(() => {})}
             title="Copy path"

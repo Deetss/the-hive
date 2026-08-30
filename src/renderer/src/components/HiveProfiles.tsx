@@ -28,7 +28,7 @@ const inputStyle: CSSProperties = {
   fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none', minWidth: 0
 };
 const labelStyle: CSSProperties = {
-  fontFamily: 'var(--cth-font-ui)', fontSize: 9, color: 'var(--cth-ink-500)', marginBottom: 4
+  fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', marginBottom: 4
 };
 
 /**
@@ -147,7 +147,7 @@ export function HiveProfiles() {
           background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
         }}>
           <Icon name="info" />
-          <div style={{ fontSize: 11, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+          <div style={{ fontSize: 13, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
             Only <strong>one</strong> instance per machine runs Slack and webhooks. A launched hive won’t own
             those ports — that’s expected, not an error.
           </div>
@@ -171,16 +171,16 @@ export function HiveProfiles() {
                         {p.name}
                       </span>
                       {isCurrent && (
-                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-mint-dark, var(--cth-ink-700))' }}>
+                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-mint-dark, var(--cth-ink-700))' }}>
                           YOU ARE HERE
                         </span>
                       )}
                       {p.remote && !isCurrent && (
-                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-ink-500)' }}>JOINED</span>
+                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>JOINED</span>
                       )}
                     </div>
                     <div style={{
-                      fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', direction: 'rtl', textAlign: 'left'
                     }}>{p.harnessHome}</div>
                   </div>
@@ -245,7 +245,7 @@ export function HiveProfiles() {
               ...inputStyle, boxShadow: `inset 0 0 0 1px ${jUrlOk === false ? 'var(--cth-coral)' : 'var(--cth-ink-100)'}`
             }} />
             {jUrlOk === false && (
-              <div style={{ fontSize: 11, color: 'var(--cth-coral, var(--cth-ink-700))' }}>
+              <div style={{ fontSize: 13, color: 'var(--cth-coral, var(--cth-ink-700))' }}>
                 Not an allowed git URL — use https://, ssh://, git://, git@host:path, or a local path.
               </div>
             )}

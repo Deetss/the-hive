@@ -402,7 +402,7 @@ export function IdePanel() {
             {target.inferred && (
               // Never assert a name we had to guess at. One quiet word is enough
               // to stop someone trusting the wrong agent's directory.
-              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)' }}>
+              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
                 (assumed)
               </span>
             )}
@@ -473,7 +473,7 @@ export function IdePanel() {
                   // folds, and together they are a bigger hit target than the
                   // caret alone was.
                   display: 'flex', alignItems: 'center', gap: 3, width: 'auto', padding: '0 3px',
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px',
                   color: 'var(--cth-ink-700)'
                 }}
               >
@@ -488,7 +488,7 @@ export function IdePanel() {
                   onClick={() => { setRailTab(k); if (gitCollapsed) toggleGitRail(); }}
                   style={{
                     padding: '1px 8px', border: 'none', cursor: 'pointer',
-                    fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '14px',
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px',
                     textTransform: 'uppercase', color: 'var(--cth-ink-700)',
                     background: railTab === k && !gitCollapsed ? 'var(--cth-sky-light)' : 'transparent',
                     boxShadow: railTab === k && !gitCollapsed ? 'inset 0 0 0 1px var(--cth-ink-300)' : 'none'
@@ -619,7 +619,7 @@ export function IdePanel() {
                 }}>
                   <Icon name="code" size={2} />
                   <div style={{
-                    fontFamily: 'var(--cth-font-ui)', fontSize: 8, textTransform: 'uppercase',
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 13, textTransform: 'uppercase',
                     letterSpacing: 1, color: 'var(--cth-ink-700)'
                   }}>nothing open</div>
                   <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13 }}>
@@ -756,7 +756,7 @@ function SectionHeader({ title, right }: { title: string; right?: React.ReactNod
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px 4px',
-      fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px', textTransform: 'uppercase',
+      fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px', textTransform: 'uppercase',
       color: 'var(--cth-ink-700)', background: 'var(--cth-cream-50)', borderBottom: '1px solid var(--cth-ink-100)'
     }}>
       <span style={{ flex: 1 }}>{title}</span>
@@ -844,7 +844,7 @@ function ShortcutHint() {
   return (
     <div style={{
       marginTop: 10, display: 'grid', gap: 2, justifyItems: 'center',
-      fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-300)'
+      fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-300)'
     }}>
       {EDITOR_SHORTCUTS.map(([keys, label]) => (
         <div key={label} style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>

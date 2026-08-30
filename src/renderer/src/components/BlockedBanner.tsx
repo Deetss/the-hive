@@ -20,7 +20,7 @@ export function BlockedBanner({ reason, onAction }: BlockedBannerProps) {
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         fontFamily: 'var(--cth-font-ui)',
-        fontSize: 8, lineHeight: '12px',
+        fontSize: 13, lineHeight: '12px',
         color: 'var(--cth-ink-900)',
         textTransform: 'uppercase'
       }}>

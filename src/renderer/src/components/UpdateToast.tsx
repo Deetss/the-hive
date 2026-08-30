@@ -244,7 +244,7 @@ export function UpdateToast() {
       {notes.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{
-            fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+            fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
             color: 'var(--cth-ink-500)', textTransform: 'uppercase'
           }}>
             What’s new

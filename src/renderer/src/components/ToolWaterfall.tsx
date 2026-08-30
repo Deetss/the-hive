@@ -53,7 +53,7 @@ export function ToolWaterfall({ agentId }: { agentId: string }) {
           const ok = s.success && s.tool !== 'api_error';
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-              <span style={{ width: 88, fontSize: 11, color: 'var(--cth-ink-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s.error ?? s.tool}>
+              <span style={{ width: 88, fontSize: 13, color: 'var(--cth-ink-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s.error ?? s.tool}>
                 {s.tool}
               </span>
               <div style={{ flex: 1, height: 12, background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)' }}>
@@ -62,10 +62,10 @@ export function ToolWaterfall({ agentId }: { agentId: string }) {
                   style={{ width: `${pct}%`, height: '100%', background: ok ? 'var(--cth-mint)' : 'var(--cth-coral)' }}
                 />
               </div>
-              <span style={{ width: 54, textAlign: 'right', fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)' }}>
+              <span style={{ width: 54, textAlign: 'right', fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
                 {fmtDur(s.durationMs)}
               </span>
-              <span style={{ width: 12, textAlign: 'center', fontSize: 11, color: ok ? 'var(--cth-mint)' : 'var(--cth-coral)' }}>
+              <span style={{ width: 12, textAlign: 'center', fontSize: 13, color: ok ? 'var(--cth-mint)' : 'var(--cth-coral)' }}>
                 {ok ? '✓' : '✗'}
               </span>
             </div>

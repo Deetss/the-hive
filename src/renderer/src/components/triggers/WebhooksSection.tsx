@@ -204,7 +204,7 @@ function WebhookRow({ hook, url, serverRunning, onPatch, onDelete }: {
                 <span style={{
                   flex: 1, minWidth: 0, padding: '4px 6px',
                   background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 11, lineHeight: '15px',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px',
                   color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                 }}>{url}</span>
                 <MiniButton onClick={() => copy('url', url)} tone={copied === 'url' ? 'good' : 'plain'}>
@@ -239,7 +239,7 @@ function WebhookRow({ hook, url, serverRunning, onPatch, onDelete }: {
             {!schemaOpen && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <MiniButton onClick={() => setSchemaOpen(true)}>edit schema</MiniButton>
-                <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>
+                <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>
                   what an inbound body must look like
                 </span>
               </div>
@@ -263,7 +263,7 @@ function WebhookRow({ hook, url, serverRunning, onPatch, onDelete }: {
             {!confirmDelete && <MiniButton tone="danger" onClick={() => setConfirmDelete(true)}>delete</MiniButton>}
             {confirmDelete && (
               <>
-                <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>Sure?</span>
+                <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Sure?</span>
                 <MiniButton tone="danger" onClick={onDelete}>delete it</MiniButton>
                 <MiniButton onClick={() => setConfirmDelete(false)}>keep</MiniButton>
               </>

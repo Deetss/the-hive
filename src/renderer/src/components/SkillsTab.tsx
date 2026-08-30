@@ -24,7 +24,7 @@ const PROVIDER_LABEL: Record<LocalSkill['provider'], string> = {
 function Chip({ text, tone = 'quiet' }: { text: string; tone?: 'quiet' | 'accent' }) {
   return (
     <span style={{
-      fontSize: 10, fontFamily: 'var(--cth-font-ui)', letterSpacing: 0.4,
+      fontSize: 13, fontFamily: 'var(--cth-font-ui)', letterSpacing: 0.4,
       padding: '2px 6px', flexShrink: 0, textTransform: 'uppercase',
       color: 'var(--cth-ink-900)',
       background: tone === 'accent' ? 'var(--cth-mint-light)' : 'var(--cth-cream-200)',
@@ -142,7 +142,7 @@ export function SkillsTab({ agentCwd }: { agentCwd?: string }) {
 
   const actionBtn = (kind: 'primary' | 'quiet' | 'danger'): React.CSSProperties => ({
     padding: '3px 9px 2px', border: 'none', cursor: 'pointer', flexShrink: 0,
-    fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+    fontFamily: 'var(--cth-font-ui)', fontSize: 13,
     color: 'var(--cth-ink-900)',
     background:
       kind === 'primary' ? 'var(--cth-mint-light)'
@@ -239,7 +239,7 @@ export function SkillsTab({ agentCwd }: { agentCwd?: string }) {
               {shownLocal.map((s) => (
                 <div key={s.id + s.path} style={rowStyle}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, flex: 1, minWidth: 0 }}>
+                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, flex: 1, minWidth: 0 }}>
                       {s.name.toUpperCase()}
                     </span>
                     <Chip text={PROVIDER_LABEL[s.provider]} />
@@ -262,7 +262,7 @@ export function SkillsTab({ agentCwd }: { agentCwd?: string }) {
                       // Bundled skills ship inside the app and are re-copied into
                       // every agent on spawn, so "removing" one would silently come
                       // back. Say that instead of offering a button that lies.
-                      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>
+                      <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>
                         ships with the app
                       </span>
                     ) : confirming === s.path ? (
@@ -280,7 +280,7 @@ export function SkillsTab({ agentCwd }: { agentCwd?: string }) {
                       >{action[s.path]?.busy ? 'removing…' : 'uninstall'}</button>
                     )}
                     {action[s.path]?.error && (
-                      <span style={{ fontSize: 11, color: 'var(--cth-coral)' }}>{action[s.path]?.error}</span>
+                      <span style={{ fontSize: 13, color: 'var(--cth-coral)' }}>{action[s.path]?.error}</span>
                     )}
                   </div>
                 </div>
@@ -298,7 +298,7 @@ export function SkillsTab({ agentCwd }: { agentCwd?: string }) {
                 Showing a cached copy — {catalogMeta.error}.
               </div>
             )}
-            <div style={{ fontSize: 11, color: 'var(--cth-ink-500)', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, color: 'var(--cth-ink-500)', marginBottom: 8 }}>
               {totalMatching} matching{totalMatching > shownCatalog.length ? ` · showing the first ${shownCatalog.length}` : ''}
               {' · '}curated by abubakarsiddik31/claude-skills-collection
             </div>
@@ -306,7 +306,7 @@ export function SkillsTab({ agentCwd }: { agentCwd?: string }) {
               {shownCatalog.map((s) => (
                 <div key={s.url + s.name} style={rowStyle}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, flex: 1, minWidth: 0 }}>
+                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, flex: 1, minWidth: 0 }}>
                       {s.name.toUpperCase()}
                     </span>
                     <Chip text={s.category} />
@@ -328,7 +328,7 @@ export function SkillsTab({ agentCwd }: { agentCwd?: string }) {
                       style={actionBtn('quiet')}
                     >learn more</button>
                     {action[s.url]?.error && (
-                      <span style={{ fontSize: 11, color: 'var(--cth-coral)', flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 13, color: 'var(--cth-coral)', flex: 1, minWidth: 0 }}>
                         {action[s.url]?.error}
                       </span>
                     )}

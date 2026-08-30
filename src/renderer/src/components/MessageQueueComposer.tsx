@@ -193,7 +193,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       }}>
       {dragOver && (
         <span style={{
-          fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '12px',
+          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
           color: 'var(--cth-ink-700)', textAlign: 'center'
         }}>DROP TO ATTACH</span>
       )}
@@ -201,12 +201,12 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
           fontFamily: 'var(--cth-font-ui)',
-          fontSize: 9, lineHeight: '12px',
+          fontSize: 13, lineHeight: '12px',
           color: 'var(--cth-ink-700)'
         }}>MESSAGE {agent.name.toUpperCase()}</span>
         {queue.length > 0 && (
           <span style={{
-            fontSize: 11, padding: '1px 6px 0',
+            fontSize: 13, padding: '1px 6px 0',
             background: 'var(--cth-cream-200)',
             boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
             fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)'
@@ -661,12 +661,12 @@ function FreeFlowButton({ agentId, hasGroqKey }: { agentId: string; hasGroqKey: 
                 display: 'flex', flexDirection: 'column', gap: 7,
                 background: 'var(--cth-paper-100)',
                 boxShadow: 'inset 0 0 0 1.5px var(--cth-ink-500), 4px 4px 0 rgba(26,19,32,0.25)',
-                fontFamily: 'var(--cth-font-ui)', fontSize: 11, lineHeight: '15px',
+                fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px',
                 color: 'var(--cth-ink-900)', textAlign: 'left', whiteSpace: 'normal'
               }}
             >
               <span style={{
-                fontFamily: 'var(--cth-font-ui)', fontSize: 9, letterSpacing: 0.5,
+                fontFamily: 'var(--cth-font-ui)', fontSize: 13, letterSpacing: 0.5,
                 textTransform: 'uppercase', color: 'var(--cth-ink-500)'
               }}>Set up dictation</span>
 
@@ -702,7 +702,7 @@ function FreeFlowButton({ agentId, hasGroqKey }: { agentId: string; hasGroqKey: 
                 style={{
                   border: 'none', background: 'none', padding: 0, cursor: 'pointer',
                   alignSelf: 'flex-start',
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 11, lineHeight: '15px',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px',
                   color: 'var(--cth-ink-900)', textDecoration: 'underline'
                 }}
               >set it up now</button>

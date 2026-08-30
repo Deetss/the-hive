@@ -58,7 +58,7 @@ const card: React.CSSProperties = {
 };
 const metaRow: React.CSSProperties = {
   display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontFamily: 'var(--cth-font-ui)',
-  fontSize: 11, color: 'var(--cth-ink-700)'
+  fontSize: 13, color: 'var(--cth-ink-700)'
 };
 const sectionHead: React.CSSProperties = {
   fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase',
@@ -70,7 +70,7 @@ function StatusBadge({ w }: { w: WorkerSnapshot }) {
   const releasing = w.status === 'releasing';
   return (
     <span style={{
-      fontFamily: 'var(--cth-font-ui)', fontSize: 10, padding: '1px 6px',
+      fontFamily: 'var(--cth-font-ui)', fontSize: 13, padding: '1px 6px',
       textTransform: 'uppercase', letterSpacing: 0.5,
       color: releasing ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)',
       background: releasing ? 'var(--cth-ink-700)' : 'var(--cth-green, #2f8f4e)',
@@ -85,7 +85,7 @@ function ReasonBadge({ status }: { status: WorkerHistoryEntry['status'] }) {
   const completed = isCompletedStatus(status);
   return (
     <span style={{
-      fontFamily: 'var(--cth-font-ui)', fontSize: 10, padding: '1px 6px',
+      fontFamily: 'var(--cth-font-ui)', fontSize: 13, padding: '1px 6px',
       textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--cth-ink-900)',
       background: completed ? 'var(--cth-green, #2f8f4e)' : 'var(--cth-salmon, #f47d55)',
       boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
@@ -141,7 +141,7 @@ function WorkerLogPanel({ workerId }: { workerId: string }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
       <pre ref={boxRef} style={{
         margin: 0, background: 'var(--cth-ink-900)', color: 'var(--cth-paper-100)',
-        fontFamily: 'var(--cth-font-mono, ui-monospace, monospace)', fontSize: 11, lineHeight: 1.4,
+        fontFamily: 'var(--cth-font-mono, ui-monospace, monospace)', fontSize: 13, lineHeight: 1.4,
         padding: 8, maxHeight: 220, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all'
       }}>
         {tail || '(no output yet)'}
@@ -219,11 +219,11 @@ export function WorkersTab() {
         <div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <span style={sectionHead}>Live workers</span>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-700)' }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)' }}>
               {live.length} / {max}
             </span>
           </div>
-          <p style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-700)', margin: '2px 0 8px' }}>
+          <p style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)', margin: '2px 0 8px' }}>
             Isolated workers Abathur spins up to handle Slack messages — they run to completion, reply in-thread, then tear down.
           </p>
 
@@ -244,7 +244,7 @@ export function WorkersTab() {
                       }}>{w.name}</span>
                       {w.hasSlack && (
                         <span title="replies to a Slack thread" style={{
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-700)',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
                           boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', padding: '0 5px'
                         }}>slack</span>
                       )}
@@ -286,7 +286,7 @@ export function WorkersTab() {
           <span style={sectionHead}>
             {filter === 'completed' ? 'Completed workers' : 'Reaped workers'}
           </span>
-          <p style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-700)', margin: '2px 0 8px' }}>
+          <p style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)', margin: '2px 0 8px' }}>
             {filter === 'completed'
               ? 'Signaled done in-thread, or were stopped by hand. Most recent first.'
               : 'Reaped by the idle-timeout or per-worker token cap before signaling done. Most recent first.'}
@@ -303,7 +303,7 @@ export function WorkersTab() {
                     <span style={{
                       fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 600, color: 'var(--cth-ink-900)'
                     }}>{h.name}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--cth-ink-700)' }}>{h.status}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: 'var(--cth-ink-700)' }}>{h.status}</span>
                   </div>
                   <div style={metaRow}>
                     <span title="worker / PTY id">{h.workerId}</span>
@@ -321,7 +321,7 @@ export function WorkersTab() {
       {preserved.length > 0 && (
         <div>
           <span style={sectionHead}>Preserved worktrees ({preserved.length})</span>
-          <p style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-700)', margin: '2px 0 8px' }}>
+          <p style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)', margin: '2px 0 8px' }}>
             Finished workers whose worktree held un-integrated work — kept (never auto-discarded) and auto-reclaimed once the work lands in its base branch.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

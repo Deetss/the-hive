@@ -106,7 +106,7 @@ export function QuickAskPanel() {
             style={{
               background: 'none', border: 'none', cursor: 'pointer', padding: 0,
               color: 'var(--cth-ink-700)', fontFamily: 'var(--cth-font-ui)',
-              fontSize: 11, textDecoration: 'underline'
+              fontSize: 13, textDecoration: 'underline'
             }}
           >
             retry
@@ -132,7 +132,7 @@ export function QuickAskPanel() {
         {entries.length === 0 && (
           <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--cth-ink-500)', fontSize: 12 }}>
             Ask the Overmind anything about the hive — tasks, agents, status, decisions.
-            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--cth-ink-300)' }}>
+            <span style={{ display: 'block', marginTop: 4, fontSize: 13, color: 'var(--cth-ink-300)' }}>
               Press Enter to send. Shift+Enter for a new line.
             </span>
           </div>

@@ -158,7 +158,7 @@ export function CodeEditor({
           <Icon name="code" size={2} />
         </div>
         <div style={{
-          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '14px',
+          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px',
           textTransform: 'uppercase', letterSpacing: 1,
           color: 'var(--cth-ink-700)'
         }}>

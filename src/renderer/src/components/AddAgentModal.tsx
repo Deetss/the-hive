@@ -40,7 +40,7 @@ const ossChip = (active: boolean, accent: AccentColorName): CSSProperties => ({
   color: 'var(--cth-ink-900)', cursor: 'pointer', border: 'none'
 });
 const ossGroupHead: CSSProperties = {
-  fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
   color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 4
 };
 const ossLink: CSSProperties = { color: 'var(--cth-ink-900)', textDecoration: 'underline', cursor: 'pointer' };
@@ -657,7 +657,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                               color: 'var(--cth-ink-900)'
                             }}>{id}</code>
                           ))}
-                          <span style={{ fontSize: 11, color: 'var(--cth-ink-700)' }}>
+                          <span style={{ fontSize: 13, color: 'var(--cth-ink-700)' }}>
                             — enable in Settings → MCP after reviewing
                           </span>
                         </span>
@@ -691,7 +691,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                       ))}
                     </select>
                     {selectedProfile?.model && (
-                      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
+                      <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
                         {selectedProfile.model}
                       </span>
                     )}
@@ -721,14 +721,14 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                       }}
                     >
                       <span style={{
-                        fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '13px',
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '13px',
                         color: 'var(--cth-ink-900)', textTransform: 'uppercase',
                         display: 'flex', alignItems: 'baseline', gap: 6
                       }}>
                         <span style={{ color: active ? 'var(--cth-ink-900)' : 'var(--cth-ink-500)' }}>{i + 1}</span>
                         {s.label}
                       </span>
-                      <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)' }}>
+                      <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
                         {s.hint}
                       </span>
                     </button>
@@ -775,7 +775,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                             <div style={{ width: 44, height: 56, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden' }}>
                               <SpritePortrait character={c.name} scale={2} />
                             </div>
-                            <span style={{ fontSize: 11, color: 'var(--cth-ink-700)' }}>{c.displayName}</span>
+                            <span style={{ fontSize: 13, color: 'var(--cth-ink-700)' }}>{c.displayName}</span>
                           </button>
                         ))}
                       </div>
@@ -1266,7 +1266,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <span style={{
         fontFamily: 'var(--cth-font-ui)',
-        fontSize: 8, lineHeight: '12px',
+        fontSize: 13, lineHeight: '12px',
         color: 'var(--cth-ink-700)',
         textTransform: 'uppercase'
       }}>{label}</span>

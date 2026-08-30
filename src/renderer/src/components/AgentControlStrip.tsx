@@ -106,10 +106,10 @@ export function AgentControlStrip({ agentId }: { agentId: string }) {
         {/* v0.3.4: the auto-delivery switch moved to the god's Command Center
             header — ONE floor-wide control instead of a per-agent toggle. */}
         {snap?.autoDeliveryPaused && (
-          <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>queued messages held (whole floor)</span>
+          <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>queued messages held (whole floor)</span>
         )}
-        {snap?.halted && <span style={{ fontSize: 11, color: 'var(--cth-coral)' }}>stopping after this step…</span>}
-        {!!snap?.pendingSteers && <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>{snap.pendingSteers} note{snap.pendingSteers === 1 ? '' : 's'} waiting</span>}
+        {snap?.halted && <span style={{ fontSize: 13, color: 'var(--cth-coral)' }}>stopping after this step…</span>}
+        {!!snap?.pendingSteers && <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>{snap.pendingSteers} note{snap.pendingSteers === 1 ? '' : 's'} waiting</span>}
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <input
@@ -132,7 +132,7 @@ export function AgentControlStrip({ agentId }: { agentId: string }) {
           >send</span>
         </PixelButton>
       </div>
-      {note && <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>{note}</span>}
+      {note && <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>{note}</span>}
     </div>
   );
 }
