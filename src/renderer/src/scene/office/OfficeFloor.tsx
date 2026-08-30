@@ -211,7 +211,21 @@ export function OfficeFloor() {
     if (paused) ticker.stop(); else ticker.start();
   }, [paused]);
 
+  // Pausing the ticker (above) only stops a scene that already exists. init()
+  // below still pays for it: the theme bundle, every tileset texture, and the
+  // whole map/character scene graph, whether or not anyone can see the result.
+  // A user who closed the app in focus mode is about to land back in it, so
+  // skip init() outright until they explicitly leave focus mode — captured
+  // once at mount, flips true permanently the first time they do (never
+  // re-skips on a later return to focus mode, since by then it's loaded).
+  const prefersFocusMode = useStore((s) => s.prefersFocusMode);
+  const [floorEnabled, setFloorEnabled] = useState(() => !prefersFocusMode);
   useEffect(() => {
+    if (!floorEnabled && !prefersFocusMode) setFloorEnabled(true);
+  }, [prefersFocusMode, floorEnabled]);
+
+  useEffect(() => {
+    if (!floorEnabled) return;
     const host = hostRef.current;
     if (!host) return;
     while (host.firstChild) host.removeChild(host.firstChild);
@@ -1754,7 +1768,7 @@ export function OfficeFloor() {
       appRef.current = null;
       while (host.firstChild) host.removeChild(host.firstChild);
     };
-  }, [officeTheme, glGeneration]);
+  }, [officeTheme, glGeneration, floorEnabled]);
 
   return (
     <div
