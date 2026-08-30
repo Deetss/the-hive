@@ -532,6 +532,12 @@ export class HiveManager {
     return [launcher ? `"${launcher}"` : 'node', `"${script}"`, ...args].join(' ');
   }
 
+  private hookShimCommand(script: string, options?: { unquoted?: boolean; withStatus?: boolean }): string {
+    const args: string[] = [];
+    if (options?.withStatus) args.push('--status');
+    return options?.unquoted ? this.nodeRunUnquoted(script, ...args) : this.nodeRun(script, ...args);
+  }
+
   /** Same, but UNQUOTED — for the CLIs whose hook config mangles embedded quotes
    *  (agy on cmd.exe) or stores the command in a quote-sensitive literal (codex's
    *  single-quoted TOML). Safe because both the hive root and the launcher inside
@@ -539,6 +545,26 @@ export class HiveManager {
    *  existing quoting convention while swapping `node` for the bundled runtime. */
   private nodeRunUnquoted(script: string, ...args: string[]): string {
     return [this.nodeLauncher() ?? 'node', script, ...args].join(' ');
+  }
+
+  /** Compute the list of extra directories an agent's sandbox may write to
+   *  (the agent's own state dir, the hive root for inbox/outbox/protocol/mempalace,
+   *  and any extra directories requested e.g. MEMPALACE_PALACE_PATH). */
+  private sandboxWritableDirs(
+    meta: { cwd?: string; id?: string },
+    dir: string,
+    root: string,
+    extraWritableDirs?: string[]
+  ): string[] {
+    const dirs = new Set<string>();
+    if (dir) dirs.add(normalize(dir));
+    if (root) dirs.add(normalize(root));
+    if (extraWritableDirs?.length) {
+      for (const d of extraWritableDirs) {
+        if (d) dirs.add(normalize(d));
+      }
+    }
+    return Array.from(dirs);
   }
 
   /** One proxy sidecar per live proxy-tier agent, keyed by agentId. Spawned in
@@ -679,6 +705,10 @@ export class HiveManager {
        *  and set into the spawn env below for Claude providers only. Undefined = the
        *  operator's default login (unchanged behavior). */
       claudeConfigDir?: string;
+      /** Extra directories the agent's sandbox may write (e.g. the shared
+       *  MemPalace dir, which `mempalace` mutates). Absolute paths; ignored
+       *  for providers without a sandbox. */
+      extraWritableDirs?: string[];
     } = {}
   ): Promise<SpawnInjection> {
     const root = this.root();
@@ -821,7 +851,7 @@ export class HiveManager {
           if (desc.kind === 'hooks') {
             if (desc.shim === 'agy') this.installAgyHooks();
             else if (desc.shim === 'codex') {
-              env.CODEX_HOME = this.installCodexHooks(engineDir, meta.cwd);
+              env.CODEX_HOME = this.installCodexHooks(engineDir, { agentId: meta.id, agentCwd: meta.cwd });
               // Codex refuses to run hooks from a config dir without persisted
               // "hook trust" (normally an interactive gate). Our hooks.json is
               // hive-authored inside an isolated CODEX_HOME, so we bypass that gate
@@ -830,6 +860,9 @@ export class HiveManager {
               // never fire. Must precede the positional prompt.
               if (!preArgs.includes('--dangerously-bypass-hook-trust'))
                 preArgs.push('--dangerously-bypass-hook-trust');
+              for (const d of this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs)) {
+                preArgs.push('--add-dir', d);
+              }
             }
             else if (desc.shim === 'pi') {
               // Pi (earendil-works) has a rich pi.on(event) lifecycle. We drop a
@@ -947,7 +980,16 @@ export class HiveManager {
     if (sock && shim) {
       env.HIVE_SOCK = sock;
       const settingsPath = join(dir, 'settings.json');
-      this.writeJson(settingsPath, this.hookSettings(shim, meta.cwd, opts.mcpDefaults, opts.theme));
+      this.writeJson(
+        settingsPath,
+        this.hookSettings(
+          shim,
+          meta.cwd,
+          opts.mcpDefaults,
+          opts.theme,
+          this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs)
+        )
+      );
       args.push('--settings', settingsPath);
     }
     return { args, env };
@@ -1116,13 +1158,18 @@ export class HiveManager {
    *  (W3) the default MCP bundle merged into this PER-SESSION settings file. cwd
    *  scopes the filesystem/git servers; cfg (the consent map) gates which servers
    *  are written. Claude-only — this is invoked solely on the Claude spawn path. */
-  private hookSettings(shim: string, cwd: string, cfg: McpDefaultsMap, theme?: 'light' | 'dark'): unknown {
-    // Bundled node, NOT bare `node` — see nodeLauncherPath(). Claude runs each of
-    // these through `sh -c` with a stripped PATH, where `node` is often absent.
-    const cmd = this.nodeRun(shim);
+  private hookSettings(
+    shim: string,
+    cwd: string,
+    cfg: McpDefaultsMap,
+    theme?: 'light' | 'dark',
+    writableDirs: string[] = []
+  ): unknown {
+    const hookCommand = this.hookShimCommand(shim);
+    const statusCommand = this.hookShimCommand(shim, { withStatus: true });
     const entry = (matcher?: string) => ({
       ...(matcher ? { matcher } : {}),
-      hooks: [{ type: 'command', command: cmd }]
+      hooks: [{ type: 'command', command: hookCommand }]
     });
     const mcpServers = this.buildDefaultMcpServers(cwd, cfg);
     return {
@@ -1148,7 +1195,7 @@ export class HiveManager {
       // the only clean programmatic source for the session's REAL context
       // window. The shim prints a compact in-terminal gauge and forwards the
       // payload to the harness (agent-card context gauge, exact limit).
-      statusLine: { type: 'command', command: `${cmd} --status`, padding: 0 },
+      statusLine: { type: 'command', command: statusCommand, padding: 0 },
       hooks: {
         Stop: [entry()],
         SubagentStop: [entry()],
@@ -1981,7 +2028,11 @@ export class HiveManager {
    *  untouched. The user's ~/.codex/auth.json is linked in and their config.toml is
    *  copied + extended (login + model/provider/trust settings still apply).
    *  Returns the CODEX_HOME path for the caller to put in the worker's env. */
-  private installCodexHooks(dir: string, agentCwd?: string): string {
+  private installCodexHooks(
+    dir: string,
+    optsOrCwd?: string | { agentId?: string; agentCwd?: string }
+  ): string {
+    const agentCwd = typeof optsOrCwd === 'string' ? optsOrCwd : optsOrCwd?.agentCwd;
     const home = join(dir, '.codex');
     try {
       mkdirSync(home, { recursive: true });
@@ -2129,11 +2180,10 @@ export class HiveManager {
         config += `\n[projects.'${tomlCwd}']\ntrust_level = "trusted"\n`;
       }
       if (shim) {
-        const events = ['PreToolUse', 'PostToolUse', 'Stop', 'SubagentStop',
-          'SessionStart', 'UserPromptSubmit', 'PreCompact', 'PostCompact'];
+        const shimCommand = this.hookShimCommand(shim, { unquoted: true });
         config += '\n# --- the-hive lifecycle hooks (auto-generated; do not edit) ---\n';
-        for (const ev of events) {
-          config += `\n[[hooks.${ev}]]\n[[hooks.${ev}.hooks]]\ntype = "command"\ncommand = '${this.nodeRunUnquoted(shim)}'\ntimeout = 30\n`;
+        for (const ev of COMMON_HOOK_EVENTS) {
+          config += `\n[[hooks.${ev}]]\n[[hooks.${ev}.hooks]]\ntype = "command"\ncommand = '${shimCommand}'\ntimeout = 30\n`;
         }
       }
       writeFileSync(join(home, 'config.toml'), config, 'utf8');
@@ -2759,6 +2809,8 @@ write there become searchable by every agent. You don't run \`mine\` yourself.
 // A minimal pipe: read the hook payload on stdin, tag it with this agent's id,
 // forward it to the hive's UDS, and relay the response back to `claude`. All the
 // real logic lives in the main process (HookServer). Never blocks a stop on error.
+const COMMON_HOOK_EVENTS = ['PreToolUse', 'PostToolUse', 'Stop', 'SubagentStop', 'SessionStart', 'UserPromptSubmit', 'PreCompact', 'PostCompact', 'Notification'];
+
 const HOOK_SHIM = `#!/usr/bin/env node
 'use strict';
 const net = require('net');
