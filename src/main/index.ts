@@ -386,6 +386,39 @@ function mimeTypeFor(ext: string): string {
   return BROWSER_SERVER_MIME[ext] ?? 'application/octet-stream';
 }
 
+function readJsonBody<T = any>(req: IncomingMessage): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk) => {
+      data += chunk;
+      if (data.length > 2_000_000) {
+        req.destroy();
+        reject(new Error('Payload too large'));
+      }
+    });
+    req.on('end', () => {
+      if (!data.trim()) {
+        resolve({} as T);
+        return;
+      }
+      try {
+        resolve(JSON.parse(data));
+      } catch {
+        reject(new Error('Invalid JSON payload'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function atomicWriteJson(filePath: string, data: unknown): void {
+  mkdirSync(dirname(filePath), { recursive: true });
+  const tmpPath = `${filePath}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+  renameSync(tmpPath, filePath);
+}
+
 function isMobileAuthed(req: IncomingMessage): boolean {
   const secret = ensureMobileApiSecret();
   if (!secret) return false;
@@ -418,7 +451,7 @@ function isMobileAuthed(req: IncomingMessage): boolean {
   }
 }
 
-function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathname: string, url: URL): boolean {
+async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathname: string, url: URL): Promise<boolean> {
   if (!pathname.startsWith('/api/')) return false;
 
   if (!isMobileAuthed(req)) {
@@ -428,15 +461,15 @@ function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathn
   }
 
   const method = req.method?.toUpperCase() ?? 'GET';
-  if (method !== 'GET') {
-    res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ error: 'Method Not Allowed' }));
-    return true;
-  }
-
   const hiveRoot = hive.root() ?? (resolveHarnessHome() ? join(resolveHarnessHome()!, 'hive') : null);
 
+  // GET /api/health
   if (pathname === '/api/health') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
     const uptimeSec = Math.floor(process.uptime());
     const payload = {
       ok: true,
@@ -450,7 +483,13 @@ function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathn
     return true;
   }
 
+  // GET /api/fleet
   if (pathname === '/api/fleet') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
     let fleetData: { ts?: number; agents?: any[] } = { ts: Date.now(), agents: [] };
     if (hiveRoot && existsSync(join(hiveRoot, 'fleet.json'))) {
       try {
@@ -475,7 +514,13 @@ function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathn
     return true;
   }
 
+  // GET /api/board
   if (pathname === '/api/board') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
     let content = '';
     let updatedAt = new Date().toISOString();
     if (hiveRoot && existsSync(join(hiveRoot, 'board.md'))) {
@@ -497,7 +542,13 @@ function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathn
     return true;
   }
 
+  // GET /api/tasks
   if (pathname === '/api/tasks') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
     let tasks: any[] = [];
     if (hiveRoot && existsSync(join(hiveRoot, 'tasks.json'))) {
       try {
@@ -519,6 +570,276 @@ function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathn
     };
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(payload));
+    return true;
+  }
+
+  // GET /api/ask-me
+  if (pathname === '/api/ask-me') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    let tasks: any[] = [];
+    if (hiveRoot && existsSync(join(hiveRoot, 'tasks.json'))) {
+      try {
+        const raw = JSON.parse(readFileSync(join(hiveRoot, 'tasks.json'), 'utf8'));
+        if (Array.isArray(raw.tasks)) tasks = raw.tasks;
+      } catch {
+        tasks = [];
+      }
+    }
+    const items: Array<{
+      type: 'task_qa';
+      taskId: string;
+      taskTitle: string;
+      assignee: string | null;
+      index: number;
+      question: string;
+      askedAt: string | null;
+    }> = [];
+
+    for (const task of tasks) {
+      if (task && Array.isArray(task.humanQA)) {
+        task.humanQA.forEach((qa: any, index: number) => {
+          if (qa && typeof qa === 'object' && (qa.a === undefined || qa.a === null || qa.a === '')) {
+            items.push({
+              type: 'task_qa',
+              taskId: task.id ?? '',
+              taskTitle: task.title ?? '',
+              assignee: task.assignee ?? null,
+              index,
+              question: qa.q ?? '',
+              askedAt: qa.askedAt ?? null
+            });
+          }
+        });
+      }
+    }
+
+    const payload = {
+      unresolvedCount: items.length,
+      items
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(payload));
+    return true;
+  }
+
+  // POST /api/tasks/:id/qa/:index/answer
+  const qaAnswerMatch = /^\/api\/tasks\/([^/]+)\/qa\/(\d+)\/answer\/?$/.exec(pathname);
+  if (qaAnswerMatch) {
+    if (method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    const taskId = decodeURIComponent(qaAnswerMatch[1]);
+    const qaIndex = parseInt(qaAnswerMatch[2], 10);
+    let body: { answer?: string };
+    try {
+      body = await readJsonBody<{ answer?: string }>(req);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      return true;
+    }
+
+    const answer = typeof body?.answer === 'string' ? body.answer.trim() : '';
+    if (!answer) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Missing answer in request body' }));
+      return true;
+    }
+
+    if (!hiveRoot || !existsSync(join(hiveRoot, 'tasks.json'))) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'tasks.json not found' }));
+      return true;
+    }
+
+    const tasksFilePath = join(hiveRoot, 'tasks.json');
+    let tasksJson: { tasks?: any[] };
+    try {
+      tasksJson = JSON.parse(readFileSync(tasksFilePath, 'utf8'));
+    } catch {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Failed to read tasks.json' }));
+      return true;
+    }
+
+    const tasks = Array.isArray(tasksJson.tasks) ? tasksJson.tasks : [];
+    const task = tasks.find((t) => t && t.id === taskId);
+    if (!task || !Array.isArray(task.humanQA) || !task.humanQA[qaIndex]) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Task or humanQA index not found' }));
+      return true;
+    }
+
+    const qaItem = task.humanQA[qaIndex];
+    qaItem.a = answer;
+    qaItem.answeredAt = new Date().toISOString();
+
+    try {
+      atomicWriteJson(tasksFilePath, tasksJson);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Failed to save tasks.json' }));
+      return true;
+    }
+
+    // Write inform message to god's inbox
+    const nowIso = new Date().toISOString();
+    const safeTimestamp = nowIso.replace(/[:.]/g, '-');
+    const godInboxDir = join(hiveRoot, 'agents', 'god', 'inbox');
+    const msgId = `${safeTimestamp}-qa-answered`;
+    const informMessage = {
+      id: msgId,
+      from: 'human',
+      to: 'god',
+      act: 'inform',
+      subject: `HUMAN ANSWER on task "${task.title || taskId}"`,
+      body: `Q: ${qaItem.q || ''}\nA: ${answer}`,
+      hops: 0,
+      requires_reply: false,
+      needs_human: false,
+      created_at: nowIso
+    };
+    try {
+      atomicWriteJson(join(godInboxDir, `${msgId}.json`), informMessage);
+    } catch {
+      // Best-effort inbox inform
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, taskId, index: qaIndex }));
+    return true;
+  }
+
+  // POST /api/messages/send
+  if (pathname === '/api/messages/send') {
+    if (method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    let body: { to?: string; act?: string; subject?: string; body?: string };
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      return true;
+    }
+
+    const to = typeof body?.to === 'string' ? body.to.trim() : '';
+    const messageBody = typeof body?.body === 'string' ? body.body : '';
+    const act = typeof body?.act === 'string' && body.act.trim() ? body.act.trim() : 'inform';
+    const subject = typeof body?.subject === 'string' && body.subject.trim() ? body.subject.trim() : 'Message from human';
+
+    if (!to) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Missing "to" field in request body' }));
+      return true;
+    }
+
+    if (!hiveRoot) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Hive root not resolved' }));
+      return true;
+    }
+
+    const nowIso = new Date().toISOString();
+    const safeTimestamp = nowIso.replace(/[:.]/g, '-');
+    const shortId = randomBytes(4).toString('hex');
+    const messageId = `${safeTimestamp}-${shortId}`;
+    const inboxDir = join(hiveRoot, 'agents', to, 'inbox');
+
+    const messagePayload = {
+      id: messageId,
+      from: 'human',
+      to,
+      act,
+      subject,
+      body: messageBody,
+      hops: 0,
+      requires_reply: false,
+      needs_human: false,
+      created_at: nowIso
+    };
+
+    try {
+      atomicWriteJson(join(inboxDir, `${messageId}.json`), messagePayload);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Failed to write message to inbox' }));
+      return true;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, messageId, routedTo: to }));
+    return true;
+  }
+
+  // PATCH /api/tasks/:id
+  const taskPatchMatch = /^\/api\/tasks\/([^/]+)\/?$/.exec(pathname);
+  if (taskPatchMatch) {
+    if (method !== 'PATCH') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    const taskId = decodeURIComponent(taskPatchMatch[1]);
+    let patch: Record<string, unknown>;
+    try {
+      patch = await readJsonBody<Record<string, unknown>>(req);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      return true;
+    }
+
+    if (!hiveRoot || !existsSync(join(hiveRoot, 'tasks.json'))) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'tasks.json not found' }));
+      return true;
+    }
+
+    const tasksFilePath = join(hiveRoot, 'tasks.json');
+    let tasksJson: { tasks?: any[] };
+    try {
+      tasksJson = JSON.parse(readFileSync(tasksFilePath, 'utf8'));
+    } catch {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Failed to read tasks.json' }));
+      return true;
+    }
+
+    const tasks = Array.isArray(tasksJson.tasks) ? tasksJson.tasks : [];
+    const taskIndex = tasks.findIndex((t) => t && t.id === taskId);
+    if (taskIndex === -1) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Task not found' }));
+      return true;
+    }
+
+    tasks[taskIndex] = {
+      ...tasks[taskIndex],
+      ...patch,
+      id: taskId,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      atomicWriteJson(tasksFilePath, tasksJson);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Failed to save tasks.json' }));
+      return true;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, taskId }));
     return true;
   }
 
@@ -557,7 +878,7 @@ function ensureBrowserServer(): Promise<string> {
       const pathname = decodeURIComponent(url.pathname);
 
       if (pathname.startsWith('/api/')) {
-        handleMobileApiRequest(req, res, pathname, url);
+        void handleMobileApiRequest(req, res, pathname, url);
         return;
       }
 
@@ -565,6 +886,46 @@ function ensureBrowserServer(): Promise<string> {
       if (method !== 'GET' && method !== 'HEAD') {
         res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Method Not Allowed');
+        return;
+      }
+
+      // Serve mobile PWA HTML from /mobile or fallback placeholder
+      if (pathname === '/mobile' || pathname === '/mobile/' || pathname.startsWith('/mobile/')) {
+        let subPath = pathname.replace(/^\/mobile\/?/, '');
+        if (!subPath || subPath === '/') subPath = 'index.html';
+
+        const candidateDirs = [
+          join(app.getAppPath(), 'src/mobile'),
+          join(process.cwd(), 'src/mobile'),
+          join(BROWSER_SERVER_ROOT, 'mobile')
+        ];
+
+        let served = false;
+        for (const dir of candidateDirs) {
+          const candidateFile = join(dir, subPath);
+          if (existsSync(candidateFile) && statSync(candidateFile).isFile()) {
+            const mime = mimeTypeFor(extname(candidateFile));
+            const content = readFileSync(candidateFile);
+            res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
+            if (method === 'HEAD') res.end();
+            else res.end(content);
+            served = true;
+            break;
+          }
+        }
+
+        if (!served) {
+          if (subPath === 'index.html') {
+            const placeholder = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TheHive Remote</title></head><body style="background:#121214;color:#f0f0f0;font-family:sans-serif;padding:32px;text-align:center;"><h2>TheHive Remote</h2><p>Mobile API ready. PWA loading...</p></body></html>';
+            const buf = Buffer.from(placeholder, 'utf8');
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': buf.byteLength, 'Cache-Control': 'no-cache' });
+            if (method === 'HEAD') res.end();
+            else res.end(buf);
+            return;
+          }
+          res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('Not Found');
+        }
         return;
       }
 
