@@ -19,7 +19,7 @@ import { createServer as createHttpServer, type Server as HttpServer, type Incom
 import {
   rmSync, existsSync, readFileSync, readdirSync, statSync, cpSync, writeFileSync,
   unlinkSync, mkdirSync, renameSync, createWriteStream, createReadStream, copyFileSync, lstatSync,
-  readlinkSync, symlinkSync
+  readlinkSync, symlinkSync, watchFile, unwatchFile
 } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { join, resolve, sep, basename, dirname, extname } from 'node:path';
@@ -386,6 +386,30 @@ function mimeTypeFor(ext: string): string {
   return BROWSER_SERVER_MIME[ext] ?? 'application/octet-stream';
 }
 
+function resolveMobileStaticFile(subPath: string): { filePath: string; mime: string } | null {
+  let cleanSub = subPath.replace(/^\/+/, '');
+  if (!cleanSub || cleanSub === 'mobile' || cleanSub === 'mobile/') cleanSub = 'index.html';
+  if (cleanSub.startsWith('mobile/')) cleanSub = cleanSub.slice('mobile/'.length);
+  if (!cleanSub) cleanSub = 'index.html';
+
+  const candidates = [
+    join(app.getAppPath(), 'src/mobile', cleanSub),
+    join(process.cwd(), 'src/mobile', cleanSub),
+    join(__dirname, '../../src/mobile', cleanSub),
+    join(__dirname, '../renderer/mobile', cleanSub),
+    join(__dirname, '../mobile', cleanSub)
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (existsSync(candidate) && statSync(candidate).isFile()) {
+        return { filePath: candidate, mime: mimeTypeFor(extname(candidate)) };
+      }
+    } catch { /* ignore */ }
+  }
+  return null;
+}
+
 function readJsonBody<T = any>(req: IncomingMessage): Promise<T> {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -419,18 +443,19 @@ function atomicWriteJson(filePath: string, data: unknown): void {
   renameSync(tmpPath, filePath);
 }
 
-function isMobileAuthed(req: IncomingMessage): boolean {
+function isMobileAuthed(req: IncomingMessage, url?: URL): boolean {
   const secret = ensureMobileApiSecret();
   if (!secret) return false;
 
-  const authHeader = req.headers['authorization'];
   let token = '';
-  if (typeof authHeader === 'string') {
-    const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
-    if (match) {
-      token = match[1].trim();
-    } else {
-      token = authHeader.trim();
+  if (url && url.searchParams.has('token')) {
+    token = (url.searchParams.get('token') ?? '').trim();
+  }
+  if (!token) {
+    const authHeader = req.headers['authorization'];
+    if (typeof authHeader === 'string') {
+      const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+      token = match ? match[1].trim() : authHeader.trim();
     }
   }
   if (!token && typeof req.headers['x-hive-secret'] === 'string') {
@@ -451,10 +476,161 @@ function isMobileAuthed(req: IncomingMessage): boolean {
   }
 }
 
+function buildFleetPayload(hiveRoot: string | null) {
+  let fleetData: { ts?: number; agents?: any[] } = { ts: Date.now(), agents: [] };
+  if (hiveRoot && existsSync(join(hiveRoot, 'fleet.json'))) {
+    try {
+      fleetData = JSON.parse(readFileSync(join(hiveRoot, 'fleet.json'), 'utf8'));
+    } catch {
+      fleetData = { ts: Date.now(), agents: [] };
+    }
+  }
+  const agents = Array.isArray(fleetData.agents) ? fleetData.agents : [];
+  const activeCount = agents.filter((a) => !a.onHold && !a.archived).length;
+  const totalUsd = agents.reduce((sum, a) => sum + (typeof a.usd === 'number' ? a.usd : 0), 0);
+  return {
+    ts: typeof fleetData.ts === 'number' ? fleetData.ts : Date.now(),
+    agents,
+    totals: {
+      activeCount,
+      totalUsd: Number(totalUsd.toFixed(4))
+    }
+  };
+}
+
+function buildBoardPayload(hiveRoot: string | null) {
+  let content = '';
+  let updatedAt = new Date().toISOString();
+  if (hiveRoot && existsSync(join(hiveRoot, 'board.md'))) {
+    try {
+      const p = join(hiveRoot, 'board.md');
+      content = readFileSync(p, 'utf8');
+      updatedAt = statSync(p).mtime.toISOString();
+    } catch {
+      content = '';
+    }
+  }
+  return {
+    ok: true,
+    content,
+    updatedAt
+  };
+}
+
+function buildTasksPayload(hiveRoot: string | null, statusParam?: string | null) {
+  let tasks: any[] = [];
+  if (hiveRoot && existsSync(join(hiveRoot, 'tasks.json'))) {
+    try {
+      const raw = JSON.parse(readFileSync(join(hiveRoot, 'tasks.json'), 'utf8'));
+      if (Array.isArray(raw.tasks)) tasks = raw.tasks;
+    } catch {
+      tasks = [];
+    }
+  }
+  if (statusParam) {
+    const allowed = new Set(statusParam.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
+    if (allowed.size > 0) {
+      tasks = tasks.filter((t) => t && typeof t.status === 'string' && allowed.has(t.status.toLowerCase()));
+    }
+  }
+  return { tasks };
+}
+
+function buildAskMePayload(hiveRoot: string | null) {
+  let tasks: any[] = [];
+  if (hiveRoot && existsSync(join(hiveRoot, 'tasks.json'))) {
+    try {
+      const raw = JSON.parse(readFileSync(join(hiveRoot, 'tasks.json'), 'utf8'));
+      if (Array.isArray(raw.tasks)) tasks = raw.tasks;
+    } catch {
+      tasks = [];
+    }
+  }
+  const items: Array<{
+    type: 'task_qa';
+    taskId: string;
+    taskTitle: string;
+    assignee: string | null;
+    index: number;
+    question: string;
+    askedAt: string | null;
+  }> = [];
+
+  for (const task of tasks) {
+    if (task && Array.isArray(task.humanQA)) {
+      task.humanQA.forEach((qa: any, index: number) => {
+        if (qa && typeof qa === 'object' && (qa.a === undefined || qa.a === null || qa.a === '')) {
+          items.push({
+            type: 'task_qa',
+            taskId: task.id ?? '',
+            taskTitle: task.title ?? '',
+            assignee: task.assignee ?? null,
+            index,
+            question: qa.q ?? '',
+            askedAt: qa.askedAt ?? null
+          });
+        }
+      });
+    }
+  }
+  return {
+    unresolvedCount: items.length,
+    items
+  };
+}
+
+const sseClients = new Set<ServerResponse>();
+let sseWatching = false;
+
+function broadcastSse(event: string, data: unknown): void {
+  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.write(msg);
+    } catch {
+      sseClients.delete(client);
+    }
+  }
+}
+
+function updateSseWatchers(): void {
+  const hiveRoot = hive.root() ?? (resolveHarnessHome() ? join(resolveHarnessHome()!, 'hive') : null);
+  if (!hiveRoot) return;
+
+  const fleetPath = join(hiveRoot, 'fleet.json');
+  const tasksPath = join(hiveRoot, 'tasks.json');
+  const boardPath = join(hiveRoot, 'board.md');
+
+  if (sseClients.size > 0 && !sseWatching) {
+    sseWatching = true;
+    try {
+      watchFile(fleetPath, { interval: 2000 }, () => {
+        broadcastSse('fleet', buildFleetPayload(hiveRoot));
+      });
+    } catch {}
+    try {
+      watchFile(tasksPath, { interval: 2000 }, () => {
+        broadcastSse('tasks', buildTasksPayload(hiveRoot));
+        broadcastSse('ask_me', buildAskMePayload(hiveRoot));
+      });
+    } catch {}
+    try {
+      watchFile(boardPath, { interval: 5000 }, () => {
+        broadcastSse('board', buildBoardPayload(hiveRoot));
+      });
+    } catch {}
+  } else if (sseClients.size === 0 && sseWatching) {
+    sseWatching = false;
+    try { unwatchFile(fleetPath); } catch {}
+    try { unwatchFile(tasksPath); } catch {}
+    try { unwatchFile(boardPath); } catch {}
+  }
+}
+
 async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathname: string, url: URL): Promise<boolean> {
   if (!pathname.startsWith('/api/')) return false;
 
-  if (!isMobileAuthed(req)) {
+  if (!isMobileAuthed(req, url)) {
     res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ error: 'unauthorized' }));
     return true;
@@ -462,6 +638,48 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
 
   const method = req.method?.toUpperCase() ?? 'GET';
   const hiveRoot = hive.root() ?? (resolveHarnessHome() ? join(resolveHarnessHome()!, 'hive') : null);
+
+  // GET /api/events (SSE Stream)
+  if (pathname === '/api/events') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+
+    sseClients.add(res);
+    updateSseWatchers();
+
+    // Send keepalive comment every 15s
+    const keepaliveTimer = setInterval(() => {
+      try {
+        res.write(':\n\n');
+      } catch {
+        clearInterval(keepaliveTimer);
+      }
+    }, 15_000);
+
+    // Immediately push initial state
+    res.write(`event: fleet\ndata: ${JSON.stringify(buildFleetPayload(hiveRoot))}\n\n`);
+    res.write(`event: tasks\ndata: ${JSON.stringify(buildTasksPayload(hiveRoot))}\n\n`);
+    res.write(`event: board\ndata: ${JSON.stringify(buildBoardPayload(hiveRoot))}\n\n`);
+    res.write(`event: ask_me\ndata: ${JSON.stringify(buildAskMePayload(hiveRoot))}\n\n`);
+
+    res.on('close', () => {
+      clearInterval(keepaliveTimer);
+      sseClients.delete(res);
+      updateSseWatchers();
+    });
+
+    return true;
+  }
 
   // GET /api/health
   if (pathname === '/api/health') {
@@ -490,25 +708,7 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       res.end(JSON.stringify({ error: 'Method Not Allowed' }));
       return true;
     }
-    let fleetData: { ts?: number; agents?: any[] } = { ts: Date.now(), agents: [] };
-    if (hiveRoot && existsSync(join(hiveRoot, 'fleet.json'))) {
-      try {
-        fleetData = JSON.parse(readFileSync(join(hiveRoot, 'fleet.json'), 'utf8'));
-      } catch {
-        fleetData = { ts: Date.now(), agents: [] };
-      }
-    }
-    const agents = Array.isArray(fleetData.agents) ? fleetData.agents : [];
-    const activeCount = agents.filter((a) => !a.onHold && !a.archived).length;
-    const totalUsd = agents.reduce((sum, a) => sum + (typeof a.usd === 'number' ? a.usd : 0), 0);
-    const payload = {
-      ts: typeof fleetData.ts === 'number' ? fleetData.ts : Date.now(),
-      agents,
-      totals: {
-        activeCount,
-        totalUsd: Number(totalUsd.toFixed(4))
-      }
-    };
+    const payload = buildFleetPayload(hiveRoot);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(payload));
     return true;
@@ -521,22 +721,7 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       res.end(JSON.stringify({ error: 'Method Not Allowed' }));
       return true;
     }
-    let content = '';
-    let updatedAt = new Date().toISOString();
-    if (hiveRoot && existsSync(join(hiveRoot, 'board.md'))) {
-      try {
-        const p = join(hiveRoot, 'board.md');
-        content = readFileSync(p, 'utf8');
-        updatedAt = statSync(p).mtime.toISOString();
-      } catch {
-        content = '';
-      }
-    }
-    const payload = {
-      ok: true,
-      content,
-      updatedAt
-    };
+    const payload = buildBoardPayload(hiveRoot);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(payload));
     return true;
@@ -549,25 +734,8 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       res.end(JSON.stringify({ error: 'Method Not Allowed' }));
       return true;
     }
-    let tasks: any[] = [];
-    if (hiveRoot && existsSync(join(hiveRoot, 'tasks.json'))) {
-      try {
-        const raw = JSON.parse(readFileSync(join(hiveRoot, 'tasks.json'), 'utf8'));
-        if (Array.isArray(raw.tasks)) tasks = raw.tasks;
-      } catch {
-        tasks = [];
-      }
-    }
     const statusParam = url.searchParams.get('status');
-    if (statusParam) {
-      const allowed = new Set(statusParam.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
-      if (allowed.size > 0) {
-        tasks = tasks.filter((t) => t && typeof t.status === 'string' && allowed.has(t.status.toLowerCase()));
-      }
-    }
-    const payload = {
-      tasks
-    };
+    const payload = buildTasksPayload(hiveRoot, statusParam);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(payload));
     return true;
@@ -580,47 +748,7 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       res.end(JSON.stringify({ error: 'Method Not Allowed' }));
       return true;
     }
-    let tasks: any[] = [];
-    if (hiveRoot && existsSync(join(hiveRoot, 'tasks.json'))) {
-      try {
-        const raw = JSON.parse(readFileSync(join(hiveRoot, 'tasks.json'), 'utf8'));
-        if (Array.isArray(raw.tasks)) tasks = raw.tasks;
-      } catch {
-        tasks = [];
-      }
-    }
-    const items: Array<{
-      type: 'task_qa';
-      taskId: string;
-      taskTitle: string;
-      assignee: string | null;
-      index: number;
-      question: string;
-      askedAt: string | null;
-    }> = [];
-
-    for (const task of tasks) {
-      if (task && Array.isArray(task.humanQA)) {
-        task.humanQA.forEach((qa: any, index: number) => {
-          if (qa && typeof qa === 'object' && (qa.a === undefined || qa.a === null || qa.a === '')) {
-            items.push({
-              type: 'task_qa',
-              taskId: task.id ?? '',
-              taskTitle: task.title ?? '',
-              assignee: task.assignee ?? null,
-              index,
-              question: qa.q ?? '',
-              askedAt: qa.askedAt ?? null
-            });
-          }
-        });
-      }
-    }
-
-    const payload = {
-      unresolvedCount: items.length,
-      items
-    };
+    const payload = buildAskMePayload(hiveRoot);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(payload));
     return true;
@@ -843,6 +971,127 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     return true;
   }
 
+  // POST /api/agents/spawn
+  if (pathname === '/api/agents/spawn') {
+    if (method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    let body: {
+      name?: string;
+      objective?: string;
+      cwd?: string;
+      provider?: AgentProvider;
+      model?: string;
+      isolate?: boolean;
+      character?: string;
+      accent?: string;
+    };
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      return true;
+    }
+
+    if (!hiveRoot) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Hive root not resolved' }));
+      return true;
+    }
+
+    const name = typeof body?.name === 'string' ? body.name.trim() : 'worker';
+    const objective = typeof body?.objective === 'string' ? body.objective.trim() : '';
+    const cwd = typeof body?.cwd === 'string' && body.cwd.trim() ? body.cwd.trim() : (resolveHarnessHome() || process.cwd());
+
+    const nowIso = new Date().toISOString();
+    const safeTimestamp = nowIso.replace(/[:.]/g, '-');
+    const cleanName = (name || 'worker').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const requestId = `${safeTimestamp}-${cleanName}`;
+
+    const spawnDir = join(hiveRoot, 'spawn-requests');
+    mkdirSync(spawnDir, { recursive: true });
+
+    const spawnReq: SpawnRequest = {
+      id: requestId,
+      name,
+      objective,
+      cwd,
+      provider: body?.provider,
+      model: body?.model,
+      isolate: body?.isolate !== false,
+      character: body?.character,
+      accent: body?.accent
+    };
+
+    try {
+      atomicWriteJson(join(spawnDir, `${requestId}.json`), spawnReq);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Failed to write spawn-request' }));
+      return true;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, requestId, status: 'queued' }));
+    return true;
+  }
+
+  // POST /api/agents/:id/stop
+  const stopMatch = /^\/api\/agents\/([^/]+)\/stop\/?$/.exec(pathname);
+  if (stopMatch) {
+    if (method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    const agentId = decodeURIComponent(stopMatch[1]);
+    let body: { reason?: string; force?: boolean };
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      body = {};
+    }
+
+    if (!hiveRoot) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Hive root not resolved' }));
+      return true;
+    }
+
+    const nowIso = new Date().toISOString();
+    const safeTimestamp = nowIso.replace(/[:.]/g, '-');
+    const stopMsgId = `${safeTimestamp}-stop`;
+    const inboxDir = join(hiveRoot, 'agents', agentId, 'inbox');
+
+    const stopPayload = {
+      id: stopMsgId,
+      from: 'human',
+      to: agentId,
+      act: 'stop',
+      subject: 'Stop requested from mobile',
+      body: body?.reason || 'Stopped from Android',
+      hops: 0,
+      requires_reply: false,
+      needs_human: false,
+      created_at: nowIso
+    };
+
+    try {
+      atomicWriteJson(join(inboxDir, `${stopMsgId}.json`), stopPayload);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Failed to write stop message to inbox' }));
+      return true;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, agentId, status: 'stop-requested' }));
+    return true;
+  }
+
   res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify({ error: 'Not Found' }));
   return true;
@@ -877,6 +1126,49 @@ function ensureBrowserServer(): Promise<string> {
 
       const pathname = decodeURIComponent(url.pathname);
 
+      // Handle unauthenticated Mobile PWA static files (/mobile, /mobile/manifest.json, /mobile/sw.js, etc.)
+      if (pathname === '/mobile' || pathname === '/mobile/' || pathname.startsWith('/mobile/')) {
+        const method = req.method?.toUpperCase() ?? 'GET';
+        if (method !== 'GET' && method !== 'HEAD') {
+          res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('Method Not Allowed');
+          return;
+        }
+
+        const subPath = pathname === '/mobile' || pathname === '/mobile/' ? 'index.html' : pathname.replace(/^\/mobile\/?/, '');
+        const resolved = resolveMobileStaticFile(subPath);
+        if (resolved) {
+          try {
+            const content = readFileSync(resolved.filePath);
+            res.writeHead(200, {
+              'Content-Type': resolved.mime,
+              'Cache-Control': 'no-cache',
+              'Content-Length': content.byteLength
+            });
+            if (method === 'HEAD') res.end();
+            else res.end(content);
+            return;
+          } catch (err) {
+            console.error('[mobile-pwa] error reading static file:', resolved.filePath, err);
+          }
+        }
+
+        // Fallback placeholder if index.html is missing
+        if (subPath === 'index.html') {
+          const placeholder = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TheHive Remote</title></head><body style="background:#121214;color:#f0f0f0;font-family:sans-serif;padding:32px;text-align:center;"><h2>TheHive Remote</h2><p>Mobile API ready. PWA loading...</p></body></html>';
+          const buf = Buffer.from(placeholder, 'utf8');
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': buf.byteLength, 'Cache-Control': 'no-cache' });
+          if (method === 'HEAD') res.end();
+          else res.end(buf);
+          return;
+        }
+
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Not Found');
+        return;
+      }
+
+      // Handle authenticated Mobile API endpoints
       if (pathname.startsWith('/api/')) {
         void handleMobileApiRequest(req, res, pathname, url);
         return;
@@ -886,46 +1178,6 @@ function ensureBrowserServer(): Promise<string> {
       if (method !== 'GET' && method !== 'HEAD') {
         res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Method Not Allowed');
-        return;
-      }
-
-      // Serve mobile PWA HTML from /mobile or fallback placeholder
-      if (pathname === '/mobile' || pathname === '/mobile/' || pathname.startsWith('/mobile/')) {
-        let subPath = pathname.replace(/^\/mobile\/?/, '');
-        if (!subPath || subPath === '/') subPath = 'index.html';
-
-        const candidateDirs = [
-          join(app.getAppPath(), 'src/mobile'),
-          join(process.cwd(), 'src/mobile'),
-          join(BROWSER_SERVER_ROOT, 'mobile')
-        ];
-
-        let served = false;
-        for (const dir of candidateDirs) {
-          const candidateFile = join(dir, subPath);
-          if (existsSync(candidateFile) && statSync(candidateFile).isFile()) {
-            const mime = mimeTypeFor(extname(candidateFile));
-            const content = readFileSync(candidateFile);
-            res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
-            if (method === 'HEAD') res.end();
-            else res.end(content);
-            served = true;
-            break;
-          }
-        }
-
-        if (!served) {
-          if (subPath === 'index.html') {
-            const placeholder = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TheHive Remote</title></head><body style="background:#121214;color:#f0f0f0;font-family:sans-serif;padding:32px;text-align:center;"><h2>TheHive Remote</h2><p>Mobile API ready. PWA loading...</p></body></html>';
-            const buf = Buffer.from(placeholder, 'utf8');
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': buf.byteLength, 'Cache-Control': 'no-cache' });
-            if (method === 'HEAD') res.end();
-            else res.end(buf);
-            return;
-          }
-          res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-          res.end('Not Found');
-        }
         return;
       }
 
