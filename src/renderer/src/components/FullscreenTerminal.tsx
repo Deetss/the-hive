@@ -442,7 +442,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                 title={m === 'ide' ? 'Show diff/file panel for the focused agent' : 'Show the agent roster'}
                 style={{
                   padding: '1px 7px', border: 'none', cursor: 'pointer',
-                  fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '14px', textTransform: 'uppercase',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '14px', textTransform: 'uppercase',
                   color: 'var(--cth-ink-700)',
                   background: sidePanel === m ? 'var(--cth-sky-light)' : 'transparent',
                   boxShadow: sidePanel === m ? 'inset 0 0 0 1px var(--cth-ink-300)' : 'none'
@@ -458,7 +458,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                     onClick={() => setSideIdeTab(t)}
                     style={{
                       padding: '1px 6px', border: 'none', cursor: 'pointer',
-                      fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '14px', textTransform: 'uppercase',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '14px', textTransform: 'uppercase',
                       color: 'var(--cth-ink-500)',
                       background: sideIdeTab === t ? 'var(--cth-lemon-light)' : 'transparent',
                       boxShadow: sideIdeTab === t ? 'inset 0 0 0 1px var(--cth-ink-200)' : 'none'
@@ -518,7 +518,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: '0 10px 6px',
-                    fontFamily: 'var(--cth-font-display)',
+                    fontFamily: 'var(--cth-font-ui)',
                     fontSize: scale.group, lineHeight: 1.5,
                     color: 'var(--cth-ink-500)'
                   }}
@@ -820,7 +820,7 @@ function SidebarRow({
             <span style={{
               flex: 1, minWidth: 0,
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              fontFamily: 'var(--cth-font-display)',
+              fontFamily: 'var(--cth-font-ui)',
               fontSize: scale.name, lineHeight: 1.5
             }}>{agent.name.toUpperCase()}</span>
             {/* Your unsent text outranks the agent's own state here: an idle
@@ -830,7 +830,7 @@ function SidebarRow({
             {agent.onHold && (
               <span title="Human has this agent 1:1 — floor automation paused" style={{
                 flexShrink: 0,
-                fontFamily: 'var(--cth-font-display)', fontSize: 7, lineHeight: '11px',
+                fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
                 padding: '1px 4px 0',
                 background: 'var(--cth-lemon)', color: 'var(--cth-ink-900)',
                 boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
@@ -954,7 +954,7 @@ function SidebarRow({
         >
           <div style={{
             marginBottom: 6,
-            fontFamily: 'var(--cth-font-display)',
+            fontFamily: 'var(--cth-font-ui)',
             fontSize: noteLabelSize,
             lineHeight: `${Math.round(noteLabelSize * 1.5)}px`,
             color: 'var(--cth-ink-700)'
@@ -1042,7 +1042,7 @@ function Header({ agent, onEdit }: { agent: Agent; onEdit: () => void }) {
       boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
     }}>
       <span style={{
-        fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '16px',
+        fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '16px',
         color: 'var(--cth-ink-900)'
       }}>{agent.name.toUpperCase()}</span>
       {/* Edit belongs with the NAME, not with the action cluster on the right:

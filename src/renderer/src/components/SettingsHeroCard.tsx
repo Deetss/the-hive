@@ -89,7 +89,7 @@ export function SettingsHeroCard() {
         <div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
             <span style={{
-              fontFamily: 'var(--cth-font-display)', fontSize: 13, lineHeight: '20px', color: INK
+              fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '20px', color: INK
             }}>THE HIVE</span>
             {version && (
               <span style={{

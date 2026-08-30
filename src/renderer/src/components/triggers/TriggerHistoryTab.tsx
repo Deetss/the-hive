@@ -127,7 +127,7 @@ function clampBody(body: string): { text: string; clipped: boolean } {
 /* ───────────────────────────────── styles ────────────────────────────────── */
 
 const tinyCaps: CSSProperties = {
-  fontFamily: 'var(--cth-font-display)', fontSize: 9, lineHeight: '12px',
+  fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '12px',
   color: 'var(--cth-ink-500)'
 };
 const uiText: CSSProperties = {
@@ -163,7 +163,7 @@ const linkButton: CSSProperties = {
 
 function badgeStyle(fill: string, line: string): CSSProperties {
   return {
-    fontFamily: 'var(--cth-font-display)', fontSize: 9, lineHeight: '12px',
+    fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '12px',
     padding: '3px 5px 2px', background: fill, boxShadow: `inset 0 0 0 1px ${line}`,
     color: 'var(--cth-ink-900)', flexShrink: 0
   };
@@ -458,7 +458,7 @@ export function TriggerHistoryTab() {
                 flex: 1, height: 32, padding: '0 8px', border: 'none', cursor: 'pointer',
                 background: active ? 'var(--cth-paper-200)' : 'transparent',
                 boxShadow: active ? 'inset 0 -2px 0 var(--cth-ink-900)' : 'none',
-                fontFamily: 'var(--cth-font-display)', fontSize: 9, lineHeight: '12px',
+                fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '12px',
                 color: active ? 'var(--cth-ink-900)' : 'var(--cth-ink-500)',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                 minWidth: 0

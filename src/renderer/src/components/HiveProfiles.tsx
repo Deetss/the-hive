@@ -28,7 +28,7 @@ const inputStyle: CSSProperties = {
   fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none', minWidth: 0
 };
 const labelStyle: CSSProperties = {
-  fontFamily: 'var(--cth-font-display)', fontSize: 9, color: 'var(--cth-ink-500)', marginBottom: 4
+  fontFamily: 'var(--cth-font-ui)', fontSize: 9, color: 'var(--cth-ink-500)', marginBottom: 4
 };
 
 /**
@@ -171,12 +171,12 @@ export function HiveProfiles() {
                         {p.name}
                       </span>
                       {isCurrent && (
-                        <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-mint-dark, var(--cth-ink-700))' }}>
+                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-mint-dark, var(--cth-ink-700))' }}>
                           YOU ARE HERE
                         </span>
                       )}
                       {p.remote && !isCurrent && (
-                        <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-500)' }}>JOINED</span>
+                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-ink-500)' }}>JOINED</span>
                       )}
                     </div>
                     <div style={{

@@ -63,7 +63,7 @@ export function PixelPanel({
             padding: '6px 12px 4px',
             background: accent ? `var(--cth-${accent})` : 'var(--cth-cream-200)',
             color: 'var(--cth-ink-900)',
-            fontFamily: 'var(--cth-font-display)',
+            fontFamily: 'var(--cth-font-ui)',
             fontSize: 'var(--cth-text-display-md)',
             lineHeight: 'var(--cth-lh-display-md)',
             boxShadow: 'inset 0 -1px 0 var(--cth-ink-900)'

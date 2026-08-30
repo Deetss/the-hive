@@ -50,15 +50,16 @@ export function AgentDetailPanel({ agent, isMobile = false }: AgentDetailPanelPr
    *
    * WHERE 440 COMES FROM. Everything that is not the name costs ~318px: the
    * four buttons measure ~246 at Inter 13px, the portrait 32, and the five
-   * 8px gaps another 40. The name is set in Press Start 2P, which is a
-   * fixed-advance pixel font — at fontSize 10 that is a flat 10px per
-   * character, plus 17 for the rename pencil beside it. Ten readable
-   * characters therefore need 117, and 318 + 117 rounds to 440.
+   * 8px gaps another 40. The name (AgentNameEditor, Inter) plus its rename
+   * pencil need ~117px for ten readable characters — 318 + 117 rounds to 440.
+   * That estimate carries over from when the name was set in Press Start 2P
+   * (a fixed-advance pixel font); Inter is proportional and narrower on
+   * average, so 440 stays a safe, if conservative, threshold.
    *
    * That threshold deliberately puts the DEFAULT 420px sidebar in compact
-   * mode. It has to: at 420 the labelled row leaves the name about 67px,
-   * which is six pixel-font characters — the "DWIGHT S." truncation this was
-   * reported as. Icons at the default width is the fix, not a side effect.
+   * mode. It has to: at 420 the labelled row leaves the name about 67px —
+   * the "DWIGHT S." truncation this was reported as. Icons at the default
+   * width is the fix, not a side effect.
    *
    * Recompute the number if a fifth button lands in this row or a label grows.
    */
@@ -301,7 +302,7 @@ function EmptyTab({ title, children }: { title: string; children: React.ReactNod
       background: 'var(--cth-paper-200)'
     }}>
       <div style={{
-        fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '14px',
+        fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px',
         color: 'var(--cth-ink-500)'
       }}>{title.toUpperCase()}</div>
       <p style={{

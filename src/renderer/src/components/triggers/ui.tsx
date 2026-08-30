@@ -59,7 +59,7 @@ export function Chip({ children, tone = 'plain' }: { children: ReactNode; tone?:
   return (
     <span style={{
       flexShrink: 0, padding: '2px 5px 1px',
-      fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+      fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
       background: bg, boxShadow: `inset 0 0 0 1px ${line}`, color: 'var(--cth-ink-900)'
     }}>{children}</span>
   );
@@ -132,7 +132,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   return (
     <div style={{ marginTop: 8 }}>
       <div style={{
-        fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+        fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
         color: 'var(--cth-ink-500)', marginBottom: 4
       }}>{label}</div>
       {children}
@@ -179,7 +179,7 @@ export function TriggerCard({ title, blurb, summary, defaultOpen = false, childr
         </span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{
-            display: 'block', fontFamily: 'var(--cth-font-display)', fontSize: 9, lineHeight: '13px',
+            display: 'block', fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '13px',
             color: 'var(--cth-ink-900)'
           }}>{title}</span>
           <span style={{ display: 'block', fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', marginTop: 2 }}>

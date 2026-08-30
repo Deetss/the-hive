@@ -42,7 +42,7 @@ export function SidebarTabs({ current, accent, onChange }: SidebarTabsProps) {
               boxShadow: active
                 ? `inset 0 -3px 0 var(--cth-${accent}), inset 1px 0 0 var(--cth-ink-900), inset -1px 0 0 var(--cth-ink-900)`
                 : 'inset 0 0 0 0',
-              fontFamily: 'var(--cth-font-display)',
+              fontFamily: 'var(--cth-font-ui)',
               fontSize: 10,
               lineHeight: '14px',
               color: active ? 'var(--cth-ink-900)' : 'var(--cth-ink-500)',

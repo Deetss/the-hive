@@ -110,7 +110,7 @@ function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean;
           position: 'absolute', top: 2, right: 2,
           minWidth: 14, height: 14, borderRadius: 7,
           background: 'var(--cth-coral)', color: '#fff',
-          fontFamily: 'var(--cth-font-display)', fontSize: 8,
+          fontFamily: 'var(--cth-font-ui)', fontSize: 8,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '0 3px', boxSizing: 'border-box', lineHeight: 1
         }}>
@@ -249,7 +249,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
             wide buttons — everything here is single-line by construction. */}
         <div style={{ flex: 1, minWidth: 0, order: mobile ? 1 : 0, marginTop: mobile ? 4 : 0 }}>
           <div style={{
-            fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '14px', color: 'var(--cth-ink-900)',
+            fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px', color: 'var(--cth-ink-900)',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
           }}>COMMAND CENTER</div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 1, minWidth: 0 }}>
@@ -747,7 +747,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
     <Scroll>
       <Section title="DISPATCH — VIA ABATHUR">
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
             SUGGESTED OWNER
           </span>
           <Select value={dispatchTo} onChange={setDispatchTo}>
@@ -1476,7 +1476,7 @@ function ActivityTab() {
                   if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id);
                   return next;
                 })}>
-                <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, padding: '1px 4px', background: BADGE_COLORS[entry.badge], color: 'var(--cth-ink-900)', flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 8, padding: '1px 4px', background: BADGE_COLORS[entry.badge], color: 'var(--cth-ink-900)', flexShrink: 0 }}>
                   {entry.badge}
                 </span>
                 <span style={{ flex: 1, fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 600, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1499,7 +1499,7 @@ function ActivityTab() {
       </Section>
 
       <div style={{ padding: '0 8px 4px' }}>
-        <button onClick={() => setShowRaw((v) => !v)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-400)', padding: 0 }}>
+        <button onClick={() => setShowRaw((v) => !v)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-ink-400)', padding: 0 }}>
           {showRaw ? '▼ RAW LOG' : '▶ RAW LOG'}
         </button>
       </div>
@@ -1531,7 +1531,7 @@ function Scroll({ children }: { children: React.ReactNode }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 9, lineHeight: '12px', color: 'var(--cth-ink-500)', marginBottom: 6 }}>{title}</div>
+      <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '12px', color: 'var(--cth-ink-500)', marginBottom: 6 }}>{title}</div>
       {children}
     </div>
   );

@@ -193,14 +193,14 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       }}>
       {dragOver && (
         <span style={{
-          fontFamily: 'var(--cth-font-display)', fontSize: 9, lineHeight: '12px',
+          fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '12px',
           color: 'var(--cth-ink-700)', textAlign: 'center'
         }}>DROP TO ATTACH</span>
       )}
       {/* Header: label, count, status, clear-all */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
-          fontFamily: 'var(--cth-font-display)',
+          fontFamily: 'var(--cth-font-ui)',
           fontSize: 9, lineHeight: '12px',
           color: 'var(--cth-ink-700)'
         }}>MESSAGE {agent.name.toUpperCase()}</span>
@@ -666,7 +666,7 @@ function FreeFlowButton({ agentId, hasGroqKey }: { agentId: string; hasGroqKey: 
               }}
             >
               <span style={{
-                fontFamily: 'var(--cth-font-display)', fontSize: 9, letterSpacing: 0.5,
+                fontFamily: 'var(--cth-font-ui)', fontSize: 9, letterSpacing: 0.5,
                 textTransform: 'uppercase', color: 'var(--cth-ink-500)'
               }}>Set up dictation</span>
 

@@ -47,14 +47,14 @@ const inputStyle: CSSProperties = {
   outline: 'none'
 };
 const labelStyle: CSSProperties = {
-  fontFamily: 'var(--cth-font-display)',
+  fontFamily: 'var(--cth-font-ui)',
   fontSize: 8,
   lineHeight: '12px',
   color: 'var(--cth-ink-700)',
   textTransform: 'uppercase'
 };
 const headStyle: CSSProperties = {
-  fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+  fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
   color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
 };
 const linkStyle: CSSProperties = { color: 'var(--cth-ink-900)', textDecoration: 'underline', cursor: 'pointer' };

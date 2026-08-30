@@ -375,7 +375,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
           background: 'var(--cth-paper-100)',
           boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)'
         }}>
-          <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 9, color: 'var(--cth-ink-500)' }}>Add checklist item</div>
+          <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 9, color: 'var(--cth-ink-500)' }}>Add checklist item</div>
           <input
             value={draftText}
             onChange={(e) => setDraftText(e.target.value)}
@@ -429,7 +429,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
         alignItems: 'center'
       }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 9, color: 'var(--cth-ink-500)' }}>your initials</span>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 9, color: 'var(--cth-ink-500)' }}>your initials</span>
           <input
             value={verifier}
             onChange={(e) => setVerifier(e.target.value)}
