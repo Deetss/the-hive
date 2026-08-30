@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '@/store/store';
 import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTelemetry';
 import { useRateLimits, ratePaceColor, fmtReset } from '@/hooks/useRateLimits';
-import type { RuntimeProfile } from '@/store/config';
+import { inferAgentProvider, providerPreset, type RuntimeProfile } from '@/store/config';
 
 /**
  * Persistent bottom status line: live hive+fleet state at a glance.
  *
  * Reads the SAME sources the rest of the app already uses: the zustand roster
- * (`agents`, `godStatus`, `messageQueues`) and the OTel telemetry hook
+ * (`agents`, `messageQueues`) and the OTel telemetry hook
  * (`useFleetTelemetry`: per-agent usage samples + breaker state). No new IPC:
  * everything here is already streamed to the renderer.
  *
@@ -18,9 +18,8 @@ import type { RuntimeProfile } from '@/store/config';
  * tooltip says so.
  *
  * Parity with Dylan's CC statusline-command.sh (fleet-adapted):
- *   ctx bar: 4-cell █/░ glyph, <50 green / 50-79 yellow / >=80 red (his thresholds)
- *   model: selected agent's model id, truncated before any ' ('
- *   dir:branch: selected agent's cwd basename + git branch (async)
+ *   engine/model: selected agent's engine (Claude / Codex / agy / Antigravity) + model
+ *   dir:branch: selected agent's cwd basename + git branch (async, compact)
  *   5h/7d rate limits: hooks.ts reads rate_limits from the CC status JSON and pushes
  *     via hive:rateLimitsUpdate. Chips render when CC includes the field (non-zero usage).
  *   WORK/PERSONAL badge: derived from CLAUDE_CONFIG_DIR basename via getConfig().accountBadge.
@@ -83,7 +82,6 @@ const tail = (p: string) => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? p;
 export function StatusBar() {
   const agents = useStore((s) => s.agents);
   const selectedId = useStore((s) => s.selectedId);
-  const godStatus = useStore((s) => s.godStatus);
   const messageQueues = useStore((s) => s.messageQueues);
   const { samples, rate, breakers } = useFleetTelemetry();
   const rateLimits = useRateLimits();
@@ -115,9 +113,22 @@ export function StatusBar() {
 
   // Selected agent (or god as fallback) for per-agent context chips.
   const focusAgent = useMemo(
-    () => agents.find((a) => a.id === selectedId) ?? agents.find((a) => a.isOvermind) ?? null,
+    () => agents.find((a) => a.id === selectedId) ?? agents.find((a) => a.isOvermind) ?? agents[0] ?? null,
     [agents, selectedId]
   );
+
+  // Engine and model clarity: primary information for the active/focused agent.
+  const engineInfo = useMemo(() => {
+    if (!focusAgent) return null;
+    const provider = inferAgentProvider(focusAgent.command, focusAgent.provider);
+    const preset = providerPreset(provider);
+    const engineName = preset.label;
+    const rawModel = focusAgent.model || '';
+    const modelName = rawModel
+      ? rawModel.replace(/^claude-3-5-/, '').replace(/^claude-3-7-/, '').replace(/^claude-3-/, '').replace(/^gemini-2\.5-/, '').replace(/^gpt-/, '')
+      : 'default';
+    return { engineName, modelName, rawModel: rawModel || 'default' };
+  }, [focusAgent]);
 
   // Resolve the badge for the currently focused agent.
   // Uses its profileId → runtimeProfiles.claudeConfigDir if available;
@@ -214,8 +225,6 @@ export function StatusBar() {
     return { worstFiveHour: fh, worstSevenDay: sd };
   }, [rateLimits, live, displayBadge, runtimeProfiles, accountBadge]);
 
-  const godColor = godStatus === 'ready' ? 'var(--cth-mint)'
-    : godStatus === 'failed' ? 'var(--cth-coral)' : 'var(--cth-lemon)';
   const health: Health = worst?.level ?? 'healthy';
 
   return (
@@ -224,7 +233,7 @@ export function StatusBar() {
       aria-label="Hive status"
       style={{
         height: 26, minHeight: 26, flexShrink: 0,
-        background: 'linear-gradient(180deg, var(--cth-cream-200) 0%, var(--cth-cream-100) 100%)',
+        background: 'var(--cth-paper-100)',
         borderTop: '1px solid var(--cth-ink-300)',
         display: 'flex', alignItems: 'center', gap: 0,
         padding: '0 12px',
@@ -245,15 +254,27 @@ export function StatusBar() {
         </>
       )}
 
-      <Chip title={`Orchestrator: ${godStatus}`}>
-        <Dot color={godColor} />
-        <span style={{ color: 'var(--cth-ink-500)' }}>hive</span>
-      </Chip>
+      {engineInfo && (
+        <>
+          <Chip title={`Engine: ${engineInfo.engineName} · Model: ${engineInfo.rawModel}${focusAgent ? ` (${focusAgent.name})` : ''}`}>
+            <span style={{ fontWeight: 600, color: 'var(--cth-ink-900)' }}>
+              {engineInfo.engineName}
+            </span>
+            <span style={{ color: 'var(--cth-ink-400)', fontSize: 10 }}>·</span>
+            <span style={{ color: 'var(--cth-ink-800)' }}>
+              {engineInfo.modelName}
+            </span>
+          </Chip>
+          <Sep />
+        </>
+      )}
 
       {focusAgent && (
         <>
-          <Sep />
-          <Chip title={`${focusAgent.name} · ${focusAgent.worktreePath ?? focusAgent.cwd}`}>
+          <Chip
+            title={`${focusAgent.name} · ${focusAgent.worktreePath ?? focusAgent.cwd}`}
+            style={{ padding: '0 6px', fontSize: 11 }}
+          >
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-sky)' }}>
               {tail(focusAgent.worktreePath ?? focusAgent.cwd)}
             </span>
@@ -264,6 +285,7 @@ export function StatusBar() {
               </>
             )}
           </Chip>
+          <Sep />
         </>
       )}
 
@@ -377,12 +399,12 @@ export function StatusBar() {
   );
 }
 
-function Chip({ children, title, onClick }: { children: React.ReactNode; title?: string; onClick?: () => void }) {
+function Chip({ children, title, onClick, style }: { children: React.ReactNode; title?: string; onClick?: () => void; style?: React.CSSProperties }) {
   return (
     <span
       title={title}
       onClick={onClick}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 10px', whiteSpace: 'nowrap', cursor: onClick ? 'pointer' : undefined }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 8px', whiteSpace: 'nowrap', cursor: onClick ? 'pointer' : undefined, ...style }}
     >
       {children}
     </span>
