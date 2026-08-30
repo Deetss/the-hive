@@ -191,16 +191,33 @@ type BrowserBridgeInvokeMessage = Extract<BrowserBridgeInbound, { type: 'invoke'
 
 function setupBrowserSocketServer(server: HttpServer): void {
   if (browserSocketServer) return;
+  const dbgLog = (line: string): void => { try { writeFileSync(join(resolveHarnessHome() ?? tmpdir(), 'bridge-debug.log'), `[${Date.now()}] ${line}\n`, { flag: 'a' }); } catch { /* ignore */ } };
+
+  // Intercept upgrade requests to log Chrome's headers and monitor raw socket data.
+  // Must be registered before ws attaches its own upgrade listener.
+  server.on('upgrade', (req, socket, head) => {
+    const ext = req.headers['sec-websocket-extensions'] ?? '(none)';
+    const origin = req.headers['origin'] ?? '(none)';
+    dbgLog(`UPGRADE path=${req.url} ext="${ext}" origin="${origin}" headLen=${(head as Buffer).length}`);
+    // Monitor raw socket data to see if data arrives at the TCP level.
+    const rawListener = (chunk: Buffer) => {
+      dbgLog(`RAW_DATA len=${chunk.length} bytes=${chunk.slice(0, 4).toString('hex')}`);
+    };
+    socket.on('data', rawListener);
+    // Remove our monitor after 10s (once ws takes over it no longer matters).
+    setTimeout(() => { try { socket.removeListener('data', rawListener); } catch { /* ignore */ } }, 10_000);
+  });
+
   const wss = new WebSocket.Server({ server, path: '/bridge', perMessageDeflate: false });
   browserSocketServer = wss;
   wss.on('connection', (socket: WebSocket) => {
     const client: BrowserBridgeClient = { socket, subscriptions: new Set(), id: ++browserBridgeClientSeq };
     browserBridgeClients.add(client);
-    try { writeFileSync(join(resolveHarnessHome() ?? tmpdir(), 'bridge-debug.log'), `[${Date.now()}] CONNECT id=${client.id} handlers=${browserInvokeHandlers.size} hasConfigGet=${browserInvokeHandlers.has('config:get')}\n`, { flag: 'a' }); } catch { /* ignore */ }
+    dbgLog(`CONNECT id=${client.id} handlers=${browserInvokeHandlers.size} hasConfigGet=${browserInvokeHandlers.has('config:get')}`);
     browserBridgeSend(client, { type: 'hello', version: 1 });
     socket.on('message', (data: WebSocket.Data) => { handleBrowserClientMessage(client, data); });
-    socket.on('close', () => { browserBridgeClients.delete(client); });
-    socket.on('error', (err: Error) => { console.error('[browser-bridge] client error:', err); });
+    socket.on('close', () => { browserBridgeClients.delete(client); dbgLog(`CLOSE id=${client.id}`); });
+    socket.on('error', (err: Error) => { console.error('[browser-bridge] client error:', err); dbgLog(`ERROR id=${client.id} ${err.message}`); });
   });
   wss.on('error', (err: Error) => { console.error('[browser-bridge] server error:', err); });
   wss.on('close', () => {
@@ -267,6 +284,7 @@ function normalizeBridgeData(data: WebSocket.Data): string {
 }
 
 function handleBrowserClientMessage(client: BrowserBridgeClient, raw: WebSocket.Data): void {
+  try { writeFileSync(join(resolveHarnessHome() ?? tmpdir(), 'bridge-debug.log'), `[${Date.now()}] MSG_ENTRY id=${client.id} rawType=${typeof raw} isBuffer=${Buffer.isBuffer(raw)}\n`, { flag: 'a' }); } catch { /* ignore */ }
   let parsed: BrowserBridgeInbound;
   try {
     parsed = JSON.parse(normalizeBridgeData(raw)) as BrowserBridgeInbound;
