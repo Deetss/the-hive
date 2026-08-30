@@ -204,6 +204,16 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
         await restartAgent(nextCommand, activeProfile, trimmedName, trimmedDescription);
       }
 
+      if (engineChanged && window.cth.hivePatchAgentEngine) {
+        const persist = await window.cth.hivePatchAgentEngine(agent.id, {
+          provider,
+          profileId: profileId ?? null
+        });
+        if (!persist?.ok) {
+          throw new Error(persist?.error ?? 'Failed to persist engine changes to the hive registry.');
+        }
+      }
+
       updateAgent(agent.id, {
         name: trimmedName,
         character,
