@@ -1426,6 +1426,22 @@ async function enableCodexRemoteForSpawn(
 /** Live PTY id → its hive agent id, recorded at spawn. The pty:kill handler only
  *  gets the PTY id, so this lets a closed tab archive the right registry agent. */
 const ptyToAgent = new Map<string, string>();
+/** Rate-limit timestamps for fleet.json writes triggered by PTY activity. */
+const lastFleetWriteMs = new Map<string, number>();
+/** Epoch ms of the latest PTY stdout activity per agent. */
+const lastAgentPtyActivityMs = new Map<string, number>();
+
+function notifyAgentPtyActivity(ptyId: string): void {
+  const agentId = ptyToAgent.get(ptyId);
+  if (!agentId) return;
+  const now = Date.now();
+  lastAgentPtyActivityMs.set(agentId, now);
+  const lastWrite = lastFleetWriteMs.get(agentId) ?? 0;
+  if (now - lastWrite >= 2000) {
+    lastFleetWriteMs.set(agentId, now);
+    writeFleetSnapshot();
+  }
+}
 /** PTY id → the spawn it should auto restart-and-continue into once a first-time
  *  CLI install finishes. The missing-CLI short-circuit runs the engine's installer
  *  in this PTY; when it exits cleanly the exit handler re-runs the SAME spawn (with
@@ -1705,6 +1721,8 @@ function teardownPty(id: string): void {
   const agentId = ptyToAgent.get(id);
   if (agentId) {
     ptyToAgent.delete(id);
+    lastFleetWriteMs.delete(agentId);
+    lastAgentPtyActivityMs.delete(agentId);
     // Drop watchdog state so a dead agent can't get nudged or leak its grace.
     try { workerWake.forget(agentId, id); } catch { /* best-effort */ }
     // Drop breaker state so a dead agent can't leak/zombie a tripped level.
@@ -1747,6 +1765,7 @@ function teardownPty(id: string): void {
     try { liveWebContents()?.send('hive:agentArchived', { id }); } catch { /* window torn down */ }
   }
   syncKeepAwake();
+  writeFleetSnapshot();
 }
 
 /** Send an inform to the god agent (the human's proxy). The ephemeral-worker
@@ -1853,6 +1872,10 @@ ptyManager.setExitHandler((id, exitCode) => {
     // Non-zero exit = install failed; leave its honest manual-fix message on screen.
   }
   teardownPty(id);
+});
+
+ptyManager.setDataHandler((id) => {
+  notifyAgentPtyActivity(id);
 });
 
 /** Keep the system from suspending the harness while agents are running.
@@ -2477,6 +2500,10 @@ function writeFleetSnapshot(): void {
         // fall back to the session figure rather than publishing a cold $0.
         const lifetime = costTotals.usdFor(id);
         const sessionUsd = u ? Number(u.usd.toFixed(4)) : 0;
+        const ptyId = ptyForAgent(id);
+        const ptyLastOutput = ptyId ? ptyManager.lastOutputAt(ptyId) : undefined;
+        const lastPty = Math.max(ptyLastOutput ?? 0, lastAgentPtyActivityMs.get(id) ?? 0);
+        const lastActiveMs = Math.max(u?.ts ?? 0, lastPty);
         return {
           id,
           name: a.name,
@@ -2488,7 +2515,7 @@ function writeFleetSnapshot(): void {
           usd: lifetime === null ? sessionUsd : Number(lifetime.toFixed(4)),
           sessionUsd,
           lastTool: spans.length ? spans[spans.length - 1].tool : null,
-          lastActiveSecAgo: u ? Math.round((now - u.ts) / 1000) : null,
+          lastActiveSecAgo: lastActiveMs > 0 ? Math.round((now - lastActiveMs) / 1000) : null,
           inboxBacklog: hive.inboxBacklog(id),
           onHold: !!a.onHold,
           profileId: a.profileId ?? null

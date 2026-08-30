@@ -338,6 +338,7 @@ export class PtyManager {
    *  (archive, worktree removal, map cleanup) that the explicit kill() path
    *  runs. Best-effort — set once by the main process. */
   private exitHandler: ((id: string, exitCode?: number) => void) | null = null;
+  private dataHandler: ((id: string, data: string) => void) | null = null;
 
   /** The default/fallback output sink — set to the PRIMARY window. Used only for
    *  sessions with no recorded owner; owned sessions route to their owner. */
@@ -375,6 +376,11 @@ export class PtyManager {
    *  install → auto restart-and-continue) from a crash. */
   setExitHandler(handler: (id: string, exitCode?: number) => void): void {
     this.exitHandler = handler;
+  }
+
+  /** Register the PTY stdout data callback. Invoked when a PTY emits stdout. */
+  setDataHandler(handler: (id: string, data: string) => void): void {
+    this.dataHandler = handler;
   }
 
   /** Send to the renderer only if it's still alive. During app quit, killing a
@@ -719,6 +725,7 @@ export class PtyManager {
         }
         // Route to the session's owner window (multi-window owner routing).
         this.safeSend(`pty:data:${opts.id}`, data, session.owner);
+        try { this.dataHandler?.(opts.id, data); } catch { /* never throw out of onData */ }
       });
       proc.onExit(({ exitCode, signal }) => {
         // Stale exit from a process whose id was reclaimed (kill()+respawn) — do
@@ -826,6 +833,7 @@ export class PtyManager {
    *  trees die without us SIGKILLing mid-cleanup. */
   killAll() {
     this.exitHandler = null;
+    this.dataHandler = null;
     const sweepNow = process.platform === 'win32';
     for (const s of this.sessions.values()) {
       const pid = s.proc.pid;
