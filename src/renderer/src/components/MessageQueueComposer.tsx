@@ -203,7 +203,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
           fontFamily: 'var(--cth-font-display)',
           fontSize: 9, lineHeight: '12px',
           color: 'var(--cth-ink-700)'
-        }}>QUEUE</span>
+        }}>MESSAGE {agent.name.toUpperCase()}</span>
         {queue.length > 0 && (
           <span style={{
             fontSize: 11, padding: '1px 6px 0',
@@ -337,7 +337,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
           onKeyDown={onKey}
           onPaste={onPaste}
           rows={5}
-          placeholder={idle ? `Message ${agent.name}` : `${agent.name} is busy — queue a message`}
+          placeholder={idle ? `Message ${agent.name}…` : `Message ${agent.name}… (queued — delivers when ready)`}
           style={{
             width: '100%',
             resize: 'vertical',
@@ -373,7 +373,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
           {freeflowEnabled && <FreeFlowButton agentId={agent.id} hasGroqKey={hasGroqKey} />}
           <PixelButton variant="primary" size="sm" onClick={queueIt} disabled={!canSend}>
             <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-              send <Icon name="arrow-right" />
+              {idle ? 'send' : 'queue'} <Icon name="arrow-right" />
             </span>
           </PixelButton>
         </div>
