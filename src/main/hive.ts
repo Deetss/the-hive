@@ -1716,7 +1716,7 @@ export class HiveManager {
   // — router: drain outboxes → inboxes —
 
   /** Poll-based router. Cheap and robust vs fs.watch quirks on macOS. */
-  startRouter(intervalMs = 1500): void {
+  startRouter(intervalMs = 500): void {
     if (this.routerTimer || !this.enabled()) return;
     this.routerTimer = setInterval(() => {
       try { this.routeOnce(); } catch { /* keep the loop alive */ }
