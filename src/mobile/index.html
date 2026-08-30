@@ -3,39 +3,87 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#121214">
+<meta name="theme-color" content="#17171B">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>TheHive Remote</title>
 <link rel="manifest" href="/mobile/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #121214;
-    --card: #1e1e22;
-    --card2: #26262c;
-    --border: #333338;
-    --accent: #75ff8a;
-    --accent-dim: #3a7a45;
-    --text: #e8e8ec;
-    --text-dim: #888890;
-    --text-muted: #55555d;
-    --red: #ff5a5a;
-    --yellow: #f5c842;
-    --blue: #5ab4ff;
-    --purple: #b06aff;
-    --nav-h: 64px;
-    --header-h: 56px;
+    /* ── TheHive Design Tokens (Dark theme parity) ── */
+    --cth-cream-50:  #17171B;   /* app ground */
+    --cth-cream-100: #1D1D22;   /* panels, header, nav bar */
+    --cth-cream-200: #26262C;   /* inputs, tabs, secondary controls */
+    --cth-cream-300: #313139;   /* disabled fills, elevated borders */
+    --cth-paper-100: #1A1A1F;   /* cards, input backgrounds */
+    --cth-paper-200: #222229;   /* container backgrounds */
+
+    /* Ink → off-white text ramp */
+    --cth-ink-900: #DEDBD6;   /* primary text, warm off-white */
+    --cth-ink-700: #B3B0AC;   /* secondary text */
+    --cth-ink-500: #96919F;   /* tertiary / hints / metadata */
+    --cth-ink-300: #787684;   /* structural borders */
+    --cth-ink-100: #3E3D46;   /* dividers / subtle insets */
+
+    /* Accents (dark-calibrated) */
+    --cth-coral:       #E08C82;   --cth-coral-light: #3B2724;
+    --cth-mint:        #74C096;   --cth-mint-light:  #1E3227;
+    --cth-sky:         #6FB3C4;   --cth-sky-light:   #1F3238;
+    --cth-lemon:       #CFAA57;   --cth-lemon-light: #332C1D;
+    --cth-lilac:       #A896E3;   --cth-lilac-light: #2B2740;
+    --cth-peach:       #DFA57F;   --cth-peach-light: #352822;
+
+    /* Status indicators */
+    --cth-status-idle:       #6F6C77;
+    --cth-status-thinking:   #64ACBB;
+    --cth-status-working:    #D8B052;
+    --cth-status-waiting:    #8095DC;
+    --cth-status-blocked:    #DF8078;
+    --cth-status-success:    #6FB88B;
+    --cth-status-ghost:      #6C6A76;
+    --cth-status-compacting: #9D8BD2;
+    --cth-status-looping:    #D69A55;
+    --cth-status-typing:     #CBA24A;
+
+    /* Fonts */
+    --cth-font-display: "Press Start 2P", monospace;
+    --cth-font-ui:      "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --cth-font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    /* Common Aliases */
+    --bg: var(--cth-cream-50);
+    --card: var(--cth-paper-100);
+    --card2: var(--cth-cream-200);
+    --border: var(--cth-ink-300);
+    --border-subtle: var(--cth-ink-100);
+    --accent: var(--cth-lemon);
+    --text: var(--cth-ink-900);
+    --text-dim: var(--cth-ink-700);
+    --text-muted: var(--cth-ink-500);
+    --red: var(--cth-coral);
+    --yellow: var(--cth-lemon);
+    --blue: var(--cth-sky);
+    --purple: var(--cth-lilac);
+
+    /* Dimensions */
+    --nav-h: 56px;
+    --header-h: 50px;
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
   }
 
   html, body {
     height: 100%;
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    font-size: 15px;
+    font-family: var(--cth-font-ui);
+    font-size: 14px;
+    line-height: 1.4;
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
   }
@@ -44,83 +92,111 @@
   #app { display: flex; flex-direction: column; height: 100%; }
 
   header {
-    height: var(--header-h);
-    background: var(--card);
-    border-bottom: 1px solid var(--border);
+    height: calc(var(--header-h) + var(--safe-top));
+    background: var(--cth-cream-100);
+    box-shadow: inset 0 -1px 0 var(--cth-ink-300);
     display: flex;
     align-items: center;
-    padding: 0 12px;
+    padding: var(--safe-top) 10px 0;
     gap: 8px;
     flex-shrink: 0;
-    padding-top: env(safe-area-inset-top, 0px);
+    z-index: 50;
   }
 
   #machine-pill {
     display: flex;
     align-items: center;
     gap: 6px;
-    background: var(--card2);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 6px 12px;
+    background: var(--cth-paper-100);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    border-radius: 2px;
+    padding: 5px 10px;
     cursor: pointer;
     min-width: 0;
     flex: 1;
-    max-width: 220px;
+    max-width: 190px;
     -webkit-tap-highlight-color: transparent;
   }
-  #machine-pill:active { opacity: 0.7; }
-  #machine-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
-  #machine-status-dot.online { background: var(--accent); }
-  #machine-status-dot.offline { background: var(--red); }
-  #machine-label { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #machine-arrow { color: var(--text-muted); font-size: 10px; margin-left: auto; flex-shrink: 0; }
+  #machine-pill:active { background: var(--cth-cream-200); }
+  #machine-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 1px;
+    background: var(--cth-ink-500);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    flex-shrink: 0;
+  }
+  #machine-status-dot.online { background: var(--cth-mint); }
+  #machine-status-dot.offline { background: var(--cth-coral); }
+  #machine-label {
+    font-family: var(--cth-font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--cth-ink-900);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #machine-arrow { color: var(--cth-ink-500); font-size: 9px; margin-left: auto; flex-shrink: 0; }
 
   #header-title {
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    color: var(--accent);
+    font-family: var(--cth-font-display);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--cth-lemon);
     flex: 1;
     text-align: center;
+    text-transform: uppercase;
   }
 
   #spend-badge {
-    font-size: 12px;
-    color: var(--text-dim);
+    font-family: var(--cth-font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--cth-mint);
+    background: var(--cth-mint-light);
+    box-shadow: inset 0 0 0 1px var(--cth-mint);
+    padding: 3px 6px;
+    border-radius: 2px;
     white-space: nowrap;
     flex-shrink: 0;
   }
+  #spend-badge:empty { display: none; }
 
   #settings-btn {
-    background: none;
+    background: var(--cth-cream-200);
     border: none;
-    color: var(--text-dim);
-    font-size: 20px;
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    color: var(--cth-ink-700);
+    font-family: var(--cth-font-ui);
+    font-size: 15px;
     cursor: pointer;
-    padding: 8px;
+    padding: 4px 8px;
+    border-radius: 2px;
     flex-shrink: 0;
     -webkit-tap-highlight-color: transparent;
   }
-  #settings-btn:active { color: var(--accent); }
+  #settings-btn:active { background: var(--cth-lemon); color: var(--cth-ink-900); }
 
   #content {
     flex: 1;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    background: var(--cth-paper-200);
   }
 
-  .screen { display: none; padding: 12px; padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 12px); }
+  .screen { display: none; padding: 10px; padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 12px); }
   .screen.active { display: block; }
 
+  /* ── Bottom Navigation ── */
   nav {
     position: fixed;
     bottom: 0;
     left: 0; right: 0;
     height: calc(var(--nav-h) + var(--safe-bottom));
-    background: var(--card);
-    border-top: 1px solid var(--border);
+    background: var(--cth-cream-100);
+    box-shadow: inset 0 1px 0 var(--cth-ink-300);
     display: flex;
     padding-bottom: var(--safe-bottom);
     z-index: 100;
@@ -133,236 +209,538 @@
     align-items: center;
     justify-content: center;
     gap: 3px;
-    background: none;
+    background: transparent;
     border: none;
-    color: var(--text-muted);
+    color: var(--cth-ink-500);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     position: relative;
+    transition: background 70ms ease;
   }
-  .nav-btn.active { color: var(--accent); }
-  .nav-btn:active { opacity: 0.7; }
-  .nav-icon { font-size: 22px; line-height: 1; }
-  .nav-label { font-size: 10px; font-weight: 600; letter-spacing: 0.3px; }
+  .nav-btn.active {
+    background: var(--cth-paper-100);
+    color: var(--cth-ink-900);
+    box-shadow: inset 0 3px 0 var(--cth-lemon), inset 1px 0 0 var(--cth-ink-900), inset -1px 0 0 var(--cth-ink-900);
+  }
+  .nav-btn:active { opacity: 0.8; }
+  .nav-icon { font-size: 16px; line-height: 1; }
+  .nav-label {
+    font-family: var(--cth-font-display);
+    font-size: 7.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
 
   .nav-badge {
     position: absolute;
-    top: 6px;
+    top: 5px;
     right: calc(50% - 18px);
-    background: var(--red);
-    color: #fff;
-    font-size: 10px;
+    background: var(--cth-coral);
+    color: var(--cth-ink-900);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-900);
+    font-family: var(--cth-font-display);
+    font-size: 7px;
     font-weight: 700;
-    border-radius: 10px;
-    min-width: 16px;
-    height: 16px;
+    border-radius: 2px;
+    min-width: 14px;
+    height: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 4px;
+    padding: 0 3px;
   }
   .nav-badge[hidden] { display: none; }
 
-  /* ── Cards ── */
+  /* ── Cards & Panels ── */
   .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 10px;
+    background: var(--cth-paper-100);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300), 2px 2px 0 0 rgba(0,0,0,0.3);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    position: relative;
+  }
+  .card-god {
+    background: var(--cth-lilac-light);
+    box-shadow: inset 0 0 0 1px var(--cth-lilac), 2px 2px 0 0 rgba(0,0,0,0.3);
   }
 
   .card-header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
+    gap: 8px;
   }
 
-  /* ── Status dots ── */
-  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-  .dot-green { background: var(--accent); }
-  .dot-red { background: var(--red); }
-  .dot-yellow { background: var(--yellow); }
-  .dot-gray { background: var(--text-muted); }
+  /* ── Status Pixel Badges ── */
+  .pixel-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 6px 0;
+    background: var(--cth-cream-100);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    font-family: var(--cth-font-ui);
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--cth-ink-900);
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .pixel-badge-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--cth-ink-500);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    flex-shrink: 0;
+  }
 
-  /* ── Provider badges ── */
+  .badge-green { box-shadow: inset 0 0 0 1px var(--cth-mint); }
+  .badge-green .pixel-badge-dot { background: var(--cth-mint); }
+  .badge-yellow { box-shadow: inset 0 0 0 1px var(--cth-lemon); }
+  .badge-yellow .pixel-badge-dot { background: var(--cth-lemon); }
+  .badge-red { box-shadow: inset 0 0 0 1px var(--cth-coral); }
+  .badge-red .pixel-badge-dot { background: var(--cth-coral); }
+  .badge-gray { box-shadow: inset 0 0 0 1px var(--cth-ink-500); }
+  .badge-gray .pixel-badge-dot { background: var(--cth-ink-500); }
+
+  /* ── Provider Badges ── */
   .badge {
-    font-size: 10px;
+    font-family: var(--cth-font-mono);
+    font-size: 9px;
     font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 6px;
-    letter-spacing: 0.4px;
+    padding: 1px 5px;
+    border-radius: 2px;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
+    flex-shrink: 0;
   }
-  .badge-claude { background: #2a1f4a; color: #b06aff; }
-  .badge-codex { background: #1a3040; color: #5ab4ff; }
-  .badge-antigravity { background: #1a3320; color: var(--accent); }
-  .badge-cursor { background: #3a2010; color: #f5a442; }
-  .badge-default { background: var(--card2); color: var(--text-dim); }
+  .badge-claude { background: var(--cth-lilac-light); color: var(--cth-lilac); box-shadow: inset 0 0 0 1px var(--cth-lilac); }
+  .badge-codex { background: var(--cth-sky-light); color: var(--cth-sky); box-shadow: inset 0 0 0 1px var(--cth-sky); }
+  .badge-antigravity { background: var(--cth-mint-light); color: var(--cth-mint); box-shadow: inset 0 0 0 1px var(--cth-mint); }
+  .badge-cursor { background: var(--cth-peach-light); color: var(--cth-peach); box-shadow: inset 0 0 0 1px var(--cth-peach); }
+  .badge-default { background: var(--cth-cream-200); color: var(--cth-ink-500); box-shadow: inset 0 0 0 1px var(--cth-ink-300); }
 
-  /* ── Agent card ── */
-  .agent-name { font-size: 15px; font-weight: 700; flex: 1; }
-  .agent-role { font-size: 12px; color: var(--text-dim); }
+  /* ── Agent Card elements ── */
+  .avatar-box {
+    width: 26px;
+    height: 26px;
+    background: var(--cth-paper-100);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--cth-font-display);
+    font-size: 11px;
+    color: var(--cth-ink-900);
+    flex-shrink: 0;
+  }
+  .agent-name {
+    font-family: var(--cth-font-display);
+    font-size: 10px;
+    line-height: 14px;
+    color: var(--cth-ink-900);
+    text-transform: uppercase;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .boss-tag {
+    font-family: var(--cth-font-display);
+    font-size: 7px;
+    line-height: 11px;
+    background: var(--cth-lemon);
+    color: var(--cth-ink-900);
+    padding: 1px 4px 0;
+    box-shadow: inset 0 0 0 1px var(--cth-ink-900);
+    flex-shrink: 0;
+  }
+  .on-hold-tag {
+    font-family: var(--cth-font-display);
+    font-size: 7px;
+    line-height: 11px;
+    background: var(--cth-lemon);
+    color: var(--cth-ink-900);
+    padding: 1px 4px 0;
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    flex-shrink: 0;
+  }
+
+  .agent-role {
+    font-family: var(--cth-font-ui);
+    font-size: 11px;
+    line-height: 14px;
+    color: var(--cth-ink-500);
+    margin: 4px 0 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .agent-metrics {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    margin-top: 10px;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 4px 0;
+    background: var(--cth-cream-50);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-100);
   }
   .metric { text-align: center; }
-  .metric-val { font-size: 14px; font-weight: 700; }
-  .metric-label { font-size: 10px; color: var(--text-muted); }
+  .metric-val {
+    font-family: var(--cth-font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--cth-ink-900);
+  }
+  .metric-label {
+    font-family: var(--cth-font-display);
+    font-size: 7px;
+    color: var(--cth-ink-500);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
 
   .agent-tool {
-    font-size: 11px;
-    color: var(--text-dim);
+    font-family: var(--cth-font-mono);
+    font-size: 10px;
+    color: var(--cth-ink-500);
     margin-top: 6px;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
   }
-  .agent-tool-val { font-family: monospace; color: var(--accent); }
-
-  .on-hold-tag {
-    font-size: 10px;
-    background: #3a3010;
-    color: var(--yellow);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-weight: 600;
+  .agent-tool-val {
+    background: var(--cth-paper-200);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    color: var(--cth-ink-700);
+    padding: 1px 5px;
+    font-family: var(--cth-font-mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
   }
 
+  .context-gauge {
+    height: 4px;
+    width: 100%;
+    background: var(--cth-cream-200);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-100);
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .context-gauge-fill { height: 100%; background: var(--cth-lemon); }
+
+  /* ── Section Headers ── */
   .fleet-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
-    padding: 0 2px;
+    margin-bottom: 8px;
+    padding: 4px 2px;
+    border-bottom: 1px solid var(--cth-ink-300);
   }
-  .fleet-header-title { font-size: 13px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
-  .fleet-refresh-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 4px; -webkit-tap-highlight-color: transparent; }
+  .fleet-header-title {
+    font-family: var(--cth-font-display);
+    font-size: 8.5px;
+    color: var(--cth-ink-500);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+  }
+  .fleet-refresh-btn {
+    background: none;
+    border: none;
+    color: var(--cth-ink-500);
+    cursor: pointer;
+    font-family: var(--cth-font-mono);
+    font-size: 14px;
+    padding: 2px 6px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .fleet-refresh-btn:active { color: var(--cth-lemon); }
 
-  /* ── ASK ME ── */
-  .ask-item { margin-bottom: 12px; }
-  .ask-task-title { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
-  .ask-question { font-size: 15px; font-weight: 600; margin-bottom: 10px; line-height: 1.4; }
-  .ask-assignee { font-size: 12px; color: var(--accent); margin-bottom: 8px; }
+  /* ── ASK ME Screen ── */
+  .ask-item {
+    background: var(--cth-paper-100);
+    box-shadow: inset 0 0 0 1px var(--cth-sky), 2px 2px 0 0 rgba(0,0,0,0.3);
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+  .ask-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    background: var(--cth-sky);
+    box-shadow: inset 0 -1px 0 var(--cth-ink-700);
+  }
+  .ask-chip {
+    font-family: var(--cth-font-display);
+    font-size: 7px;
+    background: var(--cth-lemon);
+    color: var(--cth-ink-900);
+    padding: 1px 4px 0;
+    box-shadow: inset 0 0 0 1px var(--cth-ink-900);
+    flex-shrink: 0;
+  }
+  .ask-task-title {
+    font-family: var(--cth-font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--cth-ink-900);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .ask-assignee {
+    font-family: var(--cth-font-display);
+    font-size: 7px;
+    color: var(--cth-ink-900);
+    flex-shrink: 0;
+  }
+  .ask-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .ask-question {
+    font-family: var(--cth-font-mono);
+    font-size: 12.5px;
+    line-height: 17px;
+    color: var(--cth-ink-900);
+  }
 
-  .quick-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .quick-pills { display: flex; flex-wrap: wrap; gap: 5px; }
   .pill {
-    padding: 8px 14px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    background: var(--card2);
-    color: var(--text);
-    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: 2px;
+    border: none;
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300), 0 1px 0 var(--cth-ink-100);
+    background: var(--cth-cream-200);
+    color: var(--cth-ink-900);
+    font-family: var(--cth-font-ui);
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  .pill:active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .pill:active { background: var(--cth-lemon); color: var(--cth-ink-900); box-shadow: inset 0 0 0 1px var(--cth-ink-900); }
 
   .ask-input {
     width: 100%;
-    background: var(--card2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    color: var(--text);
-    font-size: 14px;
+    background: var(--cth-paper-100);
+    border: none;
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    border-radius: 0;
+    padding: 8px 10px;
+    color: var(--cth-ink-900);
+    font-family: var(--cth-font-mono);
+    font-size: 12.5px;
     resize: none;
-    margin-bottom: 8px;
-    font-family: inherit;
-    min-height: 60px;
+    min-height: 56px;
   }
-  .ask-input:focus { outline: none; border-color: var(--accent); }
+  .ask-input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--cth-ink-700); }
 
-  /* ── Buttons ── */
+  /* ── Buttons (PixelButton Parity) ── */
   .btn {
     width: 100%;
-    padding: 13px;
-    border-radius: 10px;
+    padding: 10px;
+    border-radius: 0;
     border: none;
-    font-size: 15px;
-    font-weight: 700;
+    font-family: var(--cth-font-display);
+    font-size: 8.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    user-select: none;
   }
-  .btn:active { opacity: 0.8; }
-  .btn-primary { background: var(--accent); color: #000; }
-  .btn-secondary { background: var(--card2); color: var(--text); border: 1px solid var(--border); }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary {
+    background: var(--cth-mint);
+    color: var(--cth-ink-900);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-900), 0 1px 0 var(--cth-ink-900);
+  }
+  .btn-secondary {
+    background: var(--cth-cream-200);
+    color: var(--cth-ink-900);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300), 0 1px 0 var(--cth-ink-100);
+  }
+  .btn-dark {
+    background: var(--cth-ink-900);
+    color: var(--cth-cream-50);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-900), 0 1px 0 var(--cth-ink-900);
+  }
+  .btn-dark:active { background: var(--cth-lemon); color: var(--cth-ink-900); }
 
   .btn-sm {
-    padding: 8px 16px;
-    border-radius: 8px;
-    border: none;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
+    padding: 5px 10px;
+    font-size: 8px;
   }
 
-  /* ── Tasks ── */
-  .tab-bar { display: flex; gap: 4px; margin-bottom: 12px; background: var(--card); border-radius: 10px; padding: 4px; }
+  /* ── Tasks Kanban Screen ── */
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+    background: var(--cth-paper-100);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    padding: 4px;
+  }
   .tab {
     flex: 1;
-    padding: 8px 4px;
-    border-radius: 7px;
+    padding: 6px 2px;
     border: none;
-    background: none;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 700;
+    background: transparent;
+    color: var(--cth-ink-500);
+    font-family: var(--cth-font-display);
+    font-size: 8px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     text-align: center;
   }
-  .tab.active { background: var(--card2); color: var(--text); }
-
-  .task-status-badge {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 5px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
+  .tab.active {
+    background: var(--tab-accent, var(--cth-lemon));
+    color: var(--cth-ink-900);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-900), 0 1px 0 var(--cth-ink-900);
   }
-  .status-doing { background: #1a3320; color: var(--accent); }
-  .status-blocked { background: #3a1010; color: var(--red); }
-  .status-todo { background: #1a1a30; color: var(--blue); }
-  .status-done { background: #222; color: var(--text-muted); }
 
-  .task-title { font-size: 14px; font-weight: 700; flex: 1; }
-  .task-assignee { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
-  .task-notes { font-size: 12px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .task-card {
+    background: var(--cth-paper-100);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-100), 1px 1px 0 rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: row;
+    margin-bottom: 8px;
+    padding: 0;
+  }
+  .task-accent-edge {
+    width: 4px;
+    background: var(--col-accent, var(--cth-lemon));
+    box-shadow: inset -1px 0 0 var(--cth-ink-700);
+    flex-shrink: 0;
+  }
+  .task-body {
+    padding: 8px 10px;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .task-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .task-title {
+    font-family: var(--cth-font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cth-ink-900);
+    line-height: 17px;
+    flex: 1;
+  }
+  .task-status-badge {
+    font-family: var(--cth-font-display);
+    font-size: 7px;
+    padding: 1px 4px 0;
+    background: var(--col-accent, var(--cth-lemon));
+    color: var(--cth-ink-900);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-900);
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .task-assignee {
+    font-family: var(--cth-font-display);
+    font-size: 7.5px;
+    color: var(--cth-ink-500);
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .task-notes {
+    font-family: var(--cth-font-ui);
+    font-size: 11.5px;
+    color: var(--cth-ink-700);
+    line-height: 16px;
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
   .task-notes.expanded { -webkit-line-clamp: unset; }
-  .task-expand { font-size: 11px; color: var(--accent); background: none; border: none; cursor: pointer; padding: 4px 0; display: block; }
+  .task-expand {
+    font-family: var(--cth-font-ui);
+    font-size: 11px;
+    color: var(--cth-sky);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 3px 0;
+    display: block;
+    text-align: left;
+  }
 
-  /* ── Dispatch ── */
-  .field { margin-bottom: 14px; }
-  .field label { display: block; font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
+  /* ── Dispatch Screen ── */
+  .section-title {
+    font-family: var(--cth-font-display);
+    font-size: 8.5px;
+    color: var(--cth-ink-500);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--cth-ink-300);
+  }
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-family: var(--cth-font-display);
+    font-size: 7.5px;
+    color: var(--cth-ink-500);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
   .field select, .field input[type=text], .field textarea {
     width: 100%;
-    background: var(--card2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px;
-    color: var(--text);
-    font-size: 14px;
-    font-family: inherit;
+    background: var(--cth-paper-100);
+    border: none;
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    border-radius: 0;
+    padding: 9px 10px;
+    color: var(--cth-ink-900);
+    font-family: var(--cth-font-mono);
+    font-size: 13px;
     -webkit-appearance: none;
   }
-  .field select:focus, .field input:focus, .field textarea:focus { outline: none; border-color: var(--accent); }
-  .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23888' d='M6 8L0 0h12z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
-  .field textarea { resize: none; min-height: 100px; }
+  .field select:focus, .field input:focus, .field textarea:focus {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--cth-ink-700);
+  }
+  .field select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%2396919F' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+  .field textarea { resize: none; min-height: 90px; }
 
-  /* ── Modals ── */
+  /* ── Modals & Sheets ── */
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.7);
+    background: rgba(0,0,0,0.75);
     z-index: 200;
     display: flex;
     align-items: flex-end;
@@ -371,38 +749,57 @@
   .modal-overlay[hidden] { display: none; }
 
   .modal-sheet {
-    background: var(--card);
-    border-radius: 20px 20px 0 0;
-    padding: 20px 16px;
+    background: var(--cth-cream-100);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300), 0 -4px 16px rgba(0,0,0,0.5);
+    padding: 16px 14px;
     width: 100%;
-    max-height: 80vh;
+    max-height: 85vh;
     overflow-y: auto;
   }
-  .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
-  .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
-  .modal-close { float: right; background: none; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer; margin-top: -4px; }
+  .modal-handle { width: 32px; height: 3px; background: var(--cth-ink-300); margin: 0 auto 12px; }
+  .modal-title {
+    font-family: var(--cth-font-display);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--cth-ink-900);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--cth-ink-300);
+  }
+  .modal-close {
+    float: right;
+    background: none;
+    border: none;
+    color: var(--cth-ink-500);
+    font-family: var(--cth-font-ui);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    margin-top: -3px;
+  }
 
-  /* ── Machine items ── */
+  /* ── Machine picker items ── */
   .machine-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 12px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    margin-bottom: 8px;
+    gap: 8px;
+    padding: 10px;
+    background: var(--cth-paper-100);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    margin-bottom: 6px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  .machine-item:active { background: var(--card2); }
-  .machine-item.active { border-color: var(--accent); }
-  .machine-info { flex: 1; }
-  .machine-name { font-size: 14px; font-weight: 700; }
-  .machine-url { font-size: 11px; color: var(--text-muted); }
-  .machine-ping { font-size: 11px; color: var(--text-muted); }
+  .machine-item:active { background: var(--cth-cream-200); }
+  .machine-item.active { box-shadow: inset 0 0 0 2px var(--cth-lemon); }
+  .machine-info { flex: 1; min-width: 0; }
+  .machine-name { font-family: var(--cth-font-ui); font-size: 13px; font-weight: 700; color: var(--cth-ink-900); }
+  .machine-url { font-family: var(--cth-font-mono); font-size: 10.5px; color: var(--cth-ink-500); }
+  .machine-ping { font-family: var(--cth-font-mono); font-size: 10px; color: var(--cth-mint); }
 
-  /* ── Setup screen ── */
-  #setup-screen {
+  /* ── Setup & Re-auth Screens ── */
+  #setup-screen, #reauth-screen {
     position: fixed;
     inset: 0;
     background: var(--bg);
@@ -411,25 +808,41 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 32px 24px;
+    padding: 24px 20px;
     text-align: center;
   }
-  #setup-screen[hidden] { display: none; }
-  .setup-logo { font-size: 64px; margin-bottom: 16px; }
-  .setup-title { font-size: 24px; font-weight: 800; color: var(--accent); margin-bottom: 8px; }
-  .setup-sub { font-size: 14px; color: var(--text-dim); margin-bottom: 32px; line-height: 1.6; }
-  .setup-form { width: 100%; max-width: 380px; text-align: left; }
+  #setup-screen[hidden], #reauth-screen[hidden] { display: none; }
+  .setup-logo { font-size: 48px; margin-bottom: 12px; }
+  .setup-title {
+    font-family: var(--cth-font-display);
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    color: var(--cth-lemon);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  .setup-sub {
+    font-family: var(--cth-font-ui);
+    font-size: 13px;
+    color: var(--cth-ink-700);
+    margin-bottom: 24px;
+    line-height: 1.5;
+    max-width: 320px;
+  }
+  .setup-form { width: 100%; max-width: 360px; text-align: left; }
 
-  /* ── Loading / Error states ── */
-  .empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
-  .empty-icon { font-size: 48px; margin-bottom: 12px; }
-  .empty-msg { font-size: 14px; }
+  /* ── Error & SSE Indicator ── */
+  .empty-state { text-align: center; padding: 40px 16px; color: var(--cth-ink-500); }
+  .empty-icon { font-size: 32px; margin-bottom: 8px; }
+  .empty-msg { font-family: var(--cth-font-mono); font-size: 12px; }
 
   .error-bar {
-    background: #3a1010;
-    color: var(--red);
-    padding: 10px 14px;
-    font-size: 13px;
+    background: var(--cth-coral-light);
+    color: var(--cth-coral);
+    box-shadow: inset 0 0 0 1px var(--cth-coral);
+    padding: 8px 12px;
+    font-family: var(--cth-font-mono);
+    font-size: 11.5px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -437,39 +850,17 @@
   .error-bar[hidden] { display: none; }
 
   .sse-indicator {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted);
+    width: 6px; height: 6px;
+    border-radius: 1px;
+    background: var(--cth-ink-500);
     display: inline-block;
     margin-right: 6px;
     flex-shrink: 0;
   }
-  .sse-indicator.connected { background: var(--accent); animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+  .sse-indicator.connected { background: var(--cth-mint); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
 
-  .section-title {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    margin: 16px 0 8px;
-  }
-
-  .spinner { text-align: center; padding: 24px; color: var(--text-muted); font-size: 24px; }
-
-  /* ── Re-auth screen ── */
-  #reauth-screen {
-    position: fixed;
-    inset: 0;
-    background: var(--bg);
-    z-index: 300;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 32px 24px;
-    text-align: center;
-  }
-  #reauth-screen[hidden] { display: none; }
+  .spinner { text-align: center; padding: 24px; color: var(--cth-ink-500); font-family: var(--cth-font-mono); font-size: 16px; }
 </style>
 </head>
 <body>
@@ -493,14 +884,14 @@
       <input type="text" id="setup-label" placeholder="Main Desktop">
     </div>
     <button class="btn btn-primary" id="setup-connect-btn">Connect</button>
-    <div id="setup-error" style="color:var(--red);font-size:13px;margin-top:10px;" hidden></div>
+    <div id="setup-error" style="color:var(--cth-coral);font-family:var(--cth-font-mono);font-size:11px;margin-top:8px;" hidden></div>
   </div>
 </div>
 
 <!-- ── Re-auth ── -->
 <div id="reauth-screen" hidden>
   <div class="setup-logo">🔒</div>
-  <div class="setup-title" style="color:var(--red)">Unauthorized</div>
+  <div class="setup-title" style="color:var(--cth-coral)">Unauthorized</div>
   <div class="setup-sub">The API secret was rejected. Update it or re-pair this machine.</div>
   <div class="setup-form">
     <div class="field">
@@ -530,40 +921,40 @@
   </div>
 
   <div id="content">
-    <!-- Fleet -->
+    <!-- Fleet Screen -->
     <section id="screen-fleet" class="screen active">
       <div class="fleet-header">
         <span class="fleet-header-title"><span class="sse-indicator" id="sse-dot"></span>Live Fleet</span>
         <button class="fleet-refresh-btn" id="fleet-refresh">↻</button>
       </div>
-      <div id="fleet-list"><div class="spinner">⟳</div></div>
+      <div id="fleet-list"><div class="spinner">⟳ loading…</div></div>
     </section>
 
-    <!-- Ask Me -->
+    <!-- Ask Me Screen -->
     <section id="screen-askme" class="screen">
       <div class="fleet-header">
         <span class="fleet-header-title">ASK ME</span>
         <button class="fleet-refresh-btn" id="askme-refresh">↻</button>
       </div>
-      <div id="askme-list"><div class="spinner">⟳</div></div>
+      <div id="askme-list"><div class="spinner">⟳ loading…</div></div>
     </section>
 
-    <!-- Tasks -->
+    <!-- Tasks Screen -->
     <section id="screen-tasks" class="screen">
       <div class="tab-bar" id="task-tabs">
-        <button class="tab active" data-status="doing">Doing</button>
-        <button class="tab" data-status="blocked">Blocked</button>
-        <button class="tab" data-status="todo">Todo</button>
-        <button class="tab" data-status="done">Done</button>
+        <button class="tab active" data-status="doing" style="--tab-accent: var(--cth-lemon);">Doing</button>
+        <button class="tab" data-status="blocked" style="--tab-accent: var(--cth-coral);">Blocked</button>
+        <button class="tab" data-status="todo" style="--tab-accent: var(--cth-sky);">Todo</button>
+        <button class="tab" data-status="done" style="--tab-accent: var(--cth-mint);">Done</button>
       </div>
-      <div id="task-list"><div class="spinner">⟳</div></div>
+      <div id="task-list"><div class="spinner">⟳ loading…</div></div>
     </section>
 
-    <!-- Dispatch -->
+    <!-- Dispatch Screen -->
     <section id="screen-dispatch" class="screen">
-      <div class="section-title">Send Message</div>
+      <div class="section-title">Dispatch via Abathur</div>
       <div class="field">
-        <label>To</label>
+        <label>Recipient</label>
         <select id="dispatch-to">
           <option value="god">Abathur (Overmind)</option>
           <option value="broadcast">Broadcast (all agents)</option>
@@ -583,10 +974,10 @@
       </div>
       <div class="field">
         <label>Message</label>
-        <textarea id="dispatch-body" placeholder="Write your message…"></textarea>
+        <textarea id="dispatch-body" placeholder="Describe the task for the fleet…"></textarea>
       </div>
-      <button class="btn btn-primary" id="dispatch-send">Dispatch Message</button>
-      <div id="dispatch-result" style="margin-top:10px;font-size:13px;" hidden></div>
+      <button class="btn btn-dark" id="dispatch-send">Dispatch Message</button>
+      <div id="dispatch-result" style="margin-top:8px;font-family:var(--cth-font-mono);font-size:11.5px;" hidden></div>
     </section>
   </div>
 
@@ -639,7 +1030,7 @@
       <input type="text" id="add-label" placeholder="Laptop">
     </div>
     <button class="btn btn-primary" id="add-machine-save">Save & Connect</button>
-    <div id="add-error" style="color:var(--red);font-size:13px;margin-top:8px;" hidden></div>
+    <div id="add-error" style="color:var(--cth-coral);font-family:var(--cth-font-mono);font-size:11px;margin-top:8px;" hidden></div>
   </div>
 </div>
 
@@ -748,9 +1139,8 @@ function updateMachineHeader() {
   if (!m) return;
   document.getElementById('machine-label').textContent = m.label;
   const dot = document.getElementById('machine-status-dot');
-  dot.className = 'dot ' + (m.status === 'online' ? 'dot-green' : m.status === 'offline' ? 'dot-red' : 'dot-gray');
-  document.getElementById('machine-status-dot').className = 'dot ' + (m.status === 'online' ? 'online' : m.status === 'offline' ? 'offline' : '');
-  document.getElementById('machine-status-dot').style.background = m.status === 'online' ? 'var(--accent)' : m.status === 'offline' ? 'var(--red)' : 'var(--text-muted)';
+  dot.className = 'dot ' + (m.status === 'online' ? 'online' : m.status === 'offline' ? 'offline' : '');
+  dot.style.background = m.status === 'online' ? 'var(--cth-mint)' : m.status === 'offline' ? 'var(--cth-coral)' : 'var(--cth-ink-500)';
 }
 
 async function pingMachine(m) {
@@ -834,35 +1224,47 @@ function renderFleet() {
 }
 
 function agentCard(a) {
-  const breakerColor = a.breaker === 'healthy' ? 'green' : a.breaker === 'armed' ? 'yellow' : 'red';
+  const isGod = a.isOvermind || a.id === 'god';
+  const badgeColorClass = a.breaker === 'healthy' ? 'badge-green' : (a.breaker === 'armed' || a.breaker === 'steering') ? 'badge-yellow' : 'badge-red';
+  const statusLabel = a.breaker === 'healthy' ? (a.status || 'idle') : (a.breaker || 'looping');
   const providerClass = { claude: 'badge-claude', codex: 'badge-codex', antigravity: 'badge-antigravity', cursor: 'badge-cursor' }[a.provider] || 'badge-default';
   const activeAgo = a.lastActiveSecAgo != null ? (a.lastActiveSecAgo < 60 ? a.lastActiveSecAgo + 's ago' : Math.floor(a.lastActiveSecAgo / 60) + 'm ago') : '—';
+  const initial = (a.name || a.id || 'A').charAt(0).toUpperCase();
+
   return `
-<div class="card">
+<div class="card ${isGod ? 'card-god' : ''}">
   <div class="card-header">
-    <span class="dot dot-${breakerColor}"></span>
+    <div class="avatar-box">${initial}</div>
     <span class="agent-name">${esc(a.name || a.id)}</span>
+    ${isGod ? '<span class="boss-tag">BOSS</span>' : ''}
+    <span class="pixel-badge ${badgeColorClass}">
+      <span class="pixel-badge-dot"></span>
+      ${esc(statusLabel)}
+    </span>
+    ${a.onHold ? '<span class="on-hold-tag">1:1</span>' : ''}
     <span class="badge ${providerClass}">${esc(a.provider || 'unknown')}</span>
-    ${a.onHold ? '<span class="on-hold-tag">ON HOLD</span>' : ''}
   </div>
-  <div class="agent-role">${esc(a.role || 'Worker')}</div>
+  <div class="agent-role">${esc(a.role || (isGod ? 'Overmind' : 'Worker'))}</div>
   <div class="agent-metrics">
     <div class="metric">
-      <div class="metric-val" style="color:var(--accent)">$${a.sessionUsd != null ? Number(a.sessionUsd).toFixed(2) : '—'}</div>
+      <div class="metric-val" style="color:var(--cth-mint)">$${a.sessionUsd != null ? Number(a.sessionUsd).toFixed(2) : '0.00'}</div>
       <div class="metric-label">Session</div>
     </div>
     <div class="metric">
-      <div class="metric-val">${a.tokens != null ? fmtNum(a.tokens) : '—'}</div>
+      <div class="metric-val">${a.tokens != null ? fmtNum(a.tokens) : '0'}</div>
       <div class="metric-label">Tokens</div>
     </div>
     <div class="metric">
-      <div class="metric-val">${a.inboxBacklog != null ? a.inboxBacklog : '—'}</div>
+      <div class="metric-val">${a.inboxBacklog != null ? a.inboxBacklog : '0'}</div>
       <div class="metric-label">Inbox</div>
     </div>
   </div>
   <div class="agent-tool">
-    <span>${activeAgo}</span>
-    ${a.lastTool ? `<span style="color:var(--text-muted)">·</span><span class="agent-tool-val">${esc(a.lastTool)}</span>` : ''}
+    <span>⏱ ${activeAgo}</span>
+    ${a.lastTool ? `<span style="color:var(--cth-ink-300)">·</span><span class="agent-tool-val">⌨ ${esc(a.lastTool)}</span>` : ''}
+  </div>
+  <div class="context-gauge" title="Context usage">
+    <div class="context-gauge-fill" style="width: ${Math.min(100, Math.max(5, (a.tokens || 0) % 100))}%"></div>
   </div>
 </div>`;
 }
@@ -891,7 +1293,7 @@ function renderAskMe() {
   const items = (askMeData || {}).items || [];
   const el = document.getElementById('askme-list');
   if (items.length === 0) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-msg">No pending questions</div></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🌿</div><div class="empty-msg">Nothing needs you right now</div></div>';
     return;
   }
   el.innerHTML = items.map((item, i) => askItem(item, i)).join('');
@@ -907,7 +1309,7 @@ function renderAskMe() {
       const ta = btn.previousElementSibling;
       const answer = ta.value.trim();
       if (!answer) return;
-      btn.textContent = '…';
+      btn.textContent = 'SENDING…';
       btn.disabled = true;
       try {
         await apiFetch(`/api/tasks/${item.taskId}/qa/${item.index}/answer`, {
@@ -915,25 +1317,32 @@ function renderAskMe() {
           body: JSON.stringify({ answer })
         });
         await loadAskMe();
-      } catch { btn.textContent = 'Submit'; btn.disabled = false; }
+      } catch { btn.textContent = 'SUBMIT ANSWER'; btn.disabled = false; }
     });
   });
 }
 
 function askItem(item, i) {
+  const kind = item.kind || 'question';
+  const chipLabel = kind === 'action' ? 'ACTION' : kind === 'review' ? 'REVIEW' : 'QUESTION';
   return `
 <div class="card ask-item">
-  <div class="ask-task-title">📋 ${esc(item.taskTitle || item.taskId)}</div>
-  ${item.assignee ? `<div class="ask-assignee">👾 ${esc(item.assignee)}</div>` : ''}
-  <div class="ask-question">${esc(item.question)}</div>
-  <div class="quick-pills">
-    <button class="pill" data-val="Yes">Yes</button>
-    <button class="pill" data-val="No">No</button>
-    <button class="pill" data-val="Approved">Approved</button>
-    <button class="pill" data-val="Proceed">Proceed</button>
+  <div class="ask-header">
+    <span class="ask-chip">${chipLabel}</span>
+    <span class="ask-task-title">${esc(item.taskTitle || item.taskId)}</span>
+    ${item.assignee ? `<span class="ask-assignee">${esc(item.assignee).toUpperCase()}</span>` : ''}
   </div>
-  <textarea class="ask-input ask-textarea" placeholder="Or type a custom reply…"></textarea>
-  <button class="btn btn-primary ask-submit" data-idx="${i}">Submit Answer</button>
+  <div class="ask-body">
+    <div class="ask-question">${esc(item.question)}</div>
+    <div class="quick-pills">
+      <button class="pill" data-val="Yes">Yes</button>
+      <button class="pill" data-val="No">No</button>
+      <button class="pill" data-val="Approved">Approved</button>
+      <button class="pill" data-val="Proceed">Proceed</button>
+    </div>
+    <textarea class="ask-input ask-textarea" placeholder="Type your answer…"></textarea>
+    <button class="btn btn-primary ask-submit" data-idx="${i}">Submit Answer</button>
+  </div>
 </div>`;
 }
 
@@ -968,16 +1377,19 @@ function renderTasks() {
 }
 
 function taskCard(t) {
-  const statusClass = { doing: 'status-doing', blocked: 'status-blocked', todo: 'status-todo', done: 'status-done' }[t.status] || 'status-todo';
+  const accentColor = { doing: 'var(--cth-lemon)', blocked: 'var(--cth-coral)', todo: 'var(--cth-sky)', done: 'var(--cth-mint)' }[t.status] || 'var(--cth-lemon)';
   return `
-<div class="card">
-  <div class="card-header">
-    <span class="task-title">${esc(t.title)}</span>
-    <span class="task-status-badge ${statusClass}">${t.status}</span>
+<div class="task-card" style="--col-accent: ${accentColor};">
+  <div class="task-accent-edge"></div>
+  <div class="task-body">
+    <div class="task-header-row">
+      <span class="task-title">${esc(t.title)}</span>
+      <span class="task-status-badge">${t.status}</span>
+    </div>
+    ${t.assignee ? `<div class="task-assignee">${esc(t.assignee).toUpperCase()}</div>` : ''}
+    ${t.notes ? `<div class="task-notes">${esc(t.notes)}</div><button class="task-expand">Show more</button>` : ''}
+    ${t.updatedAt ? `<div style="font-family:var(--cth-font-mono);font-size:10px;color:var(--cth-ink-500);margin-top:4px">${new Date(t.updatedAt).toLocaleDateString()}</div>` : ''}
   </div>
-  ${t.assignee ? `<div class="task-assignee">👾 ${esc(t.assignee)}</div>` : ''}
-  ${t.notes ? `<div class="task-notes">${esc(t.notes)}</div><button class="task-expand">Show more</button>` : ''}
-  ${t.updatedAt ? `<div style="font-size:11px;color:var(--text-muted);margin-top:6px">${new Date(t.updatedAt).toLocaleDateString()}</div>` : ''}
 </div>`;
 }
 
@@ -1017,25 +1429,25 @@ document.getElementById('dispatch-send').addEventListener('click', async () => {
   const body = document.getElementById('dispatch-body').value.trim();
   const result = document.getElementById('dispatch-result');
   result.hidden = true;
-  if (!subject || !body) { result.style.color = 'var(--red)'; result.textContent = 'Subject and message are required.'; result.hidden = false; return; }
+  if (!subject || !body) { result.style.color = 'var(--cth-coral)'; result.textContent = 'Subject and message are required.'; result.hidden = false; return; }
   try {
     const res = await apiFetch('/api/messages/send', {
       method: 'POST',
       body: JSON.stringify({ to, act, subject, body })
     });
     if (res.ok) {
-      result.style.color = 'var(--accent)';
-      result.textContent = '✓ Message dispatched';
+      result.style.color = 'var(--cth-mint)';
+      result.textContent = '✓ Message dispatched via Abathur';
       result.hidden = false;
       document.getElementById('dispatch-subject').value = '';
       document.getElementById('dispatch-body').value = '';
       setTimeout(() => { result.hidden = true; }, 3000);
     } else {
-      result.style.color = 'var(--red)';
+      result.style.color = 'var(--cth-coral)';
       result.textContent = 'Failed to send (' + res.status + ')';
       result.hidden = false;
     }
-  } catch (e) { if (e.message !== '401') { result.style.color = 'var(--red)'; result.textContent = 'Network error'; result.hidden = false; } }
+  } catch (e) { if (e.message !== '401') { result.style.color = 'var(--cth-coral)'; result.textContent = 'Network error'; result.hidden = false; } }
 });
 
 // ── Machine picker ────────────────────────────────────────────────
@@ -1052,7 +1464,7 @@ function renderMachineList() {
   const el = document.getElementById('machine-list');
   el.innerHTML = machines.map(m => `
 <div class="machine-item ${m.id === activeMachineId ? 'active' : ''}" data-id="${m.id}">
-  <div style="width:8px;height:8px;border-radius:50%;background:${m.status === 'online' ? 'var(--accent)' : m.status === 'offline' ? 'var(--red)' : 'var(--text-muted)'};flex-shrink:0"></div>
+  <div style="width:7px;height:7px;border-radius:1px;background:${m.status === 'online' ? 'var(--cth-mint)' : m.status === 'offline' ? 'var(--cth-coral)' : 'var(--cth-ink-500)'};box-shadow:inset 0 0 0 1px var(--cth-ink-300);flex-shrink:0"></div>
   <div class="machine-info">
     <div class="machine-name">${esc(m.label)}</div>
     <div class="machine-url">${esc(m.baseUrl)}</div>
@@ -1125,7 +1537,7 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function fmtNum(n) {
-  if (n == null) return '—';
+  if (n == null) return '0';
   if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
   if (n >= 1000) return (n/1000).toFixed(0) + 'k';
   return String(n);
