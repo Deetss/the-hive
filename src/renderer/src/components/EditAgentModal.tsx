@@ -67,18 +67,24 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
   }, [agent.id]);
 
   const pickProvider = (id: AgentProvider) => {
-    setProfileId(undefined);
     setProvider(id);
+    const profiles = config?.runtimeProfiles ?? [];
+    const currentProfile = profileId ? profiles.find((p) => p.id === profileId) : undefined;
+    const isCompatible = currentProfile && currentProfile.provider === id;
+    if (!isCompatible) {
+      setProfileId(undefined);
+    }
     if (!config) {
       setModel(undefined);
       return;
     }
-    const nextModel = isClaudeProvider(id) ? config.defaultModel : config.providerDefaultModels?.[id];
+    const nextModel = (isCompatible && currentProfile?.model)
+      ? currentProfile.model
+      : (isClaudeProvider(id) ? config.defaultModel : config.providerDefaultModels?.[id]);
     setModel(nextModel);
   };
 
   const selectModel = (id?: string) => {
-    setProfileId(undefined);
     setModel(id);
   };
 
@@ -102,6 +108,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
 
   const preset = providerPreset(provider);
   const runtimeProfiles = config?.runtimeProfiles ?? [];
+  const providerProfiles = runtimeProfiles.filter((p) => p.provider === provider);
   const selectedProfile = profileId ? runtimeProfiles.find((p) => p.id === profileId) : undefined;
 
   const resolveConfig = async (): Promise<HarnessConfig | null> => {
@@ -378,7 +385,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
                       }}
                     >
                       <option value="">Default account</option>
-                      {runtimeProfiles.map((p) => (
+                      {providerProfiles.map((p) => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                     </select>
