@@ -279,6 +279,53 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
   const [brkHardStop, setBrkHardStop] = useState<boolean>(breakerCfg.circuitBreaker?.hardStop === true);
   const [brkRepeated, setBrkRepeated] = useState(breakerCfg.circuitBreaker?.repeatedToolLimit != null ? String(breakerCfg.circuitBreaker.repeatedToolLimit) : '');
   const [brkErrStorm, setBrkErrStorm] = useState(breakerCfg.circuitBreaker?.errorStormLimit != null ? String(breakerCfg.circuitBreaker.errorStormLimit) : '');
+
+  // --- Governor (usage-cap pacing) ---
+  // Local shape only — the renderer's HarnessConfig mirror doesn't declare
+  // governorPolicy yet, and main/config.ts isn't importable here (outside the
+  // renderer tsconfig's program). Deliberately loose: only the leaves this
+  // panel edits, everything else round-trips through `raw` untouched.
+  interface GovernorWindowView { enabled?: boolean; absoluteBackstopPct?: number }
+  type GovernorPolicyView = {
+    manualOverride?: 'force-green';
+    global?: {
+      windows?: { fiveHour?: GovernorWindowView; sevenDay?: GovernorWindowView };
+      autoOffload?: { enabled?: boolean };
+    };
+  };
+  const [govPolicy, setGovPolicy] = useState<GovernorPolicyView>(
+    (config as HarnessConfig & { governorPolicy?: GovernorPolicyView }).governorPolicy ?? {}
+  );
+  const [govMode, setGovMode] = useState<'green' | 'yellow' | 'red'>('green');
+  const govFiveHour = govPolicy.global?.windows?.fiveHour ?? {};
+  const govSevenDay = govPolicy.global?.windows?.sevenDay ?? {};
+  const govAutoOffloadOn = govPolicy.global?.autoOffload?.enabled === true;
+  const govOverrideOn = govPolicy.manualOverride === 'force-green';
+  // Always writes the FULL governorPolicy object back — config:update's patch
+  // merge is a shallow `{ ...current, ...patch }` (config.ts writeConfig), so a
+  // patch carrying only the touched leaf would silently drop every sibling
+  // field (profiles, spawnGate, evaluation, …) already on disk.
+  const saveGovPolicy = (next: GovernorPolicyView) => {
+    setGovPolicy(next);
+    void window.cth.updateConfig({ governorPolicy: next } as Partial<HarnessConfig>);
+  };
+  const setGovFiveHour = (patch: Partial<GovernorWindowView>) => saveGovPolicy({
+    ...govPolicy,
+    global: { ...govPolicy.global, windows: { ...govPolicy.global?.windows, fiveHour: { ...govFiveHour, ...patch } } }
+  });
+  const setGovSevenDay = (patch: Partial<GovernorWindowView>) => saveGovPolicy({
+    ...govPolicy,
+    global: { ...govPolicy.global, windows: { ...govPolicy.global?.windows, sevenDay: { ...govSevenDay, ...patch } } }
+  });
+  const setGovAutoOffload = (enabled: boolean) => saveGovPolicy({
+    ...govPolicy,
+    global: { ...govPolicy.global, autoOffload: { ...govPolicy.global?.autoOffload, enabled } }
+  });
+  const setGovOverride = (forceGreen: boolean) => {
+    saveGovPolicy({ ...govPolicy, manualOverride: forceGreen ? 'force-green' : undefined });
+    void window.cth.setGovernorOverride(forceGreen ? 'force-green' : null);
+  };
+
   const saveBudget = async () => {
     const tokens = agentBudget.trim() === '' ? undefined : Number(agentBudget);
     const vel = velocityCeiling.trim() === '' ? undefined : Number(velocityCeiling);
@@ -494,6 +541,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
     window.cth.getMobileApiSecret().then((info) => {
       if (alive) setMobilePairing(info);
     }).catch(() => { /* mobile server not up yet — fallback link stays blank */ });
+    setGovPolicy((c as HarnessConfig & { governorPolicy?: GovernorPolicyView }).governorPolicy ?? {});
     window.cth.kgStatus().then((s) => { if (alive) setKgDocCount(s.docCount); })
       .catch(() => { /* status unavailable */ });
     // Hydrate live connection state + the persisted Request URL: the
@@ -523,8 +571,14 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
         if (s.url) setWebhookUrl(s.url);
       } catch { /* status unavailable - assume not listening */ }
     })();
+    window.cth.governorSnapshot().then((s) => { if (alive) setGovMode(s.mode); })
+      .catch(() => { /* governor not running yet */ });
     return () => { alive = false; };
   }, []);
+
+  // Live governor mode pushes (independent of the mount-effect's `alive` flag —
+  // this subscription needs its own unsub on unmount, not a one-shot fetch).
+  useEffect(() => window.cth.onGovernorMode((payload) => setGovMode(payload.mode)), []);
 
   // Draw the pairing QR into its container. Depends on `activeSection` too:
   // the container only exists in the DOM while Connections is the active tab,
@@ -1334,6 +1388,99 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <PixelButton variant="secondary" size="sm" onClick={saveBudget}>save</PixelButton>
                             {budgetNote && <span style={{ fontSize: 12, color: 'var(--cth-mint)' }}>{budgetNote}</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
+
+                      {/* Governor — paces spend against Anthropic's 5h/7d usage windows */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <div style={{
+                            fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                            color: 'var(--cth-ink-500)', textTransform: 'uppercase'
+                          }}>
+                            Governor
+                          </div>
+                          <span style={{
+                            fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '16px', padding: '2px 8px',
+                            color: 'var(--cth-paper-100)', textTransform: 'uppercase',
+                            background: govMode === 'red' ? 'var(--cth-coral)' : govMode === 'yellow' ? '#c98a1a' : 'var(--cth-mint-700, #1f7a4d)'
+                          }}>
+                            {govMode}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                          Paces spawns against Anthropic's 5-hour and 7-day usage windows — trips to YELLOW/RED and
+                          pauses spawning before a hard provider rate limit does it for you.
+                        </span>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                          {/* 5-hour window */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                            <PixelButton
+                              variant={govFiveHour.enabled !== false ? 'primary' : 'secondary'}
+                              size="sm"
+                              onClick={() => setGovFiveHour({ enabled: govFiveHour.enabled === false })}
+                            >
+                              5h: {govFiveHour.enabled !== false ? 'on' : 'off'}
+                            </PixelButton>
+                            <input
+                              type="range" min={5} max={100} step={5}
+                              value={govFiveHour.absoluteBackstopPct ?? 20}
+                              onChange={(e) => setGovFiveHour({ absoluteBackstopPct: Number(e.target.value) })}
+                              disabled={govFiveHour.enabled === false}
+                              style={{ width: 160 }}
+                            />
+                            <span style={{ fontSize: 12, color: 'var(--cth-ink-700)', minWidth: 90 }}>
+                              trip at {govFiveHour.absoluteBackstopPct ?? 20}% of limit
+                            </span>
+                          </div>
+                          {/* 7-day window */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                            <PixelButton
+                              variant={govSevenDay.enabled !== false ? 'primary' : 'secondary'}
+                              size="sm"
+                              onClick={() => setGovSevenDay({ enabled: govSevenDay.enabled === false })}
+                            >
+                              7d: {govSevenDay.enabled !== false ? 'on' : 'off'}
+                            </PixelButton>
+                            <input
+                              type="range" min={5} max={100} step={5}
+                              value={govSevenDay.absoluteBackstopPct ?? 80}
+                              onChange={(e) => setGovSevenDay({ absoluteBackstopPct: Number(e.target.value) })}
+                              disabled={govSevenDay.enabled === false}
+                              style={{ width: 160 }}
+                            />
+                            <span style={{ fontSize: 12, color: 'var(--cth-ink-700)', minWidth: 90 }}>
+                              trip at {govSevenDay.absoluteBackstopPct ?? 80}% of limit
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>Auto-offload</span>
+                              <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                                When RED, queue new spawns onto a fallback target instead of holding them.
+                              </span>
+                            </div>
+                            <PixelButton variant={govAutoOffloadOn ? 'primary' : 'secondary'} size="sm" onClick={() => setGovAutoOffload(!govAutoOffloadOn)}>
+                              {govAutoOffloadOn ? 'on' : 'off'}
+                            </PixelButton>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>Manual override</span>
+                              <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                                Force GREEN regardless of pace — for testing only. (A force-RED override isn't wired
+                                up yet; only auto/force-green exist end to end.)
+                              </span>
+                            </div>
+                            <PixelButton variant={govOverrideOn ? 'primary' : 'secondary'} size="sm" onClick={() => setGovOverride(!govOverrideOn)}>
+                              {govOverrideOn ? 'force-green' : 'auto'}
+                            </PixelButton>
                           </div>
                         </div>
                       </div>
