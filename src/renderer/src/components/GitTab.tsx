@@ -240,7 +240,7 @@ function StatusGroup({ label, entries }: {
           }}>{e.code === ' ' ? '·' : e.code}</span>
           <span style={{
             flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            fontFamily: 'var(--cth-font-mono)', fontSize: 13
+            fontFamily: 'var(--cth-font-ui)', fontSize: 13
           }} title={e.path}>{e.path}</span>
           <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>{statusLabel(e.code)}</span>
           <button

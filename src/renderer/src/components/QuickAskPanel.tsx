@@ -126,7 +126,7 @@ export function QuickAskPanel() {
           flex: 1, minHeight: 0, overflowY: 'auto',
           background: 'var(--cth-paper-200)', padding: 10,
           display: 'flex', flexDirection: 'column', gap: 10,
-          fontFamily: 'var(--cth-font-mono)'
+          fontFamily: 'var(--cth-font-ui)'
         }}
       >
         {entries.length === 0 && (
@@ -177,7 +177,7 @@ export function QuickAskPanel() {
           rows={2}
           style={{
             flex: 1, resize: 'none', background: 'transparent', border: 'none', outline: 'none',
-            fontFamily: 'var(--cth-font-mono)', fontSize: 13, lineHeight: '18px',
+            fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '18px',
             color: 'var(--cth-ink-900)', padding: '2px 0'
           }}
         />

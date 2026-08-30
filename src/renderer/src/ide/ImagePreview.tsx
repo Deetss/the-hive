@@ -46,14 +46,14 @@ export function ImagePreview({ root, rel, onCopyPath, onViewSource }: ImagePrevi
       <div style={ideBarStyle}>
         <Icon name="image" />
         <span
-          style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--cth-font-mono)' }}
+          style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--cth-font-ui)' }}
           title={rel}
         >{rel}</span>
 
         {/* Facts about the file, in the same muted register as the diff bar's
             HEAD → working tree label. Dimensions only exist once the image has
             actually decoded, so this stays honest about what is known. */}
-        <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-500)', whiteSpace: 'nowrap' }}>
+        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)', whiteSpace: 'nowrap' }}>
           {dims ? `${dims.w}×${dims.h}` : '—'}
           {img.status === 'ready' ? ` · ${formatBytes(img.size)}` : ''}
         </span>

@@ -131,7 +131,7 @@ export function FileTree({ root, activeRel, onOpenFile, onCopyPath }: FileTreePr
           {node.isDir ? (
             <span style={{
               width: 10, display: 'inline-block', textAlign: 'center',
-              fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-700)'
+              fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-700)'
             }}>
               {node.expanded ? '▾' : '▸'}
             </span>

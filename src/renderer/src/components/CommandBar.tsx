@@ -63,7 +63,7 @@ export function CommandBar({ accent, busy, blocked, onSend }: CommandBarProps) {
       <PixelPanel variant="inset" noPadding style={{ padding: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{
-            fontFamily: 'var(--cth-font-mono)',
+            fontFamily: 'var(--cth-font-ui)',
             fontSize: 18,
             color: `var(--cth-${accent})`,
             lineHeight: '20px',
@@ -80,7 +80,7 @@ export function CommandBar({ accent, busy, blocked, onSend }: CommandBarProps) {
               background: 'var(--cth-paper-100)',
               border: 'none',
               boxShadow: `inset 0 0 0 1px ${inputBorder}`,
-              fontFamily: 'var(--cth-font-mono)',
+              fontFamily: 'var(--cth-font-ui)',
               fontSize: 18,
               lineHeight: '20px',
               color: 'var(--cth-ink-900)',

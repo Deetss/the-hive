@@ -251,7 +251,7 @@ export function SkillsTab({ agentCwd }: { agentCwd?: string }) {
                     </div>
                   )}
                   <div style={{
-                    fontFamily: 'var(--cth-font-mono)', fontSize: 10.5,
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 10.5,
                     color: 'var(--cth-ink-500)', wordBreak: 'break-all'
                   }}>{s.path}</div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>

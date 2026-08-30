@@ -764,7 +764,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>New home folder</span>
                 <code style={{
-                  fontFamily: 'var(--cth-font-mono, monospace)', fontSize: 12,
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 12,
                   color: 'var(--cth-ink-900)', wordBreak: 'break-all'
                 }}>{changeHome}</code>
               </div>
@@ -924,7 +924,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                         <div style={{ display: 'flex', gap: 12, fontSize: 13, lineHeight: '20px', alignItems: 'center' }}>
                           <span style={{
                             flex: 1, color: 'var(--cth-ink-900)', wordBreak: 'break-all',
-                            fontFamily: 'var(--cth-font-mono, monospace)'
+                            fontFamily: 'var(--cth-font-ui)'
                           }}>{config.harnessHome ?? '—'}</span>
                           <PixelButton variant="secondary" size="sm" onClick={pickNewHome}>change...</PixelButton>
                         </div>
@@ -1462,7 +1462,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                   value={slackSecret}
                                   onChange={(e) => setSlackSecret(e.target.value)}
                                   placeholder="Slack app -> Basic Information -> Signing Secret"
-                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)' }}
                                 />
                               </label>
                               {/* Bot token: stays in main; never leaves the main process. */}
@@ -1473,7 +1473,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                   value={slackBotToken}
                                   onChange={(e) => setSlackBotToken(e.target.value)}
                                   placeholder="xoxb-..."
-                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)' }}
                                 />
                               </label>
                             </div>
@@ -1485,7 +1485,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                   value={slackChannel}
                                   onChange={(e) => setSlackChannel(e.target.value)}
                                   placeholder="C0123... or blank for any"
-                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)' }}
                                 />
                               </label>
                               <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 100 }}>
@@ -1495,7 +1495,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                   value={slackPort}
                                   onChange={(e) => setSlackPort(e.target.value)}
                                   placeholder="3847"
-                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)' }}
                                 />
                               </label>
                             </div>
@@ -1548,7 +1548,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                     readOnly
                                     value={tunnelUrl}
                                     onFocus={(e) => e.currentTarget.select()}
-                                    style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)', fontSize: 12 }}
+                                    style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)', fontSize: 12 }}
                                   />
                                   <PixelButton variant="secondary" size="sm" onClick={copyTunnel} disabled={!tunnelUrl}>copy</PixelButton>
                                 </div>
@@ -1690,7 +1690,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                       value={endpoint || 'starts once the webhook server is listening'}
                                       onFocus={(e) => e.currentTarget.select()}
                                       style={{
-                                        ...slackInputStyle, fontFamily: 'var(--cth-font-mono)', fontSize: 12,
+                                        ...slackInputStyle, fontFamily: 'var(--cth-font-ui)', fontSize: 12,
                                         color: endpoint ? 'var(--cth-ink-900)' : 'var(--cth-ink-500)'
                                       }}
                                     />
@@ -1712,7 +1712,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                       readOnly
                                       value={w.secret}
                                       onFocus={(e) => e.currentTarget.select()}
-                                      style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                                      style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)' }}
                                     />
                                     <PixelButton
                                       variant="secondary"
@@ -1810,7 +1810,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               onChange={(e) => { void applyOrg({ ...orgTrigger, apiKey: e.target.value }, false); }}
                               onBlur={() => { void applyOrg(orgTrigger); }}
                               placeholder="paste your organisation key"
-                              style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                              style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)' }}
                             />
                             <PixelButton
                               variant="secondary"
@@ -1902,7 +1902,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                   value={groqKey}
                                   onChange={(e) => setGroqKey(e.target.value)}
                                   placeholder="gsk_... (get a free key at console.groq.com)"
-                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)' }}
                                 />
                                 <PixelButton variant="secondary" size="sm" onClick={() => setShowGroqKey((v) => !v)} disabled={!groqKey}>
                                   {showGroqKey ? 'hide' : 'show'}
@@ -1916,7 +1916,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               <select
                                 value={freeflowModel}
                                 onChange={(e) => setFreeflowModel(e.target.value)}
-                                style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                                style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)' }}
                               >
                                 <option value="whisper-large-v3-turbo">whisper-large-v3-turbo (fast)</option>
                                 <option value="whisper-large-v3">whisper-large-v3 (accurate)</option>
@@ -1984,7 +1984,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                           </span>
                           <span style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-700)' }}>
                             Talking to Abathur runs on OpenAI&rsquo;s Realtime API — speech in, speech out, over a
-                            live connection to <strong style={{ fontFamily: 'var(--cth-font-mono)' }}>{REALTIME_MODEL}</strong>.
+                            live connection to <strong style={{ fontFamily: 'var(--cth-font-ui)' }}>{REALTIME_MODEL}</strong>.
                             That is a different service from the Claude subscription your agents run on, so it needs
                             its own <strong>OpenAI API key</strong>.
                           </span>
@@ -2001,7 +2001,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               onChange={(e) => setOpenAiVoiceKey(e.target.value)}
                               onKeyDown={(e) => { if (e.key === 'Enter') void saveOpenAiVoiceKey(); }}
                               placeholder={hasOpenAiKey ? 'key saved — paste a new one to replace it' : 'sk-…'}
-                              style={{ ...slackInputStyle, flex: 1, fontFamily: 'var(--cth-font-mono)' }}
+                              style={{ ...slackInputStyle, flex: 1, fontFamily: 'var(--cth-font-ui)' }}
                             />
                             <PixelButton
                               variant="secondary"
@@ -2041,7 +2041,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               setIdleDisconnectMs(v);
                               void window.cth.updateConfig({ realtimeIdleDisconnectMs: v });
                             }}
-                            style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                            style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)' }}
                           >
                             <option value="30000">30 seconds</option>
                             <option value="60000">1 minute</option>

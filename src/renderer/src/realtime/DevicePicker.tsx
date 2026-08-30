@@ -49,7 +49,7 @@ const labelStyle: React.CSSProperties = {
   textTransform: 'uppercase'
 };
 const selectStyle: React.CSSProperties = {
-  fontFamily: 'var(--cth-font-mono)',
+  fontFamily: 'var(--cth-font-ui)',
   fontSize: 12,
   padding: '6px 8px',
   border: '2px solid var(--cth-ink-300)',

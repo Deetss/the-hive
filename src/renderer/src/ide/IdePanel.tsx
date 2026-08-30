@@ -413,7 +413,7 @@ export function IdePanel() {
           </span>
         )}
         <span title={root ?? ''} style={{
-          fontFamily: 'var(--cth-font-mono)', fontSize: 13, color: 'var(--cth-ink-500)',
+          fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '30vw'
         }}>
           {root ? basename(root) : 'no workspace'}
@@ -473,7 +473,7 @@ export function IdePanel() {
                   // folds, and together they are a bigger hit target than the
                   // caret alone was.
                   display: 'flex', alignItems: 'center', gap: 3, width: 'auto', padding: '0 3px',
-                  fontFamily: 'var(--cth-font-mono)', fontSize: 10, lineHeight: '14px',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px',
                   color: 'var(--cth-ink-700)'
                 }}
               >
@@ -535,7 +535,7 @@ export function IdePanel() {
                       }}>{f.code === ' ' ? '·' : f.code}</span>
                       <span style={{
                         flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        fontFamily: 'var(--cth-font-mono)', direction: 'rtl', textAlign: 'left'
+                        fontFamily: 'var(--cth-font-ui)', direction: 'rtl', textAlign: 'left'
                       }}>{f.path}</span>
                     </div>
                   );
@@ -705,7 +705,7 @@ export function IdePanel() {
                       </span>
                       <span style={{
                         flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        fontFamily: 'var(--cth-font-mono)', textAlign: 'right'
+                        fontFamily: 'var(--cth-font-ui)', textAlign: 'right'
                       }} title={activeTab.rel}>{activeTab.rel}</span>
                     </div>
                     <div style={{ flex: 1, minHeight: 0 }}>
@@ -732,7 +732,7 @@ export function IdePanel() {
                       <span>working tree</span>
                       <span style={{
                         flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        fontFamily: 'var(--cth-font-mono)', textAlign: 'right'
+                        fontFamily: 'var(--cth-font-ui)', textAlign: 'right'
                       }} title={activeTab.rel}>{activeTab.rel}</span>
                       <button onClick={() => ensureDiff(activeTab.rel, true)} title="Refresh diff" style={iconBtn}>
                         <Icon name="web" />
@@ -775,7 +775,7 @@ function EditorBar({ rel, dirty, saveState, onSave, onCopy, mdView, onMdView, on
   return (
     <div style={ideBarStyle}>
       <Icon name="code" />
-      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--cth-font-mono)' }} title={rel}>
+      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--cth-font-ui)' }} title={rel}>
         {rel}{dirty ? ' •' : ''}
       </span>
       {mdView && onMdView && (

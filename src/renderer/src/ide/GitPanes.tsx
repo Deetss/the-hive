@@ -47,7 +47,7 @@ function FileRow({ f, onClick }: { f: GitFileChange; onClick: () => void }) {
       }}>{f.status}</span>
       <span style={{
         flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        fontFamily: 'var(--cth-font-mono)', direction: 'rtl', textAlign: 'left'
+        fontFamily: 'var(--cth-font-ui)', direction: 'rtl', textAlign: 'left'
       }}>{f.path}</span>
     </div>
   );
@@ -196,7 +196,7 @@ export function ComparePane({ gitRoot, onOpenRevDiff }: {
   };
 
   const sel: React.CSSProperties = {
-    flex: 1, minWidth: 0, height: 22, fontFamily: 'var(--cth-font-mono)', fontSize: 11,
+    flex: 1, minWidth: 0, height: 22, fontFamily: 'var(--cth-font-ui)', fontSize: 11,
     background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
     border: 'none', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
   };

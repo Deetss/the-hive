@@ -265,7 +265,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
           }}
         />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-500)' }}>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)' }}>
             pending: {pendingCount}
           </span>
           <PixelButton variant="secondary" size="sm" onClick={() => void loadDoc()}>
@@ -446,7 +446,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
             }}
           />
         </div>
-        <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 10, color: 'var(--cth-ink-500)' }}>
+        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-500)' }}>
           last updated: {formatTimestamp(doc?.updatedAt)}
         </span>
         {saving && <PixelBadge label="saving…" status="thinking" />}

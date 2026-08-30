@@ -577,7 +577,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                       <Icon name="folder" />
                       <span style={{
                         flex: 1,
-                        fontFamily: 'var(--cth-font-mono)', fontSize: 13,
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 13,
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                       }}>{r}</span>
                       <PixelButton variant="ghost" size="sm" onClick={() => removeRepo(r)}>
@@ -904,7 +904,7 @@ const inputStyle: React.CSSProperties = {
   background: 'var(--cth-paper-100)',
   border: 'none',
   boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-  fontFamily: 'var(--cth-font-mono)',
+  fontFamily: 'var(--cth-font-ui)',
   fontSize: 13,
   color: 'var(--cth-ink-900)',
   outline: 'none'

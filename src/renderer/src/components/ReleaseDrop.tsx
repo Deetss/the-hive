@@ -50,7 +50,7 @@ const PAPER = '#FFFDF7';
 const INK = '#1B1B1B';
 const INK_FAINT = '#8A867A';
 const YELLOW = '#FFCA54';
-const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+const FONT = 'var(--cth-font-ui)';
 
 export function ReleaseDrop({ version, html, onDismiss }: ReleaseDropProps) {
   const srcDoc = useMemo(() => buildDropSrcDoc(html), [html]);
@@ -100,7 +100,7 @@ export function ReleaseDrop({ version, html, onDismiss }: ReleaseDropProps) {
           borderRadius: 0,
           boxShadow: `12px 12px 0 ${INK}`,
           overflow: 'hidden',
-          fontFamily: MONO
+          fontFamily: FONT
         }}
       >
         {/* Title bar: the site's `.win` header. Dark band, three square dots,
@@ -139,7 +139,7 @@ export function ReleaseDrop({ version, html, onDismiss }: ReleaseDropProps) {
               flexShrink: 0, width: 26, height: 26, padding: 0,
               background: PAPER, color: INK, border: `2px solid ${PAPER}`,
               borderRadius: 0, cursor: 'pointer',
-              fontFamily: MONO, fontSize: 13, fontWeight: 700, lineHeight: 1,
+              fontFamily: FONT, fontSize: 13, fontWeight: 700, lineHeight: 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}
           >✕</button>

@@ -886,7 +886,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {hasSpark ? (
                 <span style={{ flex: 1, minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 10, color: 'var(--cth-ink-500)', flexShrink: 0 }}>{rateLabel}</span>
+                  <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-500)', flexShrink: 0 }}>{rateLabel}</span>
                   <Sparkline series={sparkSeries} />
                 </span>
               ) : (
@@ -898,15 +898,15 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                   background: 'var(--cth-paper-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', color: 'var(--cth-ink-700)'
                 }}>{lastTool[a.id]}</span>
               )}
-              <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 10, color: 'var(--cth-ink-300)', flexShrink: 0 }}>budget</span>
-              <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-900)', width: 56, textAlign: 'right' }}>{fmtTokens(tokens)}</span>
+              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-300)', flexShrink: 0 }}>budget</span>
+              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-900)', width: 56, textAlign: 'right' }}>{fmtTokens(tokens)}</span>
               <div
                 title={`CUMULATIVE session usage: ${tokens.toLocaleString()} of ${denom.toLocaleString()} tokens${agentCap ? ' (agent limit)' : ' (floor budget)'} — not the context window`}
                 style={{ width: 96, height: 8, background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0 }}
               >
                 <div style={{ width: `${pct}%`, height: '100%', background: meterColor }} />
               </div>
-              <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-500)', width: 30, textAlign: 'right' }}>{pct}%</span>
+              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)', width: 30, textAlign: 'right' }}>{pct}%</span>
             </div>
             {/* Context window — the SAME exact statusLine-fed numbers as the
                 avatar-card gauge (tokens currently in the window vs the real
@@ -915,13 +915,13 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                 spend, this one is headroom before compaction. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ flex: 1 }} />
-              <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 10, color: 'var(--cth-ink-300)', flexShrink: 0 }}>ctx</span>
+              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-300)', flexShrink: 0 }}>ctx</span>
               {a.contextTokens !== undefined && a.contextLimit ? (() => {
                 const cpct = Math.min(100, Math.round((a.contextTokens! / a.contextLimit!) * 100));
                 const ccolor = cpct >= 88 ? 'var(--cth-coral)' : cpct >= 75 ? 'var(--cth-lemon)' : `var(--cth-${a.accent})`;
                 return (
                   <>
-                    <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-900)', width: 56, textAlign: 'right' }}>
+                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-900)', width: 56, textAlign: 'right' }}>
                       {fmtTokens(a.contextTokens!)}
                     </span>
                     <div
@@ -930,11 +930,11 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                     >
                       <div style={{ width: `${cpct}%`, height: '100%', background: ccolor }} />
                     </div>
-                    <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-500)', width: 30, textAlign: 'right' }}>{cpct}%</span>
+                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)', width: 30, textAlign: 'right' }}>{cpct}%</span>
                   </>
                 );
               })() : (
-                <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-300)' }}>
+                <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-300)' }}>
                   no status tick yet
                 </span>
               )}
@@ -1082,7 +1082,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
         <div style={{
           display: 'flex', gap: 14, marginTop: 2, padding: '6px 8px',
           background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-          fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-900)', flexWrap: 'wrap'
+          fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-900)', flexWrap: 'wrap'
         }}>
           <span>Σ <strong>{fmtTokens(sumTokens)}</strong> tok</span>
           <span style={{ color: 'var(--cth-ink-700)' }}>inputs {fmtTokens(sumInput)} (cache {fleetCachePct}%)</span>
@@ -1225,7 +1225,7 @@ interface MemoryTextResult {
 const MemoryTextResultRow = memo(function MemoryTextResultRow({ source, excerpt }: MemoryTextResult) {
   return (
     <div style={{ marginBottom: 4 }}>
-      <div style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-500)' }}>{source}</div>
+      <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)' }}>{source}</div>
       <Pre>{excerpt}</Pre>
     </div>
   );
@@ -1376,7 +1376,7 @@ function TokenLimitEditor({ value, onSet }: { value?: number; onSet: (tokens: nu
           fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-900)'
         }}
       >{value && value > 0
-        ? <>limit <span style={{ fontFamily: 'var(--cth-font-mono)' }}>{fmtTokens(value)}</span></>
+        ? <>limit <span style={{ fontFamily: 'var(--cth-font-ui)' }}>{fmtTokens(value)}</span></>
         : 'set limit'}</button>
     );
   }
@@ -1393,7 +1393,7 @@ function TokenLimitEditor({ value, onSet }: { value?: number; onSet: (tokens: nu
         placeholder="tokens"
         style={{
           width: 84, padding: '2px 4px', background: 'var(--cth-paper-100)', border: 'none',
-          boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-mono)',
+          boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)',
           fontSize: 11, color: 'var(--cth-ink-900)', outline: 'none'
         }}
       />
@@ -1477,7 +1477,7 @@ function ActivityTab() {
                 <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, padding: '1px 4px', background: BADGE_COLORS[entry.badge], color: 'var(--cth-ink-900)', flexShrink: 0 }}>
                   {entry.badge}
                 </span>
-                <span style={{ flex: 1, fontFamily: 'var(--cth-font-mono)', fontSize: 13, fontWeight: 600, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ flex: 1, fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 600, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {entry.headline}
                 </span>
                 <span style={{ fontSize: 10, color: 'var(--cth-ink-300)', flexShrink: 0 }}>
@@ -1486,7 +1486,7 @@ function ActivityTab() {
               </div>
               {expanded && (
                 <div style={{ padding: '0 8px 8px' }}>
-                  <div style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 12, color: 'var(--cth-ink-700)', whiteSpace: 'pre-wrap', lineHeight: '17px' }}>
+                  <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-700)', whiteSpace: 'pre-wrap', lineHeight: '17px' }}>
                     {entry.body}
                   </div>
                 </div>
@@ -1562,7 +1562,7 @@ const textareaStyle: React.CSSProperties = {
   flex: 1, width: '100%', resize: 'none', padding: '6px 8px',
   background: 'var(--cth-paper-100)', border: 'none',
   boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-  fontFamily: 'var(--cth-font-mono)', fontSize: 12, lineHeight: '17px',
+  fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '17px',
   color: 'var(--cth-ink-900)', outline: 'none', boxSizing: 'border-box'
 };
 

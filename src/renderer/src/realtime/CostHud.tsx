@@ -27,7 +27,7 @@ const wrap: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 6,
-  fontFamily: 'var(--cth-font-mono)',
+  fontFamily: 'var(--cth-font-ui)',
   fontSize: 12,
   color: 'var(--cth-ink-900)'
 };
@@ -40,7 +40,7 @@ const labelStyle: React.CSSProperties = {
 };
 const capInputStyle: React.CSSProperties = {
   width: 92,
-  fontFamily: 'var(--cth-font-mono)',
+  fontFamily: 'var(--cth-font-ui)',
   fontSize: 12,
   padding: '4px 6px',
   border: '2px solid var(--cth-ink-300)',
@@ -88,7 +88,7 @@ export function CostHud({ compact = false }: CostHudProps): React.ReactElement |
       <span
         title={`${totalTok.toLocaleString()} voice audio tokens this session`}
         style={{
-          fontFamily: 'var(--cth-font-mono)',
+          fontFamily: 'var(--cth-font-ui)',
           fontSize: 12,
           fontWeight: 600,
           color: 'var(--cth-ink-900)',

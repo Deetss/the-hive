@@ -225,7 +225,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
                       border: 'none', outline: 'none', resize: 'none', boxSizing: 'border-box',
                       background: 'var(--cth-cream-100)',
                       boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-                      fontFamily: 'var(--cth-font-mono)', fontSize: 12,
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 12,
                       lineHeight: '18px', color: 'var(--cth-ink-900)'
                     }}
                   />

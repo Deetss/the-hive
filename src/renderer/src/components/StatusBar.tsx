@@ -254,13 +254,13 @@ export function StatusBar() {
         <>
           <Sep />
           <Chip title={`${focusAgent.name} · ${focusAgent.worktreePath ?? focusAgent.cwd}`}>
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-sky)' }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-sky)' }}>
               {tail(focusAgent.worktreePath ?? focusAgent.cwd)}
             </span>
             {branch && (
               <>
                 <span style={{ color: 'var(--cth-ink-300)' }}>:</span>
-                <span style={{ color: 'var(--cth-ink-700)', fontFamily: 'var(--cth-font-mono)' }}>{branch}</span>
+                <span style={{ color: 'var(--cth-ink-700)', fontFamily: 'var(--cth-font-ui)' }}>{branch}</span>
               </>
             )}
           </Chip>
@@ -269,7 +269,7 @@ export function StatusBar() {
 
       <Sep />
       <Chip title={`${live.length} agent(s) with a live terminal`}>
-        <strong style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+        <strong style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
           {live.length}
         </strong>
         <span style={{ color: 'var(--cth-ink-500)' }}>active</span>
@@ -277,12 +277,12 @@ export function StatusBar() {
 
       <Sep />
       <Chip title="Fleet tokens used (live OpenTelemetry)">
-        <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+        <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
           {fmtTokens(tokens)}
         </span>
         <span style={{ color: 'var(--cth-ink-500)' }}>tok</span>
         {tokPerMin >= 1 && (
-          <span style={{ color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-mono)' }}>
+          <span style={{ color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
             {fmtTokens(tokPerMin)}/m
           </span>
         )}
@@ -290,7 +290,7 @@ export function StatusBar() {
 
       <Sep />
       <Chip title={billingMode === 'api' ? 'Fleet cost so far (OTel · API billing)' : 'Estimated fleet cost (OTel · subscription — not actual billing)'}>
-        <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+        <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
           {billingMode === 'api' ? fmtUsd(usd) : `~${fmtUsd(usd)}`}
         </span>
         {billingMode !== 'api' && (
@@ -306,10 +306,10 @@ export function StatusBar() {
             <span style={{ fontFamily: 'var(--cth-font-mono)', color: ratePaceColor(worstFiveHour.pct, worstFiveHour.resetsAt, 300), letterSpacing: 1 }}>
               {ctxBar(worstFiveHour.pct)}
             </span>
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
               {worstFiveHour.pct}%
             </span>
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
               {fmtReset(worstFiveHour.resetsAt)}
             </span>
           </Chip>
@@ -324,10 +324,10 @@ export function StatusBar() {
             <span style={{ fontFamily: 'var(--cth-font-mono)', color: ratePaceColor(worstSevenDay.pct, worstSevenDay.resetsAt, 10080), letterSpacing: 1 }}>
               {ctxBar(worstSevenDay.pct)}
             </span>
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
               {worstSevenDay.pct}%
             </span>
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
               {fmtReset(worstSevenDay.resetsAt)}
             </span>
           </Chip>
@@ -338,7 +338,7 @@ export function StatusBar() {
         <>
           <Sep />
           <Chip title="Messages parked for busy agents (outgoing queue, not hive inbox)">
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-900)' }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
               {queued}
             </span>
             <span style={{ color: 'var(--cth-ink-500)' }}>pending</span>
@@ -358,7 +358,7 @@ export function StatusBar() {
             <Dot color={govColor(governor.mode)} />
             <span style={{ color: govColor(governor.mode) }}>gov</span>
             {governor.mode === 'red' && govWindow(governor.reason) && (
-              <span style={{ fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
+              <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 11 }}>
                 {govWindow(governor.reason)}
               </span>
             )}

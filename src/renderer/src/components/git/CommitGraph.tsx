@@ -188,7 +188,7 @@ export function CommitGraph({ commits, currentBranch, onCommitClick }: CommitGra
                 flexShrink: 1, minWidth: 0, maxWidth: '38%',
                 overflow: 'hidden', textOverflow: 'ellipsis',
                 padding: '0 5px', fontSize: 11,
-                fontFamily: 'var(--cth-font-mono)',
+                fontFamily: 'var(--cth-font-ui)',
                 color: isCurrent ? 'var(--cth-ink-900)' : 'var(--cth-ink-700)',
                 background: isCurrent ? 'var(--cth-lemon-light)' : 'transparent',
                 boxShadow: `inset 0 0 0 1px ${isCurrent ? 'var(--cth-lemon)' : 'var(--cth-ink-300)'}`
@@ -201,7 +201,7 @@ export function CommitGraph({ commits, currentBranch, onCommitClick }: CommitGra
             )}
 
             <span style={{
-              flexShrink: 0, fontFamily: 'var(--cth-font-mono)',
+              flexShrink: 0, fontFamily: 'var(--cth-font-ui)',
               fontSize: 11, color: 'var(--cth-ink-500)'
             }}>{relTime(c.time * 1000)}</span>
           </div>

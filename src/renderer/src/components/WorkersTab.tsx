@@ -38,7 +38,7 @@ const card: React.CSSProperties = {
   padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6
 };
 const metaRow: React.CSSProperties = {
-  display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontFamily: 'var(--cth-font-mono)',
+  display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontFamily: 'var(--cth-font-ui)',
   fontSize: 11, color: 'var(--cth-ink-700)'
 };
 const sectionHead: React.CSSProperties = {
@@ -50,7 +50,7 @@ function StatusBadge({ w }: { w: WorkerSnapshot }) {
   const releasing = w.status === 'releasing';
   return (
     <span style={{
-      fontFamily: 'var(--cth-font-mono)', fontSize: 10, padding: '1px 6px',
+      fontFamily: 'var(--cth-font-ui)', fontSize: 10, padding: '1px 6px',
       textTransform: 'uppercase', letterSpacing: 0.5,
       color: releasing ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)',
       background: releasing ? 'var(--cth-ink-700)' : 'var(--cth-green, #2f8f4e)',
@@ -91,7 +91,7 @@ export function WorkersTab() {
       <div>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
           <span style={sectionHead}>Live workers</span>
-          <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-700)' }}>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-700)' }}>
             {live.length} / {max}
           </span>
         </div>
@@ -116,7 +116,7 @@ export function WorkersTab() {
                     }}>{w.name}</span>
                     {w.hasSlack && (
                       <span title="replies to a Slack thread" style={{
-                        fontFamily: 'var(--cth-font-mono)', fontSize: 10, color: 'var(--cth-ink-700)',
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-700)',
                         boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', padding: '0 5px'
                       }}>slack</span>
                     )}

@@ -21,7 +21,7 @@ export function ToolWaterfall({ agentId }: { agentId: string }) {
       <div style={{
         flexShrink: 0, padding: '8px 10px', background: 'var(--cth-cream-200)',
         boxShadow: 'inset 0 -2px 0 var(--cth-ink-900)',
-        fontFamily: 'var(--cth-font-mono)', fontSize: 12, color: 'var(--cth-ink-900)',
+        fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-900)',
         display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'baseline'
       }}>
         {sample ? (
@@ -62,7 +62,7 @@ export function ToolWaterfall({ agentId }: { agentId: string }) {
                   style={{ width: `${pct}%`, height: '100%', background: ok ? 'var(--cth-mint)' : 'var(--cth-coral)' }}
                 />
               </div>
-              <span style={{ width: 54, textAlign: 'right', fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-500)' }}>
+              <span style={{ width: 54, textAlign: 'right', fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)' }}>
                 {fmtDur(s.durationMs)}
               </span>
               <span style={{ width: 12, textAlign: 'center', fontSize: 11, color: ok ? 'var(--cth-mint)' : 'var(--cth-coral)' }}>

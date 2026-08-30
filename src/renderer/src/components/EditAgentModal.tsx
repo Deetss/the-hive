@@ -390,7 +390,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
                       ))}
                     </select>
                     {selectedProfile?.model && (
-                      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-mono)' }}>
+                      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
                         {selectedProfile.model}
                       </span>
                     )}

@@ -322,7 +322,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
     boxShadow: 'inset 0 0 0 1px var(--cth-ink-900), 0 1px 0 var(--cth-ink-900)'
   };
   const sessionButtonStyle: CSSProperties = {
-    fontFamily: 'var(--cth-font-mono)',
+    fontFamily: 'var(--cth-font-ui)',
     fontSize: 11,
     padding: '3px 8px',
     border: '1px solid var(--cth-ink-200)',
@@ -423,7 +423,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
       {isViewingArchived && selectedArchivedSession && (
         <div style={{
           padding: '6px 10px', borderBottom: '1px solid var(--cth-ink-300)',
-          background: 'var(--cth-paper-100)', fontFamily: 'var(--cth-font-mono)',
+          background: 'var(--cth-paper-100)', fontFamily: 'var(--cth-font-ui)',
           fontSize: 11, color: 'var(--cth-ink-700)'
         }}>
           Viewing archived session {selectedArchivedSession.label} ({selectedSessionRange}). Actions are read-only.
@@ -524,7 +524,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
                       })}
                       title={expandedKeys.has(key) ? 'Click to collapse' : 'Click to expand'}
                       style={{
-                        fontFamily: 'var(--cth-font-mono)', fontSize: 11, lineHeight: '15px',
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 11, lineHeight: '15px',
                         color: 'var(--cth-ink-800)', cursor: 'pointer',
                         ...(expandedKeys.has(key) ? {} : {
                           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
@@ -547,7 +547,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
                             flex: 1, padding: '3px 6px', border: 'none', outline: 'none',
                             background: 'var(--cth-paper-100)',
                             boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)',
-                            fontFamily: 'var(--cth-font-mono)', fontSize: 11,
+                            fontFamily: 'var(--cth-font-ui)', fontSize: 11,
                             color: 'var(--cth-ink-900)'
                           }}
                         />
@@ -853,7 +853,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose 
             <div style={{
               padding: 10, background: 'var(--cth-paper-100)',
               boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-              fontFamily: 'var(--cth-font-mono)', fontSize: 12, lineHeight: '18px',
+              fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '18px',
               color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap', wordBreak: 'break-word'
             }}>
               {task.description?.trim() || <span style={{ color: 'var(--cth-ink-300)' }}>(no description on this card)</span>}

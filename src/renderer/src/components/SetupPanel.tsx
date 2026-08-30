@@ -70,7 +70,7 @@ function ToolRow({ tool }: { tool: ToolStatus }) {
       {/* Found: show WHERE, so a "ready" claim is verifiable rather than trusted. */}
       {tool.found && tool.path && (
         <div style={{
-          fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-500)',
+          fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)',
           wordBreak: 'break-all'
         }}>
           {tool.path}{tool.detail ? ` · ${tool.detail}` : ''}

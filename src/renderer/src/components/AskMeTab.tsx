@@ -24,7 +24,7 @@ export function AskMeTab() {
   const unresolvedMessages = messages.filter((m) => !m.resolved);
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--cth-paper-200)', padding: 10, display: 'flex', flexDirection: 'column', gap: 10, fontFamily: 'var(--cth-font-mono)' }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--cth-paper-200)', padding: 10, display: 'flex', flexDirection: 'column', gap: 10, fontFamily: 'var(--cth-font-ui)' }}>
       {unresolvedMessages.length === 0 && (
         <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--cth-ink-500)', fontSize: 12 }}>
           Nothing needs you right now. 🌿<br />
@@ -41,7 +41,7 @@ export function AskMeTab() {
             <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-900)', background: 'var(--cth-lemon)', padding: '1px 4px' }}>
               {msg.act === 'query' ? 'QUERY' : msg.act === 'prompt' ? 'PROMPT' : 'MESSAGE'}
             </span>
-            <span style={{ flex: 1, fontFamily: 'var(--cth-font-mono)', fontSize: 14, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ flex: 1, fontFamily: 'var(--cth-font-ui)', fontSize: 14, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {msg.subject || `from ${nameFor(msg.from)}`}
             </span>
             <span style={{ fontSize: 10, color: 'var(--cth-ink-700)', flexShrink: 0 }}>
@@ -68,7 +68,7 @@ export function AskMeTab() {
                 }}
                 rows={2}
                 placeholder="Reply… (Ctrl+Enter to send)"
-                style={{ flex: 1, boxSizing: 'border-box', padding: '5px 7px', resize: 'vertical', background: 'var(--cth-paper-100)', border: 'none', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-mono)', fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none' }}
+                style={{ flex: 1, boxSizing: 'border-box', padding: '5px 7px', resize: 'vertical', background: 'var(--cth-paper-100)', border: 'none', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none' }}
               />
             </div>
             <div style={{ display: 'flex', gap: 6 }}>

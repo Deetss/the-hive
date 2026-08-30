@@ -231,7 +231,7 @@ export function LocalDelegateSettings() {
   };
 
   const inp = (extra?: React.CSSProperties): React.CSSProperties => ({
-    fontFamily: 'var(--cth-font-mono)',
+    fontFamily: 'var(--cth-font-ui)',
     fontSize: 12,
     padding: '4px 8px',
     background: 'var(--cth-ink-100)',
@@ -283,7 +283,7 @@ export function LocalDelegateSettings() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                 {h && (
-                  <span style={{ fontSize: 10, fontFamily: 'var(--cth-font-mono)', color: h.checking ? 'var(--cth-ink-400)' : h.ok ? '#3d8c3d' : '#c0392b' }}>
+                  <span style={{ fontSize: 10, fontFamily: 'var(--cth-font-ui)', color: h.checking ? 'var(--cth-ink-400)' : h.ok ? '#3d8c3d' : '#c0392b' }}>
                     {h.checking ? 'pinging…' : h.ok ? `OK ${h.latencyMs}ms` : 'OFFLINE'}
                   </span>
                 )}
@@ -332,7 +332,7 @@ export function LocalDelegateSettings() {
               {(['wsl-exec', 'ssh', 'http'] as const).map((k) => (
                 <button key={k}
                   onClick={() => setTransportKind(k)}
-                  style={{ fontSize: 11, padding: '3px 10px', cursor: 'pointer', borderRadius: 4, border: '1px solid var(--cth-ink-300)', fontFamily: 'var(--cth-font-mono)', background: form.transport.kind === k ? 'var(--cth-ink-900)' : 'var(--cth-ink-100)', color: form.transport.kind === k ? 'var(--cth-bg)' : 'var(--cth-ink-700)' }}>
+                  style={{ fontSize: 11, padding: '3px 10px', cursor: 'pointer', borderRadius: 4, border: '1px solid var(--cth-ink-300)', fontFamily: 'var(--cth-font-ui)', background: form.transport.kind === k ? 'var(--cth-ink-900)' : 'var(--cth-ink-100)', color: form.transport.kind === k ? 'var(--cth-bg)' : 'var(--cth-ink-700)' }}>
                   {k}
                 </button>
               ))}
@@ -428,7 +428,7 @@ export function LocalDelegateSettings() {
             <span style={sectionLabel}>Authentication</span>
             {keyStatus === 'set' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, fontFamily: 'var(--cth-font-mono)', color: '#3d8c3d' }}>● key set (encrypted)</span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--cth-font-ui)', color: '#3d8c3d' }}>● key set (encrypted)</span>
                 <button onClick={clearApiKey}
                   style={{ fontSize: 10, padding: '2px 8px', cursor: 'pointer', background: 'transparent', border: '1px solid #c0392b', borderRadius: 3, color: '#c0392b' }}>
                   clear key
@@ -511,7 +511,7 @@ export function LocalDelegateSettings() {
               test connection
             </button>
             {testResult && (
-              <span style={{ fontSize: 11, fontFamily: 'var(--cth-font-mono)', color: testResult.ok ? '#3d8c3d' : '#c0392b' }}>
+              <span style={{ fontSize: 11, fontFamily: 'var(--cth-font-ui)', color: testResult.ok ? '#3d8c3d' : '#c0392b' }}>
                 {testResult.ok ? `✓ ${testResult.msg}` : `✗ ${testResult.msg}`}
               </span>
             )}

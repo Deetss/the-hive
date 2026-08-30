@@ -119,14 +119,14 @@ export function UpdateBadge() {
           fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: 1.5, textAlign: 'left'
         }}
       >
-        <div style={{ fontFamily: 'var(--cth-font-mono, monospace)', fontWeight: 700, fontSize: 12.5 }}>
+        <div style={{ fontFamily: 'var(--cth-font-ui)', fontWeight: 700, fontSize: 12.5 }}>
           Click to download v{pending}
         </div>
         <div style={{ marginTop: 4, color: 'var(--cth-ink-700)' }}>
           Download the latest version and replace the app you have. Prefer the app to update itself? Settings &rarr; Updates.
         </div>
         <div style={{
-          marginTop: 8, fontFamily: 'var(--cth-font-mono, monospace)', fontSize: 9,
+          marginTop: 8, fontFamily: 'var(--cth-font-ui)', fontSize: 9,
           letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--cth-ink-500)'
         }}>On {steps.os}</div>
         <ol style={{ margin: '4px 0 0', paddingLeft: 18, color: 'var(--cth-ink-700)' }}>
@@ -149,7 +149,7 @@ export function UpdateBadge() {
           fontFamily: 'var(--cth-font-ui)', fontSize: 12.5, lineHeight: 1.5, textAlign: 'left'
         }}
       >
-        <div style={{ fontFamily: 'var(--cth-font-mono, monospace)', fontWeight: 700, fontSize: 13 }}>
+        <div style={{ fontFamily: 'var(--cth-font-ui)', fontWeight: 700, fontSize: 13 }}>
           v{started} is downloading in your browser.
         </div>
         <div style={{ marginTop: 6, color: 'var(--cth-ink-700)' }}>

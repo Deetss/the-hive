@@ -303,7 +303,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
                 padding: '2px 4px 2px 6px',
                 background: 'var(--cth-cream-200)',
                 boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-                fontFamily: 'var(--cth-font-mono)', fontSize: 12, lineHeight: '16px',
+                fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '16px',
                 color: 'var(--cth-ink-900)'
               }}
             >
@@ -353,7 +353,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
             // Border lives in .cth-input so :focus can change it — an inline
             // boxShadow here would outrank the stylesheet and the focus state
             // would silently never apply.
-            fontFamily: 'var(--cth-font-mono)',
+            fontFamily: 'var(--cth-font-ui)',
             fontSize: composerFontSize, lineHeight: `${composerLineHeight}px`,
             color: 'var(--cth-ink-900)',
             outline: 'none',
@@ -461,7 +461,7 @@ function QueuedMessageRow(
       boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
     }}>
       <span style={{
-        fontFamily: 'var(--cth-font-mono)', fontSize: 12,
+        fontFamily: 'var(--cth-font-ui)', fontSize: 12,
         color: 'var(--cth-ink-500)', lineHeight: '18px', flexShrink: 0
       }}>{`${index + 1}.`}</span>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>

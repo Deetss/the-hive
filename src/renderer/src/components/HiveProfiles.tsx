@@ -24,7 +24,7 @@ function folderName(p: string): string {
 
 const inputStyle: CSSProperties = {
   flex: 1, padding: '6px 8px 4px', background: 'var(--cth-paper-100)', border: 'none',
-  boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-mono)',
+  boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)',
   fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none', minWidth: 0
 };
 const labelStyle: CSSProperties = {
@@ -180,7 +180,7 @@ export function HiveProfiles() {
                       )}
                     </div>
                     <div style={{
-                      fontFamily: 'var(--cth-font-mono)', fontSize: 11, color: 'var(--cth-ink-500)',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', direction: 'rtl', textAlign: 'left'
                     }}>{p.harnessHome}</div>
                   </div>

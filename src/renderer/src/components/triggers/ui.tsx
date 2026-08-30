@@ -26,7 +26,7 @@ export const inputStyle: CSSProperties = {
 
 export const monoInputStyle: CSSProperties = {
   ...inputStyle,
-  fontFamily: 'var(--cth-font-mono)'
+  fontFamily: 'var(--cth-font-ui)'
 };
 
 export const textareaStyle: CSSProperties = {

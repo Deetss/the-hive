@@ -151,7 +151,7 @@ const bodyBox: CSSProperties = {
   background: 'var(--cth-cream-200)',
   boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
   padding: '6px 8px',
-  fontFamily: 'var(--cth-font-mono)', fontSize: 12, lineHeight: '17px',
+  fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '17px',
   color: 'var(--cth-ink-900)',
   whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word'
 };

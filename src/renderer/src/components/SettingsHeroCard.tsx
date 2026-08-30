@@ -76,7 +76,7 @@ export function SettingsHeroCard() {
   };
 
   const INK = 'var(--cth-ink-900)';
-  const MONO = 'var(--cth-font-mono, monospace)';
+  const FONT = 'var(--cth-font-ui)';
 
   return (
     <div style={{
@@ -93,18 +93,18 @@ export function SettingsHeroCard() {
             }}>THE HIVE</span>
             {version && (
               <span style={{
-                fontFamily: MONO, fontSize: 15, fontWeight: 700, color: INK
+                fontFamily: FONT, fontSize: 15, fontWeight: 700, color: INK
               }}>v{version}</span>
             )}
             <span style={{
-              fontFamily: MONO, fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase',
+              fontFamily: FONT, fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase',
               padding: '2px 7px', background: 'var(--cth-mint-light)',
               boxShadow: 'inset 0 0 0 1px var(--cth-mint)', color: INK
             }}>{PLAN.label}</span>
             {pending && (
               <>
                 <span style={{ flex: 1 }} />
-                <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--cth-ink-700)' }}>
+                <span style={{ fontFamily: FONT, fontSize: 11, color: 'var(--cth-ink-700)' }}>
                   v{pending} is out
                 </span>
                 <PixelButton variant="primary" size="sm" onClick={downloadManually}
@@ -134,12 +134,12 @@ export function SettingsHeroCard() {
           border: `2px solid ${INK}`
         }}>
           <span style={{
-            display: 'inline-block', fontFamily: MONO, fontSize: 9, letterSpacing: '.18em',
+            display: 'inline-block', fontFamily: FONT, fontSize: 9, letterSpacing: '.18em',
             textTransform: 'uppercase', padding: '2px 7px',
             background: INK, color: 'var(--cth-paper-100)'
           }}>Announcement</span>
           <div style={{
-            marginTop: 8, fontFamily: MONO, fontSize: 14, fontWeight: 700, color: INK
+            marginTop: 8, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: INK
           }}>v0.5.0 launches with The Hive Pro.</div>
           <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.5, color: 'var(--cth-ink-700)', maxWidth: '64ch' }}>
             <b style={{ color: INK }}>Community stays free, stays open, and keeps getting updates.</b>{' '}
@@ -157,7 +157,7 @@ export function SettingsHeroCard() {
           marginTop: 2
         }}>
           <div style={{
-            fontFamily: MONO, fontSize: 30, fontWeight: 700, lineHeight: 0.9,
+            fontFamily: FONT, fontSize: 30, fontWeight: 700, lineHeight: 0.9,
             letterSpacing: '-.05em', color: 'var(--cth-lemon)', textAlign: 'center', flexShrink: 0
           }}>
             50<span style={{
@@ -166,7 +166,7 @@ export function SettingsHeroCard() {
             }}>% OFF</span>
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600 }}>On the Founders&rsquo; Wall?</div>
+            <div style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600 }}>On the Founders&rsquo; Wall?</div>
             <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.85, marginTop: 2 }}>
               A month of The Hive Pro free, then 50% off the annual plan. For the first
               100 people on the wall.
@@ -191,7 +191,7 @@ export function SettingsHeroCard() {
             border: `2px solid ${INK}`
           }}>
             <span style={{
-              fontFamily: MONO, fontSize: 9, letterSpacing: '.18em',
+              fontFamily: FONT, fontSize: 9, letterSpacing: '.18em',
               textTransform: 'uppercase', color: 'var(--cth-ink-500)', flexShrink: 0
             }}>Sponsored by</span>
             <span style={{ fontSize: 13, color: INK, flexShrink: 0 }}>{SPONSOR.name}</span>

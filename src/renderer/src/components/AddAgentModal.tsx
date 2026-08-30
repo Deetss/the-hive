@@ -691,7 +691,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                       ))}
                     </select>
                     {selectedProfile?.model && (
-                      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-mono)' }}>
+                      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
                         {selectedProfile.model}
                       </span>
                     )}
@@ -882,7 +882,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                           value={cwd}
                           onChange={(e) => setCwd(e.target.value)}
                           placeholder="/path/to/your/project"
-                          style={{ ...inputStyle, flex: 1, fontFamily: 'var(--cth-font-mono)', fontSize: 13 }}
+                          style={{ ...inputStyle, flex: 1, fontFamily: 'var(--cth-font-ui)', fontSize: 13 }}
                         />
                         <PixelButton variant="secondary" size="md" onClick={pickFolder}>
                           <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
@@ -926,7 +926,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                         onChange={(e) => { setResumeSessionId(e.target.value); setFolderNote(undefined); }}
                         onBlur={resolveFolderFromSession}
                         placeholder="paste a Claude session id to continue its conversation"
-                        style={{ ...inputStyle, fontFamily: 'var(--cth-font-mono)', fontSize: 13 }}
+                        style={{ ...inputStyle, fontFamily: 'var(--cth-font-ui)', fontSize: 13 }}
                       />
                       {folderNote && (
                         <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-mint, var(--cth-ink-700))' }}>
@@ -1107,7 +1107,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                                 ? 'your-agent-cli'
                                 : 'claude'
                         }
-                        style={{ ...inputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                        style={{ ...inputStyle, fontFamily: 'var(--cth-font-ui)' }}
                       />
                     </Row>
                   </>
@@ -1180,7 +1180,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
             }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 12, color: 'var(--cth-ink-700)', lineHeight: '17px' }}>
-                  <strong>Import hire</strong> loads a ready-made agent from a <code style={{ fontFamily: 'var(--cth-font-mono)' }}>.json</code> manifest —
+                  <strong>Import hire</strong> loads a ready-made agent from a <code style={{ fontFamily: 'var(--cth-font-ui)' }}>.json</code> manifest —
                   it fills in every field below for you to review. Nothing spawns until you hit <em>spawn</em>.
                 </span>
                 <button
@@ -1200,7 +1200,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <span style={{ fontSize: 12, color: 'var(--cth-ink-500)', lineHeight: '16px' }}>
                     Copy this into Claude/ChatGPT/Gemini, fill in the details at the bottom, then save
-                    its JSON reply as a <code style={{ fontFamily: 'var(--cth-font-mono)' }}>.json</code> file and import it here.
+                    its JSON reply as a <code style={{ fontFamily: 'var(--cth-font-ui)' }}>.json</code> file and import it here.
                   </span>
                   <textarea
                     readOnly
@@ -1210,7 +1210,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                     style={{
                       ...inputStyle,
                       width: '100%',
-                      fontFamily: 'var(--cth-font-mono)', fontSize: 12, lineHeight: '16px',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '16px',
                       resize: 'vertical', background: 'var(--cth-paper-100)'
                     }}
                   />
