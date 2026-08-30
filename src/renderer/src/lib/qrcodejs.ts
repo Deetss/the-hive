@@ -283,26 +283,13 @@ var QRCode;
 			this._elCanvas.style.display = "none";
 		}
 
-		// Android 2.1 bug workaround
-		// http://code.google.com/p/android/issues/detail?id=5141
-		if (this._android && this._android <= 2.1) {
-	    	var factor = 1 / window.devicePixelRatio;
-	        var drawImage = CanvasRenderingContext2D.prototype.drawImage;
-	    	CanvasRenderingContext2D.prototype.drawImage = function (image, sx, sy, sw, sh, dx, dy, dw, dh) {
-	    		if (("nodeName" in image) && /img/i.test(image.nodeName)) {
-		        	for (var i = arguments.length - 1; i >= 1; i--) {
-		            	arguments[i] = arguments[i] * factor;
-		        	}
-	    		} else if (typeof dw == "undefined") {
-	    			arguments[1] *= factor;
-	    			arguments[2] *= factor;
-	    			arguments[3] *= factor;
-	    			arguments[4] *= factor;
-	    		}
-
-	        	drawImage.apply(this, arguments);
-	    	};
-		}
+		// Upstream had an "Android 2.1 canvas bug workaround" here, gated on
+		// `this._android` — but `this` at this point in the original script is
+		// whatever called this IIFE (the global object in a classic sloppy-mode
+		// script, so always falsy `undefined._android` reads as `undefined` and
+		// the block never actually ran). Irrelevant for Electron either way;
+		// dropped rather than ported, since as an ES module (always strict mode)
+		// that same read throws instead of silently no-op'ing.
 
 		/**
 		 * Check whether the user's browser supports Data URI or not
