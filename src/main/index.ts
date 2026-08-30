@@ -21,7 +21,7 @@ import {
   unlinkSync, mkdirSync, renameSync, createWriteStream, createReadStream, copyFileSync, lstatSync,
   readlinkSync, symlinkSync, watchFile, unwatchFile
 } from 'node:fs';
-import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
+import { randomBytes, createHash, timingSafeEqual, randomUUID } from 'node:crypto';
 import { join, resolve, sep, basename, dirname, extname } from 'node:path';
 import { homedir, tmpdir, hostname } from 'node:os';
 import { request as httpsRequest } from 'node:https';
@@ -5159,6 +5159,43 @@ ipcMain.handle('history:list', (_evt, agentId: unknown, limit: unknown) =>
 ipcMain.handle('history:search', (_evt, query: unknown, limit: unknown) =>
   persist.searchHistory(typeof query === 'string' ? query : '', typeof limit === 'number' ? limit : undefined));
 
+let saveStatePending = false;
+
+function broadcastSaveStateToActiveAgents(): void {
+  try {
+    const hiveRoot = hive.root();
+    if (!hiveRoot) return;
+    const activeAgentIds = [...new Set(ptyToAgent.values())];
+    if (activeAgentIds.length === 0) return;
+    const now = new Date();
+    const created_at = now.toISOString();
+    const ts = created_at.replace(/[:.]/g, '-');
+    for (const agentId of activeAgentIds) {
+      const inboxDir = join(hiveRoot, 'agents', agentId, 'inbox');
+      if (!existsSync(inboxDir)) {
+        try { mkdirSync(inboxDir, { recursive: true }); } catch { /* best-effort */ }
+      }
+      const msgId = randomUUID();
+      const payload = {
+        id: msgId,
+        from: 'system',
+        to: agentId,
+        act: 'save_state',
+        subject: 'App closing — save your session now',
+        body: 'Write your session handoff to .remember/remember.md immediately.',
+        created_at
+      };
+      try {
+        atomicWriteJson(join(inboxDir, `${ts}-save-exit.json`), payload);
+      } catch (err) {
+        console.error(`[quit] failed writing save_state to ${agentId}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('[quit] broadcastSaveStateToActiveAgents failed:', err);
+  }
+}
+
 // ─── IPC: quit confirmation ─────────────────────────────────────────────────
 /** Tear the harness down and quit. Shared by the hard "kill all & quit" path
  *  and the closing-time conclusion (after the god confirmed the floor saved). */
@@ -5190,7 +5227,15 @@ function teardownAndQuit(): void {
 }
 ipcMain.handle('app:confirmClose', () => {
   closingTime.cancel(); // a hard quit overrides a closing time in progress
-  teardownAndQuit();
+  if (!saveStatePending && ptyManager.list().length > 0) {
+    saveStatePending = true;
+    broadcastSaveStateToActiveAgents();
+    setTimeout(() => {
+      teardownAndQuit();
+    }, 8000);
+  } else {
+    teardownAndQuit();
+  }
 });
 ipcMain.handle('app:cancelClose', () => {
   // The modal closes on the renderer side. The one thing main owes anybody here
@@ -7458,11 +7503,22 @@ app.on('child-process-gone', (_e, d) => {
 app.on('before-quit', (e) => {
   if (allowQuit) return;
   const count = ptyManager.list().length;
-  if (count === 0) return;
+  if (count === 0) {
+    allowQuit = true;
+    return;
+  }
   e.preventDefault();
-  if (mainWindow) {
-    mainWindow.focus();
-    mainWindow.webContents.send('app:closeRequested', { ptyCount: count });
+  if (!saveStatePending) {
+    saveStatePending = true;
+    broadcastSaveStateToActiveAgents();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.focus();
+      mainWindow.webContents.send('app:closeRequested', { ptyCount: count });
+    }
+    setTimeout(() => {
+      allowQuit = true;
+      teardownAndQuit();
+    }, 8000);
   }
 });
 
