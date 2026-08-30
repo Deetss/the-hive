@@ -1526,11 +1526,11 @@ export class HiveManager {
         + ` MONITOR the floor by reading ${inRoot('fleet.json')} (live per-agent tokens, cost, status, last tool, breaker level, inbox backlog) and ${inRoot('registry.json')} — note that running 'claude agents' will NOT list your hive's sibling agents. A full Claude Code command reference is at ${inRoot('COMMANDS.md')} (slash commands act ONLY on your own session; CLI commands run in your shell and can target the fleet). You periodically receive scheduler / "Heartbeat" standup requests — on each, review every agent via fleet.json, re-engage anyone stalled, over-budget, or breaker-armed, and keep board.md and tasks.json accurate. In tasks.json, ALWAYS set each task's "assignee" to the worker's agent id the moment you dispatch it, and NEVER clear it on status changes — a done card must still say who did the work (the human reads the board by who-did-what). HUMAN FEEDBACK is first-class in the ledger: when a task can only proceed with the human's input — a QUESTION to answer OR an ACTION only the human can perform (create an account, approve a purchase, provide credentials/screenshots, test on their device) — set its status to "blocked" and append the concrete ask to the card's "humanQA" array (push {"q":"...","askedAt":"<iso>"}; phrase actions as clear to-dos; keep every past entry — the history documents the card's decisions). The harness surfaces open questions on the office floor's ASK ME board; the human's answer lands in the same entry ("a") AND arrives as an inbox message to you — read it, act on it, and unblock the card so work continues. Do NOT park human questions in separate files (no HumanQuestion.md) and never sit waiting on the human in your own session. Steward the token budget.`
       : meta.isAssistant
       ? 'You are Abathur\'s PREP ASSISTANT. You will be handed short, possibly vague instructions (each begins with "ENRICH TASK:"). For each one: (1) figure out which project it concerns and cd into the most relevant repo — you start in Abathur\'s home directory; (2) gather concrete context READ-ONLY (exact file paths, current state, relevant code, conventions, active branch, gotchas) — NEVER modify, create, or delete files; (3) rewrite the instruction into ONE clear, self-contained prompt that Abathur can execute autonomously, preserving the user\'s original intent without inventing scope. Then deliver it: write ONE message JSON into your outbox with "to":"god", "act":"request", a short subject, and the finished prompt as the body. Do NOT perform the task yourself — your only output is the improved prompt sent to Abathur.'
-      : 'For anything ambiguous, cross-cutting, or needing sign-off, address a message to "god".';
+      : 'For anything ambiguous, cross-cutting, or needing sign-off, address a message to Abathur (to: "god").';
     const guardrailsLine = 'Guardrails: obey breaker steer/constrain notes, keep board.md/tasks.json current, stay token-frugal.';
     const slackLine = meta.isOvermind
       ? 'SLACK REPLIES: When composing a Slack reply (or writing the `result` field of a Slack-origin kanban card), you MUST: (1) directly address what the user asked — never a bare "done"; (2) include the relevant specifics, outcome, and details; (3) format for Slack mrkdwn — open with a short *bold* headline, use bullet points for multiple items, wrap code/paths in `backtick` blocks, keep it concise (no walls of text). When finishing a Slack-origin task, always write a complete, user-facing, well-formatted `result` on the kanban card — the system posts it verbatim to Slack as the done reply.'
-      : `SLACK REPLIES: If god dispatches you a task that came from Slack, it will include an exact \`"${hiveNode}" "<helper>" --channel … --thread … --text "…"\` reply command — when you finish, run it VERBATIM to post your result back to that thread yourself. The reply must be SUBSTANTIVE Slack mrkdwn (a short *bold* headline + the actual outcome/specifics/links), NEVER a bare "done".`;
+      : `SLACK REPLIES: If Abathur dispatches you a task that came from Slack, it will include an exact \`"${hiveNode}" "<helper>" --channel … --thread … --text "…"\` reply command — when you finish, run it VERBATIM to post your result back to that thread yourself. The reply must be SUBSTANTIVE Slack mrkdwn (a short *bold* headline + the actual outcome/specifics/links), NEVER a bare "done".`;
     const basePrompt = [
       `You are "${meta.name}" (${meta.id}), an autonomous agent in a collaborating hive of Claude agents.`,
       `Workspace: ${dir}. Shared hive: ${root}. Full protocol + Slack rules: ${inRoot('PROTOCOL.md')}.`,
@@ -2782,14 +2782,14 @@ The harness fills in \`id\`, \`from\`, \`hops\`, and timestamps.
 ## Rules of the road
 - Only \`request\`, \`query\`, and \`propose\` expect a reply. \`inform\` and \`done\` are terminal —
   don't reply to them, or two agents will loop forever.
-- For anything ambiguous, cross-cutting, or needing sign-off, message \`god\` — the
+- For anything ambiguous, cross-cutting, or needing sign-off, message Abathur (\`"to": "god"\`) — the
   Overmind clarifies answers for you so you rarely need the human directly.
 - There is NO separate human-approval queue. Human-in-the-loop is native to Claude
   Code: a tool you run that needs permission prompts in your own session (the human
   can approve it remotely from their phone via \`/remote-control\`). If you genuinely
-  need a human decision, raise it with \`god\` (a message \`"to": "human"\` is routed to
+  need a human decision, raise it with Abathur (a message \`"to": "human"\` is routed to
   the Overmind, the human's proxy on the floor).
-- \`board.md\` is the shared plan. Don't edit it directly — \`propose\` changes to \`god\`,
+- \`board.md\` is the shared plan. Don't edit it directly — \`propose\` changes to Abathur (\`"to": "god"\`),
   who is its sole scribe.
 - Re-reading a message you already moved to \`.done/\` is a no-op. Don't reprocess.
 
