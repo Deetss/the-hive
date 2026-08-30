@@ -587,6 +587,9 @@ export interface WorkerSnapshot {
   hasSlack: boolean;
   releasing: boolean;
   status: 'releasing' | 'working';
+  /** Most recent tool name the worker's hook events reported, or null before
+   *  its first tool call. */
+  lastTool: string | null;
 }
 /** A worker worktree preserved at teardown, awaiting integration + GC. */
 export interface PreservedWorktreeSnapshot {
@@ -594,6 +597,22 @@ export interface PreservedWorktreeSnapshot {
   wtPath: string;
   baseBranch: string;
   preservedAt: number;
+}
+/** Why a finished worker left `liveWorkers` — 'done' signaled completion
+ *  itself; the rest are reap paths that fire before it ever does. */
+export type WorkerEndReason = 'done' | 'idle' | 'token-cap' | 'manual-stop';
+/** One recently finished ephemeral worker, kept for the Workers panel's
+ *  completed/reaped filter (a bounded ring — `liveWorkers` itself drops the
+ *  entry the moment it tears down). */
+export interface WorkerHistoryEntry {
+  workerId: string;
+  reqId: string;
+  name: string;
+  baseBranch: string;
+  spawnedAt: number;
+  endedAt: number;
+  reason: WorkerEndReason;
+  hasSlack: boolean;
 }
 
 const api = {
@@ -803,12 +822,21 @@ const api = {
   hiveAgentDirectory: (): Promise<AgentDirectory> => ipcRenderer.invoke('hive:agentDirectory'),
 
   // ─── Ephemeral workers (P4 — Slack-triggered isolated workers) ───────────
-  /** Live ephemeral workers + worktrees preserved awaiting integration/GC. */
-  listWorkers: (): Promise<{ live: WorkerSnapshot[]; preserved: PreservedWorktreeSnapshot[]; maxWorkers: number }> =>
-    ipcRenderer.invoke('workers:list'),
+  /** Live ephemeral workers + worktrees preserved awaiting integration/GC +
+   *  a bounded history of recently finished workers. */
+  listWorkers: (): Promise<{
+    live: WorkerSnapshot[];
+    preserved: PreservedWorktreeSnapshot[];
+    maxWorkers: number;
+    history: WorkerHistoryEntry[];
+  }> => ipcRenderer.invoke('workers:list'),
   /** Manually stop a live ephemeral worker (safety-gated teardown; work preserved). */
   stopWorker: (workerId: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('workers:stop', workerId),
+  /** Rolling tail of a worker's raw PTY output (ANSI included), for the Workers
+   *  panel's read-only log view. Null once the session has torn down. */
+  getPtyTail: (id: string, maxChars?: number): Promise<string | null> =>
+    ipcRenderer.invoke('pty:tail', id, maxChars),
 
   // ─── Semantic memory (MemPalace CLI) ─────────────────────────────────────
   memoryStatus: (): Promise<MemoryStatus> => ipcRenderer.invoke('hive:memoryStatus'),

@@ -1715,6 +1715,35 @@ interface WorkerRec {
  *  force-removed) when it holds unintegrated work — god is the sole integrator. */
 const liveWorkers = new Map<string, WorkerRec>();
 
+/** Why a worker left `liveWorkers` — surfaced in the Workers panel's
+ *  completed/reaped filter. 'done' = it signaled completion itself; the other
+ *  three are reap paths that fire before that ever happens. */
+type WorkerEndReason = 'done' | 'idle' | 'token-cap' | 'manual-stop';
+/** One finished worker, kept after teardown purely for the panel's history —
+ *  `liveWorkers` itself never retains a finished entry. */
+interface WorkerHistoryEntry {
+  workerId: string;
+  reqId: string;
+  name: string;
+  baseBranch: string;
+  spawnedAt: number;
+  endedAt: number;
+  reason: WorkerEndReason;
+  hasSlack: boolean;
+}
+/** Bounded ring of recently finished workers — newest first, capped so it can
+ *  never grow unbounded across a long-running app session. */
+const WORKER_HISTORY_MAX = 30;
+const workerHistory: WorkerHistoryEntry[] = [];
+function recordWorkerHistory(rec: WorkerRec, reason: WorkerEndReason): void {
+  workerHistory.unshift({
+    workerId: rec.workerId, reqId: rec.reqId, name: rec.name ?? rec.workerId,
+    baseBranch: rec.baseBranch, spawnedAt: rec.spawnedAt, endedAt: Date.now(),
+    reason, hasSlack: !!rec.slack
+  });
+  if (workerHistory.length > WORKER_HISTORY_MAX) workerHistory.length = WORKER_HISTORY_MAX;
+}
+
 /** The loopback secret broker (Phase 2). Workers reach registered integrations through
  *  it without ever seeing a credential. getRecord/getSecret are injected so the broker
  *  stays electron-free + unit-testable. Started in bootstrapHiveServices; each worker is
@@ -4411,6 +4440,12 @@ ipcMain.handle('pty:kill', (_evt, id: string) => {
   return res;
 });
 ipcMain.handle('pty:list', () => ptyManager.list());
+/** Rolling tail of a PTY's raw output, for the Workers panel's read-only log
+ *  view. Null when the session is already gone (torn down/reaped). */
+ipcMain.handle('pty:tail', (_evt, id: string, maxChars?: number): string | null => {
+  if (typeof id !== 'string') return null;
+  return ptyManager.getTail(id, typeof maxChars === 'number' ? maxChars : undefined);
+});
 
 // Resolve a pasted Claude session id to the cwd it originally ran in, so the Add
 // Agent dialog can auto-fill the folder for a resume (#2 zero-step resume). Reads
@@ -6610,6 +6645,7 @@ async function ephemeralWorkerTick(): Promise<void> {
         // Success: the worker already replied in-thread; just release it.
         rec.releasing = true;
         console.log(`[worker] ${workerId} signaled done — releasing`);
+        recordWorkerHistory(rec, 'done');
         ptyManager.kill(workerId);
         teardownPty(workerId);
         continue;
@@ -6627,6 +6663,7 @@ async function ephemeralWorkerTick(): Promise<void> {
             `Worker ${workerId} used ${used.toLocaleString()} tokens (> its cap of ${tokenCap.toLocaleString()}) and was reaped. Any committed work on its branch is preserved for you.`,
             rec.slack
           );
+          recordWorkerHistory(rec, 'token-cap');
           ptyManager.kill(workerId);
           teardownPty(workerId);
           continue;
@@ -6642,6 +6679,7 @@ async function ephemeralWorkerTick(): Promise<void> {
           `Worker ${workerId} produced no output for ${Math.round(idleMs / 60000)} min (> the ${Math.round(idleTimeoutMs / 60000)} min cap) and never signaled done, so it was reaped. Any committed work on its branch is preserved for you.`,
           rec.slack
         );
+        recordWorkerHistory(rec, 'idle');
         ptyManager.kill(workerId);
         teardownPty(workerId);
       }
@@ -6709,6 +6747,9 @@ interface WorkerSnapshot {
   hasSlack: boolean;
   releasing: boolean;
   status: 'releasing' | 'working';
+  /** Most recent tool name the worker's hook events reported, or null before
+   *  its first tool call. Same map the Fleet cards read (`lastAgentTool`). */
+  lastTool: string | null;
 }
 /** Snapshot of a preserved-but-not-yet-GC'd worktree for the tab. */
 interface PreservedSnapshot {
@@ -6718,8 +6759,14 @@ interface PreservedSnapshot {
   preservedAt: number;
 }
 
-/** List live ephemeral workers (+ preserved worktrees awaiting GC) for the tab. */
-ipcMain.handle('workers:list', (): { live: WorkerSnapshot[]; preserved: PreservedSnapshot[]; maxWorkers: number } => {
+/** List live ephemeral workers (+ preserved worktrees awaiting GC, + recently
+ *  finished workers) for the Workers panel. */
+ipcMain.handle('workers:list', (): {
+  live: WorkerSnapshot[];
+  preserved: PreservedSnapshot[];
+  maxWorkers: number;
+  history: WorkerHistoryEntry[];
+} => {
   const cfg = readConfig();
   const defaultCap = typeof cfg.defaultWorkerTokenCap === 'number' && cfg.defaultWorkerTokenCap > 0
     ? cfg.defaultWorkerTokenCap : 0;
@@ -6739,13 +6786,14 @@ ipcMain.handle('workers:list', (): { live: WorkerSnapshot[]; preserved: Preserve
       tokenCap: effCap > 0 ? effCap : null,
       hasSlack: !!rec.slack,
       releasing: !!rec.releasing,
-      status: rec.releasing ? 'releasing' : 'working'
+      status: rec.releasing ? 'releasing' : 'working',
+      lastTool: lastAgentTool.get(rec.workerId) ?? null
     };
   });
   const preserved: PreservedSnapshot[] = [...preservedWorktrees.values()].map((e) => ({
     workerId: e.workerId, wtPath: e.wtPath, baseBranch: e.baseBranch, preservedAt: e.preservedAt
   }));
-  return { live, preserved, maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4) };
+  return { live, preserved, maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4), history: workerHistory };
 });
 
 /** Manually stop a live ephemeral worker. Mirrors the done-release path: mark
@@ -6763,6 +6811,7 @@ ipcMain.handle('workers:stop', (_evt, workerId: string): { ok: boolean; error?: 
   if (rec.releasing) return { ok: true }; // already stopping
   rec.releasing = true;
   console.log(`[worker] manual stop requested for ${workerId}`);
+  recordWorkerHistory(rec, 'manual-stop');
   try { ptyManager.kill(workerId); } catch (e) { return { ok: false, error: String(e) }; }
   teardownPty(workerId);
   return { ok: true };
