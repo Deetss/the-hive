@@ -881,14 +881,20 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     const safeTimestamp = nowIso.replace(/[:.]/g, '-');
     const shortId = randomBytes(4).toString('hex');
     const messageId = `${safeTimestamp}-${shortId}`;
-    const inboxDir = join(hiveRoot, 'agents', to, 'inbox');
+
+    // Route through god's inbox so the Overmind sees every mobile dispatch
+    // and can add context before forwarding. If the message is already for god,
+    // it lands there directly. The `to` field preserves the intended recipient.
+    const routeTarget = to === 'god' ? 'god' : 'god';
+    const routeSubject = to === 'god' ? subject : `Task from the human (for ${to}): ${subject}`;
+    const inboxDir = join(hiveRoot, 'agents', routeTarget, 'inbox');
 
     const messagePayload = {
       id: messageId,
       from: 'human',
       to,
       act,
-      subject,
+      subject: routeSubject,
       body: messageBody,
       hops: 0,
       requires_reply: false,
