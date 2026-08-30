@@ -1403,6 +1403,21 @@ async function loadTasks() {
   } catch (e) { if (e.message !== '401') showError('Tasks load failed'); }
 }
 
+async function patchTask(taskId, patch) {
+  try {
+    const res = await apiFetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
+    if (res.ok) {
+      await loadTasks();
+    }
+  } catch (e) {
+    showError('Task update failed');
+  }
+}
+
 function renderTasks() {
   const all = (tasksData || {}).tasks || [];
   const filtered = all.filter(t => t.status === activeTaskTab);
@@ -1419,20 +1434,50 @@ function renderTasks() {
       btn.textContent = expanded ? 'Show less' : 'Show more';
     });
   });
+  el.querySelectorAll('.task-status-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const id = sel.dataset.id;
+      const status = e.target.value;
+      if (id && status) patchTask(id, { status });
+    });
+  });
+  el.querySelectorAll('[contenteditable="true"]').forEach(elem => {
+    elem.addEventListener('blur', (e) => {
+      const id = elem.dataset.id;
+      const field = elem.dataset.field;
+      const text = (elem.innerText || elem.textContent || '').trim();
+      if (!id || !field) return;
+      if (field === 'title' && text) patchTask(id, { title: text });
+      if (field === 'notes') patchTask(id, { notes: text, description: text });
+      if (field === 'result') patchTask(id, { result: text });
+    });
+  });
 }
 
 function taskCard(t) {
   const accentColor = { doing: 'var(--cth-lemon)', blocked: 'var(--cth-coral)', todo: 'var(--cth-sky)', done: 'var(--cth-mint)' }[t.status] || 'var(--cth-lemon)';
+  const notesText = t.notes || t.description || '';
   return `
 <div class="task-card" style="--col-accent: ${accentColor};">
   <div class="task-accent-edge"></div>
   <div class="task-body">
     <div class="task-header-row">
-      <span class="task-title">${esc(t.title)}</span>
-      <span class="task-status-badge">${t.status}</span>
+      <span class="task-title" contenteditable="true" data-id="${t.id}" data-field="title" title="Click to edit title">${esc(t.title)}</span>
+      <select class="task-status-select" data-id="${t.id}" style="font-family:var(--cth-font-display);font-size:8px;padding:2px 4px;background:var(--col-accent);color:var(--cth-ink-900);border:1px solid var(--cth-ink-900);cursor:pointer">
+        <option value="todo" ${t.status === 'todo' ? 'selected' : ''}>TODO</option>
+        <option value="doing" ${t.status === 'doing' ? 'selected' : ''}>DOING</option>
+        <option value="blocked" ${t.status === 'blocked' ? 'selected' : ''}>BLOCKED</option>
+        <option value="done" ${t.status === 'done' ? 'selected' : ''}>DONE</option>
+      </select>
     </div>
     ${t.assignee ? `<div class="task-assignee">${esc(t.assignee).toUpperCase()}</div>` : ''}
-    ${t.notes ? `<div class="task-notes">${esc(t.notes)}</div><button class="task-expand">Show more</button>` : ''}
+    <div class="task-notes" contenteditable="true" data-id="${t.id}" data-field="notes" title="Click to edit notes" style="outline:none">${esc(notesText)}</div>
+    ${notesText ? `<button class="task-expand">Show more</button>` : ''}
+    ${t.status === 'done' || t.result ? `
+    <div style="margin-top:6px;padding:4px 6px;background:var(--cth-paper-50);border-left:2px solid var(--cth-mint);font-size:11px">
+      <div style="font-family:var(--cth-font-display);font-size:8px;color:var(--cth-mint);margin-bottom:2px">RESULT:</div>
+      <div contenteditable="true" data-id="${t.id}" data-field="result" title="Click to edit result" style="outline:none;font-family:var(--cth-font-ui);color:var(--cth-ink-800)">${esc(t.result || '(click to add result)')}</div>
+    </div>` : ''}
     ${t.updatedAt ? `<div style="font-family:var(--cth-font-mono);font-size:10px;color:var(--cth-ink-500);margin-top:4px">${new Date(t.updatedAt).toLocaleDateString()}</div>` : ''}
   </div>
 </div>`;

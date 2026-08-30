@@ -22,11 +22,13 @@ export interface HiveTask {
   id: string;
   title: string;
   description?: string;
+  notes?: string;
   assignee?: string;
   status: 'todo' | 'doing' | 'blocked' | 'done';
   dependsOn: string[];
   priority: number;
   createdAt: string;
+  result?: string;
   /** First-class human feedback: the god appends {q} when a card needs the human;
    *  the ASK ME view fills in {a}. Full history stays on the card. */
   humanQA?: HumanQA[];

@@ -56,6 +56,15 @@ export function TaskDetailOverlay() {
     } catch { void refresh(); }
   };
 
+  const patchTask = async (patch: Partial<HiveTask>) => {
+    const next = tasks.map((t) => (t.id === task.id ? { ...t, ...patch } : t));
+    setTasks(next); // optimistic
+    try {
+      const result = await window.cth.hivePatchTask(task.id, patch);
+      if (!result.ok) void refresh();
+    } catch { void refresh(); }
+  };
+
   const assign = () => {
     // Route through the Command Center's dispatch box (which mails the god —
     // the human never writes into a worker's inbox directly).
@@ -75,6 +84,7 @@ export function TaskDetailOverlay() {
       assigneeName={nameFor(task.assignee)}
       onMove={(s) => void move(s)}
       onAssign={assign}
+      onPatch={patchTask}
       onClose={closeTaskDetail}
     />
   );

@@ -86,6 +86,8 @@ export function parseTasks(raw: unknown): HiveTask[] {
         : stableId(`${typeof t.title === 'string' ? t.title : ''}|${typeof t.createdAt === 'string' ? t.createdAt : ''}|${i}`),
       title: typeof t.title === 'string' ? t.title : '(untitled)',
       description: typeof t.description === 'string' ? t.description : undefined,
+      notes: typeof t.notes === 'string' ? t.notes : undefined,
+      result: typeof t.result === 'string' ? t.result : undefined,
       assignee: typeof t.assignee === 'string' ? t.assignee : undefined,
       status: (['todo', 'doing', 'blocked', 'done'] as const).includes(t.status as Status)
         ? (t.status as Status) : 'todo',
@@ -787,12 +789,13 @@ const TaskCard = memo(function TaskCard({ task, accent, assigneeName, onOpen, on
 // the big stage instead of the narrow side panel. Exported for App's
 // TaskDetailOverlay; opened via the store's openTaskDetail from anywhere.
 
-export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose }: {
+export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch, onClose }: {
   task: HiveTask;
   all: HiveTask[];
   assigneeName?: string;
   onMove: (s: Status) => void;
   onAssign: () => void;
+  onPatch?: (patch: Partial<HiveTask>) => Promise<void>;
   onClose: () => void;
 }) {
   const isMobile = useMediaQuery('(max-width: 480px)');
@@ -803,6 +806,42 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose 
     .map((id) => all.find((t) => t.id === id))
     .filter((t): t is HiveTask => !!t);
   const created = new Date(task.createdAt);
+
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(task.title);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(task.notes || task.description || '');
+  const [isEditingResult, setIsEditingResult] = useState(false);
+  const [resultDraft, setResultDraft] = useState(task.result || '');
+
+  useEffect(() => {
+    setTitleDraft(task.title);
+    setNotesDraft(task.notes || task.description || '');
+    setResultDraft(task.result || '');
+  }, [task.title, task.notes, task.description, task.result]);
+
+  const saveTitle = async () => {
+    setIsEditingTitle(false);
+    const trimmed = titleDraft.trim();
+    if (trimmed && trimmed !== task.title) {
+      await onPatch?.({ title: trimmed });
+    }
+  };
+
+  const saveNotes = async () => {
+    setIsEditingNotes(false);
+    if (notesDraft !== (task.notes || task.description || '')) {
+      await onPatch?.({ description: notesDraft, notes: notesDraft });
+    }
+  };
+
+  const saveResult = async () => {
+    setIsEditingResult(false);
+    if (resultDraft !== (task.result || '')) {
+      await onPatch?.({ result: resultDraft });
+    }
+  };
+
   return (
     <div
       onClick={onClose}
@@ -829,9 +868,36 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose 
           <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
             {/* Title under a status-colored bar */}
             <div style={{ borderLeft: `4px solid ${col.accent}`, paddingLeft: 8 }}>
-              <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 15, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
-                {task.title}
-              </div>
+              {isEditingTitle ? (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onBlur={saveTitle}
+                    onKeyDown={(e) => { if (e.key === 'Enter') void saveTitle(); if (e.key === 'Escape') setIsEditingTitle(false); }}
+                    autoFocus
+                    style={{
+                      flex: 1, padding: '4px 8px', fontFamily: 'var(--cth-font-ui)', fontSize: 15,
+                      fontWeight: 600, color: 'var(--cth-ink-900)', background: 'var(--cth-paper-100)',
+                      border: '1px solid var(--cth-ink-700)', outline: 'none'
+                    }}
+                  />
+                  <PixelButton variant="primary" size="sm" onClick={saveTitle}>save</PixelButton>
+                </div>
+              ) : (
+                <div
+                  onClick={() => setIsEditingTitle(true)}
+                  title="Click to edit title"
+                  style={{
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 15, lineHeight: '20px',
+                    color: 'var(--cth-ink-900)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>{task.title}</span>
+                  <span style={{ fontSize: 11, color: 'var(--cth-ink-400)' }}>✎</span>
+                </div>
+              )}
             </div>
 
             {/* Fact row */}
@@ -849,14 +915,111 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose 
               </span>
             </div>
 
-            {/* The contract — preserved line by line */}
+            {/* The contract / notes — preserved line by line & editable */}
             <div style={{
               padding: 10, background: 'var(--cth-paper-100)',
               boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-              fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '18px',
-              color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap', wordBreak: 'break-word'
+              display: 'flex', flexDirection: 'column', gap: 6
             }}>
-              {task.description?.trim() || <span style={{ color: 'var(--cth-ink-300)' }}>(no description on this card)</span>}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-500)' }}>
+                  NOTES / DESCRIPTION
+                </span>
+                {!isEditingNotes && (
+                  <button
+                    onClick={() => setIsEditingNotes(true)}
+                    style={{
+                      border: 'none', background: 'transparent', cursor: 'pointer',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)',
+                      textDecoration: 'underline'
+                    }}
+                  >edit</button>
+                )}
+              </div>
+              {isEditingNotes ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <textarea
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    rows={6}
+                    autoFocus
+                    style={{
+                      width: '100%', padding: '6px 8px', fontFamily: 'var(--cth-font-ui)', fontSize: 12,
+                      lineHeight: '18px', color: 'var(--cth-ink-900)', background: 'var(--cth-cream-100)',
+                      border: '1px solid var(--cth-ink-700)', outline: 'none', resize: 'vertical', boxSizing: 'border-box'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    <PixelButton variant="ghost" size="sm" onClick={() => setIsEditingNotes(false)}>cancel</PixelButton>
+                    <PixelButton variant="primary" size="sm" onClick={saveNotes}>save notes</PixelButton>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={() => setIsEditingNotes(true)}
+                  title="Click to edit notes"
+                  style={{
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '18px',
+                    color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: 'pointer'
+                  }}
+                >
+                  {task.notes?.trim() || task.description?.trim() || <span style={{ color: 'var(--cth-ink-300)' }}>(click to add notes/description)</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Result / Deliverable */}
+            <div style={{
+              padding: 10, background: 'var(--cth-paper-100)',
+              boxShadow: 'inset 0 0 0 1px var(--cth-mint)',
+              display: 'flex', flexDirection: 'column', gap: 6
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-mint)' }}>
+                  RESULT / DELIVERABLE
+                </span>
+                {!isEditingResult && (
+                  <button
+                    onClick={() => setIsEditingResult(true)}
+                    style={{
+                      border: 'none', background: 'transparent', cursor: 'pointer',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)',
+                      textDecoration: 'underline'
+                    }}
+                  >edit</button>
+                )}
+              </div>
+              {isEditingResult ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <textarea
+                    value={resultDraft}
+                    onChange={(e) => setResultDraft(e.target.value)}
+                    rows={4}
+                    placeholder="Summary of outcome / deliverable…"
+                    autoFocus
+                    style={{
+                      width: '100%', padding: '6px 8px', fontFamily: 'var(--cth-font-ui)', fontSize: 12,
+                      lineHeight: '18px', color: 'var(--cth-ink-900)', background: 'var(--cth-cream-100)',
+                      border: '1px solid var(--cth-ink-700)', outline: 'none', resize: 'vertical', boxSizing: 'border-box'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    <PixelButton variant="ghost" size="sm" onClick={() => setIsEditingResult(false)}>cancel</PixelButton>
+                    <PixelButton variant="primary" size="sm" onClick={saveResult}>save result</PixelButton>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={() => setIsEditingResult(true)}
+                  title="Click to edit result"
+                  style={{
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '18px',
+                    color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: 'pointer'
+                  }}
+                >
+                  {task.result?.trim() || <span style={{ color: 'var(--cth-ink-300)' }}>(click to add result / deliverable)</span>}
+                </div>
+              )}
             </div>
 
             {/* The human Q&A trail — every decision documented on the card */}
