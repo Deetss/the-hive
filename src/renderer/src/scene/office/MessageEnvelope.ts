@@ -2,7 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import { colors } from '@/design/tokens';
 
 /** Hive speech-acts (mirrors HiveMessage['act'] in the main process). */
-export type MessageAct = 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done';
+export type MessageAct = 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done' | 'warn';
 
 // A little pixel-art envelope that flies from a sender's desk to a recipient's
 // desk when the hive routes a message, then pops a small arrival burst. Lives in
@@ -21,7 +21,8 @@ const ACT_COLOR: Record<MessageAct, number> = {
   inform:  colors.cream[200],
   agree:   colors.accent.mint,
   done:    colors.accent.mint,
-  refuse:  colors.accent.coral
+  refuse:  colors.accent.coral,
+  warn:    colors.accent.lemon
 };
 
 const OUTLINE = colors.ink[900];

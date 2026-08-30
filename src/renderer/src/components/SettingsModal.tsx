@@ -537,11 +537,11 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
       setGroqKey(cc.groqApiKey ?? '');
       setFreeflowModel(cc.freeflowModel ?? 'whisper-large-v3-turbo');
       setIdleDisconnectMs((c as HarnessConfig).realtimeIdleDisconnectMs ?? 180_000);
+      setGovPolicy((c as HarnessConfig & { governorPolicy?: GovernorPolicyView }).governorPolicy ?? {});
     }).catch(() => { /* keep prop-seeded values */ });
     window.cth.getMobileApiSecret().then((info) => {
       if (alive) setMobilePairing(info);
     }).catch(() => { /* mobile server not up yet — fallback link stays blank */ });
-    setGovPolicy((c as HarnessConfig & { governorPolicy?: GovernorPolicyView }).governorPolicy ?? {});
     window.cth.kgStatus().then((s) => { if (alive) setKgDocCount(s.docCount); })
       .catch(() => { /* status unavailable */ });
     // Hydrate live connection state + the persisted Request URL: the
