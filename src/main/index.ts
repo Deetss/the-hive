@@ -4100,6 +4100,11 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
           seen.add(a); return true;
         }); }
       seedPrompt = inj.seedPrompt;
+      const agentDir = (hive.enabled() && opts.hive?.id) ? join(hive.root() || '', 'agents', opts.hive.id) : undefined;
+      const rememberHandoff = hive.readRememberHandoff(agentDir, opts.cwd);
+      if (rememberHandoff && seedPrompt && !seedPrompt.includes(rememberHandoff)) {
+        seedPrompt = `## Previous Session Handoff (.remember/remember.md)\n${rememberHandoff}\n\n${seedPrompt}`;
+      }
       // Point the agent's mempalace CLI at the shared palace + the `kg` CLI at the
       // enterprise knowledge store (both no-ops / empty when their flags are off).
       opts.env = { ...(opts.env ?? {}), ...inj.env, ...memory.env(), ...knowledge.env() };

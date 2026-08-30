@@ -1444,6 +1444,30 @@ export class HiveManager {
    *    read `C:\Users\x\hive\agents\god/inbox/`. Use join() so the agent's own
    *    tooling gets a path it can pass straight to its shell.
    */
+  /** Read .remember/remember.md session handoff if present in agent dir or cwd. */
+  readRememberHandoff(agentDir?: string, cwd?: string): string | null {
+    const candidates: string[] = [];
+    if (agentDir) {
+      candidates.push(join(agentDir, '.remember', 'remember.md'));
+      candidates.push(join(agentDir, 'remember.md'));
+    }
+    if (cwd) {
+      candidates.push(join(cwd, '.remember', 'remember.md'));
+      candidates.push(join(cwd, 'remember.md'));
+    }
+    for (const p of candidates) {
+      try {
+        if (existsSync(p)) {
+          const raw = readFileSync(p, 'utf8').trim();
+          if (raw) return raw;
+        }
+      } catch {
+        // ignore read error
+      }
+    }
+    return null;
+  }
+
   private injectedPrompt(
     meta: AgentMeta,
     dir: string,
@@ -1456,6 +1480,12 @@ export class HiveManager {
     const inDir = (...parts: string[]): string => join(dir, ...parts);
     const inRoot = (...parts: string[]): string => join(root, ...parts);
     const ctxLine = 'Roster shows `ctx NN%` usage - treat high percentages as busy and route heavy work to low-ctx agents.';
+
+    // Session handoff context from .remember/remember.md (1:1 session resume context)
+    const remember = this.readRememberHandoff(dir, meta.cwd);
+    const rememberSection = remember
+      ? `## Previous Session Handoff (.remember/remember.md)\n${remember}\n\n`
+      : '';
 
     const memoryLine = semanticMemory
       // The palace location is named, not spelled as `$MEMPALACE_PALACE_PATH`:
@@ -1501,7 +1531,7 @@ export class HiveManager {
     const slackLine = meta.isOvermind
       ? 'SLACK REPLIES: When composing a Slack reply (or writing the `result` field of a Slack-origin kanban card), you MUST: (1) directly address what the user asked — never a bare "done"; (2) include the relevant specifics, outcome, and details; (3) format for Slack mrkdwn — open with a short *bold* headline, use bullet points for multiple items, wrap code/paths in `backtick` blocks, keep it concise (no walls of text). When finishing a Slack-origin task, always write a complete, user-facing, well-formatted `result` on the kanban card — the system posts it verbatim to Slack as the done reply.'
       : `SLACK REPLIES: If god dispatches you a task that came from Slack, it will include an exact \`"${hiveNode}" "<helper>" --channel … --thread … --text "…"\` reply command — when you finish, run it VERBATIM to post your result back to that thread yourself. The reply must be SUBSTANTIVE Slack mrkdwn (a short *bold* headline + the actual outcome/specifics/links), NEVER a bare "done".`;
-    return [
+    const basePrompt = [
       `You are "${meta.name}" (${meta.id}), an autonomous agent in a collaborating hive of Claude agents.`,
       `Workspace: ${dir}. Shared hive: ${root}. Full protocol + Slack rules: ${inRoot('PROTOCOL.md')}.`,
       'Core loop:',
@@ -1518,6 +1548,8 @@ export class HiveManager {
       ctxLine,
       `Env vars: AGENT_ID, AGENT_NAME, HIVE_ROOT, AGENT_DIR.`
     ].filter(Boolean).join('\n');
+
+    return rememberSection ? `${rememberSection}${basePrompt}` : basePrompt;
   }
 
   // — messaging —
