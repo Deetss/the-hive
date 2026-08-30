@@ -721,19 +721,6 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     return true;
   }
 
-  // GET /api/workers — ephemeral Slack-triggered workers, for the mobile Workers screen.
-  if (pathname === '/api/workers') {
-    if (method !== 'GET') {
-      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
-      return true;
-    }
-    const payload = buildWorkersPayload();
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(payload));
-    return true;
-  }
-
   // GET /api/board
   if (pathname === '/api/board') {
     if (method !== 'GET') {
@@ -1122,6 +1109,60 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     return true;
   }
 
+  // GET /api/workers/:id/tail
+  const workerTailMatch = /^\/api\/workers\/([^/]+)\/tail\/?$/.exec(pathname);
+  if (workerTailMatch) {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    const agentId = decodeURIComponent(workerTailMatch[1]);
+    const tail = getWorkerPtyTail(agentId);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, agentId, tail }));
+    return true;
+  }
+
+  // GET /api/workers
+  if (pathname === '/api/workers' || pathname === '/api/workers/') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    const cfg = readConfig();
+    const defaultCap = typeof cfg.defaultWorkerTokenCap === 'number' && cfg.defaultWorkerTokenCap > 0
+      ? cfg.defaultWorkerTokenCap : 0;
+    const now = Date.now();
+    const live = [...liveWorkers.values()].map((rec) => {
+      const idle = ptyManager.idleFor(rec.workerId);
+      const effCap = (rec.tokenCap && rec.tokenCap > 0) ? rec.tokenCap : (defaultCap > 0 ? defaultCap : 0);
+      const tail = getWorkerPtyTail(rec.workerId);
+      const isWorking = idle !== undefined && idle < 3000;
+      return {
+        workerId: rec.workerId,
+        reqId: rec.reqId,
+        name: rec.name ?? rec.workerId,
+        baseBranch: rec.baseBranch,
+        cwd: rec.cwd,
+        objective: rec.objective,
+        spawnedAt: rec.spawnedAt,
+        ageMs: Math.max(0, now - rec.spawnedAt),
+        idleMs: idle === undefined ? null : idle,
+        tokensUsed: workerTokensUsed(rec.workerId),
+        tokenCap: effCap > 0 ? effCap : null,
+        hasSlack: !!rec.slack,
+        releasing: !!rec.releasing,
+        status: rec.releasing ? 'releasing' : (isWorking ? 'working' : 'idle'),
+        tailPreview: tail.slice(-5)
+      };
+    });
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, live, recent: recentWorkers, maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4) }));
+    return true;
+  }
+
   res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify({ error: 'Not Found' }));
   return true;
@@ -1467,6 +1508,19 @@ function stripAnsiText(str: string): string {
   return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
 }
 
+/** Rolling 200-line PTY buffer per worker / agent. */
+const workerPtyTail = new Map<string, string[]>();
+const workerPtyPartial = new Map<string, string>();
+
+function getWorkerPtyTail(id: string): string[] {
+  const lines = [...(workerPtyTail.get(id) ?? [])];
+  const partial = workerPtyPartial.get(id)?.replace(/\r/g, '').trimEnd();
+  if (partial && partial.length > 0) {
+    lines.push(partial);
+  }
+  return lines.slice(-200);
+}
+
 function notifyAgentPtyActivity(ptyId: string, chunk?: string): void {
   const agentId = ptyToAgent.get(ptyId);
   if (!agentId) return;
@@ -1483,6 +1537,28 @@ function notifyAgentPtyActivity(ptyId: string, chunk?: string): void {
       if (detectedTool) {
         lastAgentTool.set(agentId, detectedTool);
       }
+    }
+
+    // Maintain 200-line rolling buffer per worker / agent
+    const currentLines = workerPtyTail.get(agentId) ?? [];
+    const prevPartial = workerPtyPartial.get(agentId) ?? '';
+    const combined = prevPartial + plain;
+    const parts = combined.split('\n');
+    const newPartial = parts.pop() ?? '';
+    workerPtyPartial.set(agentId, newPartial);
+    if (ptyId && ptyId !== agentId) workerPtyPartial.set(ptyId, newPartial);
+    for (const p of parts) {
+      const cleanLine = p.replace(/\r/g, '');
+      if (cleanLine.trim() || cleanLine.length > 0) {
+        currentLines.push(cleanLine);
+      }
+    }
+    if (currentLines.length > 200) {
+      currentLines.splice(0, currentLines.length - 200);
+    }
+    workerPtyTail.set(agentId, currentLines);
+    if (ptyId && ptyId !== agentId) {
+      workerPtyTail.set(ptyId, currentLines);
     }
   }
 
@@ -1713,6 +1789,8 @@ interface WorkerRec {
   name?: string;          // display name (for the worker tab)
   slack?: { channel: string; thread_ts: string };
   baseBranch: string;     // the branch its worktree was cut from (for ahead-of-base)
+  cwd?: string;
+  objective?: string;
   spawnedAt: number;      // epoch ms
   releasing?: boolean;    // kill issued; awaiting teardownPty (skip re-processing)
   /** Per-worker TOTAL-token cap from the spawn-request (overrides the config
@@ -1728,33 +1806,47 @@ interface WorkerRec {
  *  force-removed) when it holds unintegrated work — god is the sole integrator. */
 const liveWorkers = new Map<string, WorkerRec>();
 
-/** Why a worker left `liveWorkers` — surfaced in the Workers panel's
- *  completed/reaped filter. 'done' = it signaled completion itself; the other
- *  three are reap paths that fire before that ever happens. */
-type WorkerEndReason = 'done' | 'idle' | 'token-cap' | 'manual-stop';
-/** One finished worker, kept after teardown purely for the panel's history —
- *  `liveWorkers` itself never retains a finished entry. */
-interface WorkerHistoryEntry {
+interface RecentWorkerSnapshot {
   workerId: string;
   reqId: string;
   name: string;
   baseBranch: string;
+  cwd?: string;
+  objective?: string;
   spawnedAt: number;
   endedAt: number;
-  reason: WorkerEndReason;
-  hasSlack: boolean;
+  durationMs: number;
+  tokensUsed: number;
+  status: 'done' | 'reaped' | 'stopped' | 'failed';
+  tailPreview: string[];
 }
-/** Bounded ring of recently finished workers — newest first, capped so it can
- *  never grow unbounded across a long-running app session. */
-const WORKER_HISTORY_MAX = 30;
-const workerHistory: WorkerHistoryEntry[] = [];
-function recordWorkerHistory(rec: WorkerRec, reason: WorkerEndReason): void {
-  workerHistory.unshift({
-    workerId: rec.workerId, reqId: rec.reqId, name: rec.name ?? rec.workerId,
-    baseBranch: rec.baseBranch, spawnedAt: rec.spawnedAt, endedAt: Date.now(),
-    reason, hasSlack: !!rec.slack
-  });
-  if (workerHistory.length > WORKER_HISTORY_MAX) workerHistory.length = WORKER_HISTORY_MAX;
+const recentWorkers: RecentWorkerSnapshot[] = [];
+const recordedRecentWorkerIds = new Set<string>();
+
+function recordRecentWorker(workerId: string, status: 'done' | 'reaped' | 'stopped' | 'failed'): void {
+  if (recordedRecentWorkerIds.has(workerId)) return;
+  recordedRecentWorkerIds.add(workerId);
+  const rec = liveWorkers.get(workerId);
+  const now = Date.now();
+  const spawnedAt = rec?.spawnedAt ?? now;
+  const tail = getWorkerPtyTail(workerId);
+  const tokens = workerTokensUsed(workerId);
+  const entry: RecentWorkerSnapshot = {
+    workerId,
+    reqId: rec?.reqId ?? workerId.replace(/^worker-/, ''),
+    name: rec?.name ?? workerId,
+    baseBranch: rec?.baseBranch ?? 'main',
+    cwd: rec?.cwd,
+    objective: rec?.objective,
+    spawnedAt,
+    endedAt: now,
+    durationMs: Math.max(0, now - spawnedAt),
+    tokensUsed: tokens,
+    status,
+    tailPreview: tail.slice(-5)
+  };
+  recentWorkers.unshift(entry);
+  if (recentWorkers.length > 20) recentWorkers.splice(20);
 }
 
 /** The loopback secret broker (Phase 2). Workers reach registered integrations through
@@ -1860,6 +1952,7 @@ function teardownPty(id: string): void {
     // idle-reaped all land here. Normal agents keep the immediate force-remove.
     const worker = liveWorkers.get(id);
     if (worker) {
+      recordRecentWorker(id, 'stopped');
       liveWorkers.delete(id);
       releaseOffloadSlot(worker.reqId); // G2: free the offload slot (no-op for normal workers)
       void finalizeWorkerWorktree(wtPath, origCwd, worker);
@@ -1871,7 +1964,10 @@ function teardownPty(id: string): void {
   }
   // A worker whose isolation failed (non-repo cwd) has no worktree to gate above —
   // still clear its tracking entry so the controller stops watching a dead PTY.
-  if (liveWorkers.has(id)) liveWorkers.delete(id);
+  if (liveWorkers.has(id)) {
+    recordRecentWorker(id, 'stopped');
+    liveWorkers.delete(id);
+  }
   // Archive the dead worker's floor card (mirrors killAgent's voice-kill path;
   // the renderer's archiveAgent is a no-op if the card is already gone). NOT
   // done for regular agents: their kill flows already manage their own card.
@@ -4453,12 +4549,6 @@ ipcMain.handle('pty:kill', (_evt, id: string) => {
   return res;
 });
 ipcMain.handle('pty:list', () => ptyManager.list());
-/** Rolling tail of a PTY's raw output, for the Workers panel's read-only log
- *  view. Null when the session is already gone (torn down/reaped). */
-ipcMain.handle('pty:tail', (_evt, id: string, maxChars?: number): string | null => {
-  if (typeof id !== 'string') return null;
-  return ptyManager.getTail(id, typeof maxChars === 'number' ? maxChars : undefined);
-});
 
 // Resolve a pasted Claude session id to the cwd it originally ran in, so the Add
 // Agent dialog can auto-fill the folder for a resume (#2 zero-step resume). Reads
@@ -6542,7 +6632,7 @@ async function processSpawnRequest(filePath: string): Promise<void> {
         } as OffloadWorkSpec
       }
     : undefined;
-  liveWorkers.set(workerId, { workerId, reqId, name: meta.name, slack, baseBranch, spawnedAt: Date.now(), tokenCap, offload });
+  liveWorkers.set(workerId, { workerId, reqId, name: meta.name, slack, baseBranch, spawnedAt: Date.now(), tokenCap, offload, cwd, objective });
 
   // Dispatch the objective via the standard inbox path (zero new transport),
   // reusing the autonomous-request preamble so the worker gets the exact Slack
@@ -6657,8 +6747,8 @@ async function ephemeralWorkerTick(): Promise<void> {
       if (workerSignaledDone(workerId, rec.spawnedAt)) {
         // Success: the worker already replied in-thread; just release it.
         rec.releasing = true;
+        recordRecentWorker(workerId, 'done');
         console.log(`[worker] ${workerId} signaled done — releasing`);
-        recordWorkerHistory(rec, 'done');
         ptyManager.kill(workerId);
         teardownPty(workerId);
         continue;
@@ -6670,13 +6760,13 @@ async function ephemeralWorkerTick(): Promise<void> {
         const used = workerTokensUsed(workerId);
         if (used > tokenCap) {
           rec.releasing = true;
+          recordRecentWorker(workerId, 'reaped');
           console.warn(`[worker] reaping ${workerId} — token cap (${used.toLocaleString()} > ${tokenCap.toLocaleString()})`);
           informGod(
             `[worker reaped — token cap] ${workerId}`,
             `Worker ${workerId} used ${used.toLocaleString()} tokens (> its cap of ${tokenCap.toLocaleString()}) and was reaped. Any committed work on its branch is preserved for you.`,
             rec.slack
           );
-          recordWorkerHistory(rec, 'token-cap');
           ptyManager.kill(workerId);
           teardownPty(workerId);
           continue;
@@ -6686,13 +6776,13 @@ async function ephemeralWorkerTick(): Promise<void> {
       if (idleMs === undefined) continue; // PTY already gone; teardownPty cleans up
       if (idleMs > idleTimeoutMs) {
         rec.releasing = true;
+        recordRecentWorker(workerId, 'reaped');
         console.warn(`[worker] reaping idle ${workerId} (${Math.round(idleMs / 60000)}min idle)`);
         informGod(
           `[worker reaped — idle] ${workerId}`,
           `Worker ${workerId} produced no output for ${Math.round(idleMs / 60000)} min (> the ${Math.round(idleTimeoutMs / 60000)} min cap) and never signaled done, so it was reaped. Any committed work on its branch is preserved for you.`,
           rec.slack
         );
-        recordWorkerHistory(rec, 'idle');
         ptyManager.kill(workerId);
         teardownPty(workerId);
       }
@@ -6752,6 +6842,8 @@ interface WorkerSnapshot {
   reqId: string;
   name: string;
   baseBranch: string;
+  cwd?: string;
+  objective?: string;
   spawnedAt: number;
   ageMs: number;
   idleMs: number | null;        // null = PTY already gone
@@ -6759,10 +6851,8 @@ interface WorkerSnapshot {
   tokenCap: number | null;      // effective cap (per-request or config default); null = unlimited
   hasSlack: boolean;
   releasing: boolean;
-  status: 'releasing' | 'working';
-  /** Most recent tool name the worker's hook events reported, or null before
-   *  its first tool call. Same map the Fleet cards read (`lastAgentTool`). */
-  lastTool: string | null;
+  status: 'releasing' | 'working' | 'idle';
+  tailPreview: string[];
 }
 /** Snapshot of a preserved-but-not-yet-GC'd worktree for the tab. */
 interface PreservedSnapshot {
@@ -6772,15 +6862,13 @@ interface PreservedSnapshot {
   preservedAt: number;
 }
 
-/** Live ephemeral workers (+ preserved worktrees awaiting GC, + recently
- *  finished workers) for the Workers panel — shared by the desktop IPC handler
- *  and the mobile `/api/workers` route so the two surfaces never drift. */
-function buildWorkersPayload(): {
+/** List live ephemeral workers (+ preserved worktrees awaiting GC) for the tab. */
+ipcMain.handle('workers:list', (): {
   live: WorkerSnapshot[];
+  recent: RecentWorkerSnapshot[];
   preserved: PreservedSnapshot[];
   maxWorkers: number;
-  history: WorkerHistoryEntry[];
-} {
+} => {
   const cfg = readConfig();
   const defaultCap = typeof cfg.defaultWorkerTokenCap === 'number' && cfg.defaultWorkerTokenCap > 0
     ? cfg.defaultWorkerTokenCap : 0;
@@ -6788,11 +6876,15 @@ function buildWorkersPayload(): {
   const live: WorkerSnapshot[] = [...liveWorkers.values()].map((rec) => {
     const idle = ptyManager.idleFor(rec.workerId);
     const effCap = (rec.tokenCap && rec.tokenCap > 0) ? rec.tokenCap : (defaultCap > 0 ? defaultCap : 0);
+    const tail = getWorkerPtyTail(rec.workerId);
+    const isWorking = idle !== undefined && idle < 3000;
     return {
       workerId: rec.workerId,
       reqId: rec.reqId,
       name: rec.name ?? rec.workerId,
       baseBranch: rec.baseBranch,
+      cwd: rec.cwd,
+      objective: rec.objective,
       spawnedAt: rec.spawnedAt,
       ageMs: Math.max(0, now - rec.spawnedAt),
       idleMs: idle === undefined ? null : idle,
@@ -6800,25 +6892,25 @@ function buildWorkersPayload(): {
       tokenCap: effCap > 0 ? effCap : null,
       hasSlack: !!rec.slack,
       releasing: !!rec.releasing,
-      status: rec.releasing ? 'releasing' : 'working',
-      lastTool: lastAgentTool.get(rec.workerId) ?? null
+      status: rec.releasing ? 'releasing' : (isWorking ? 'working' : 'idle'),
+      tailPreview: tail.slice(-5)
     };
   });
   const preserved: PreservedSnapshot[] = [...preservedWorktrees.values()].map((e) => ({
     workerId: e.workerId, wtPath: e.wtPath, baseBranch: e.baseBranch, preservedAt: e.preservedAt
   }));
-  return { live, preserved, maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4), history: workerHistory };
-}
-ipcMain.handle('workers:list', () => buildWorkersPayload());
+  return { live, recent: recentWorkers, preserved, maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4) };
+});
+
+/** Return the rolling PTY buffer for a worker / agent. */
+ipcMain.handle('workers:getTail', (_evt, agentId: unknown): string[] => {
+  if (typeof agentId !== 'string' || !agentId) return [];
+  return getWorkerPtyTail(agentId);
+});
 
 /** Manually stop a live ephemeral worker. Mirrors the done-release path: mark
  *  releasing, then kill + teardownPty runs the SAFETY-GATED worktree teardown
- *  (committed work is preserved, never force-discarded). Idempotent. teardownPty
- *  is called explicitly (D10) rather than left to the PTY's natural exit: kill()
- *  frees the manager's id slot synchronously, so by the time the process's real
- *  exit arrives the exit-handler's stale-id guard already misreads it as a
- *  reclaimed id and skips teardown — the worker would stay "live" in registry.json
- *  and fleet.json forever after this call. */
+ *  (committed work is preserved, never force-discarded). Idempotent. */
 ipcMain.handle('workers:stop', (_evt, workerId: string): { ok: boolean; error?: string } => {
   if (typeof workerId !== 'string' || !workerId) return { ok: false, error: 'invalid worker id' };
   const rec = liveWorkers.get(workerId);
@@ -6826,7 +6918,32 @@ ipcMain.handle('workers:stop', (_evt, workerId: string): { ok: boolean; error?: 
   if (rec.releasing) return { ok: true }; // already stopping
   rec.releasing = true;
   console.log(`[worker] manual stop requested for ${workerId}`);
-  recordWorkerHistory(rec, 'manual-stop');
+
+  // Write stop message to worker's inbox for graceful shutdown
+  const root = hive.root();
+  if (root) {
+    const nowIso = new Date().toISOString();
+    const safeTimestamp = nowIso.replace(/[:.]/g, '-');
+    const stopMsgId = `${safeTimestamp}-stop`;
+    const inboxDir = join(root, 'agents', workerId, 'inbox');
+    try {
+      mkdirSync(inboxDir, { recursive: true });
+      writeFileSync(join(inboxDir, `${stopMsgId}.json`), JSON.stringify({
+        id: stopMsgId,
+        from: 'human',
+        to: workerId,
+        act: 'stop',
+        subject: 'Stop requested',
+        body: 'Stop active work and finish safely',
+        hops: 0,
+        requires_reply: false,
+        needs_human: false,
+        created_at: nowIso
+      }, null, 2), 'utf8');
+    } catch { /* best-effort */ }
+  }
+
+  recordRecentWorker(workerId, 'stopped');
   try { ptyManager.kill(workerId); } catch (e) { return { ok: false, error: String(e) }; }
   teardownPty(workerId);
   return { ok: true };
