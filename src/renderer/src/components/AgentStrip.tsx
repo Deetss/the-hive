@@ -193,7 +193,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{
-                      fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
                       color: 'var(--cth-ink-500)'
                     }}>PRIVATE NOTE · {a.name.toUpperCase()}</span>
                     <button
@@ -291,7 +291,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
             fontFamily: 'var(--cth-font-ui)'
           }}>
             <span style={{
-              fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+              fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
               color: 'var(--cth-ink-500)', textTransform: 'uppercase'
             }}>
               previous session

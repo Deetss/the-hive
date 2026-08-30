@@ -72,7 +72,7 @@ const sectionHeaderStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
-  fontFamily: 'var(--cth-font-display)',
+  fontFamily: 'var(--cth-font-ui)',
   fontSize: 12,
   color: 'var(--cth-ink-900)'
 };
@@ -199,7 +199,7 @@ export function ProfileWalkthrough({ config, mandatory, onComplete, onCancel }: 
       <PixelPanel variant="dialog" style={panelStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 14, color: 'var(--cth-ink-900)' }}>
+            <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 14, color: 'var(--cth-ink-900)' }}>
               Finish setting up your accounts
             </div>
             <div style={blurbStyle}>

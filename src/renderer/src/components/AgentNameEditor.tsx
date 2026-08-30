@@ -85,7 +85,7 @@ export function AgentNameEditor({
           border: 'none', outline: 'none',
           background: 'var(--cth-paper-100)',
           boxShadow: `inset 0 0 0 1px var(--cth-${error ? 'coral' : 'ink-300'})`,
-          fontFamily: 'var(--cth-font-display)', fontSize,
+          fontFamily: 'var(--cth-font-ui)', fontSize,
           color: 'var(--cth-ink-900)', textTransform: uppercase ? 'uppercase' : undefined
         }}
       />
@@ -98,7 +98,7 @@ export function AgentNameEditor({
         onDoubleClick={(event) => { event.stopPropagation(); beginEditing(); }}
         title={`${name} — double-click to rename`}
         style={{
-          fontFamily: 'var(--cth-font-display)', fontSize,
+          fontFamily: 'var(--cth-font-ui)', fontSize,
           color: 'var(--cth-ink-900)',
           minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
         }}

@@ -38,7 +38,7 @@ export function AskMeTab() {
       {unresolvedMessages.map((msg) => (
         <div key={msg.id} style={{ background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-sky)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px', background: 'var(--cth-sky)', boxShadow: 'inset 0 -1px 0 var(--cth-ink-700)' }}>
-            <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-900)', background: 'var(--cth-lemon)', padding: '1px 4px' }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-ink-900)', background: 'var(--cth-lemon)', padding: '1px 4px' }}>
               {msg.act === 'query' ? 'QUERY' : msg.act === 'prompt' ? 'PROMPT' : 'MESSAGE'}
             </span>
             <span style={{ flex: 1, fontFamily: 'var(--cth-font-ui)', fontSize: 14, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

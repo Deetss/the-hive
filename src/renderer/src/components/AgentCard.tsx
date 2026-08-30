@@ -214,7 +214,7 @@ export function AgentCard({
             boxShadow: 'inset 0 0 0 1px var(--cth-ink-300), 1px 2px 0 rgba(26,19,32,0.18)',
             transform: 'rotate(4deg)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-900)',
+            fontFamily: 'var(--cth-font-ui)', fontSize: 8, color: 'var(--cth-ink-900)',
             cursor: 'pointer'
           }}
         >
@@ -251,7 +251,7 @@ export function AgentCard({
                   <AgentNameEditor name={name} onCommit={onRename} uppercase />
                 ) : (
                   <span style={{
-                    fontFamily: 'var(--cth-font-display)',
+                    fontFamily: 'var(--cth-font-ui)',
                     fontSize: 'var(--cth-text-display-sm)',
                     lineHeight: 'var(--cth-lh-display-sm)',
                     color: 'var(--cth-ink-900)',
@@ -261,7 +261,7 @@ export function AgentCard({
                 )}
                 {isOvermind && (
                   <span style={{
-                    fontFamily: 'var(--cth-font-display)', fontSize: 7, lineHeight: '11px',
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
                     background: `var(--cth-${accent})`, color: 'var(--cth-ink-900)',
                     padding: '1px 4px 0', flexShrink: 0
                   }}>BOSS</span>
@@ -275,7 +275,7 @@ export function AgentCard({
               {onHold && (
                 <span title="Human has this agent 1:1 — floor automation paused" style={{
                   flexShrink: 0,
-                  fontFamily: 'var(--cth-font-display)', fontSize: 7, lineHeight: '11px',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
                   padding: '1px 4px 0',
                   background: 'var(--cth-lemon)', color: 'var(--cth-ink-900)',
                   boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'

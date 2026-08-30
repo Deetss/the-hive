@@ -101,7 +101,7 @@ export function ThreadsPanel({ agentId }: ThreadsPanelProps) {
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
                 padding: '6px 10px', border: 'none', cursor: 'pointer', background: 'var(--cth-cream-200)',
-                fontFamily: 'var(--cth-font-display)', fontSize: 'var(--cth-text-display-sm)',
+                fontFamily: 'var(--cth-font-ui)', fontSize: 'var(--cth-text-display-sm)',
                 lineHeight: '14px', color: 'var(--cth-ink-900)', boxShadow: 'inset 0 -1px 0 var(--cth-ink-900)'
               }}
             >

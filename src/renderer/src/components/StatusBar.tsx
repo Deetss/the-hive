@@ -246,7 +246,7 @@ export function StatusBar() {
         <>
           <Chip title={`Account: ${displayBadge} (from CLAUDE_CONFIG_DIR${focusAgent?.profileId ? ' via agent profile' : ''})`}>
             <Dot color={displayBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)'} />
-            <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 9, color: displayBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)' }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 9, color: displayBadge === 'PERSONAL' ? 'var(--cth-mint)' : 'var(--cth-sky)' }}>
               {displayBadge}
             </span>
           </Chip>

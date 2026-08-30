@@ -12,7 +12,7 @@ const HOST_RE = /^[A-Za-z0-9._-]+$/;
 const URL_RE = /^https?:\/\/.+/;
 
 const labelStyle: React.CSSProperties = {
-  fontFamily: 'var(--cth-font-display)',
+  fontFamily: 'var(--cth-font-ui)',
   fontSize: 8,
   lineHeight: '12px',
   color: 'var(--cth-ink-500)',
@@ -269,7 +269,7 @@ export function LocalDelegateSettings() {
           <div key={d.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={rowStyle}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 11, color: 'var(--cth-ink-900)' }}>
+                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-900)' }}>
                   {d.label}{' '}
                   <span style={{ fontSize: 9, color: 'var(--cth-ink-400)' }}>{d.id}</span>
                   {d.secretRef && <span style={{ fontSize: 9, color: '#3d8c3d', marginLeft: 4 }}>● key</span>}

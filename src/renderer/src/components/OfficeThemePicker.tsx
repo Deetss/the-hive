@@ -93,7 +93,7 @@ export function OfficeThemePicker({ config }: { config: HarnessConfig }) {
   return (
     <div>
       <div style={{
-        fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+        fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
         color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
       }}>
         Office Theme
@@ -144,12 +144,12 @@ export function OfficeThemePicker({ config }: { config: HarnessConfig }) {
                       {t.label}
                     </span>
                     {isCurrent && (
-                      <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 7, color: 'var(--cth-mint)', textTransform: 'uppercase' }}>
+                      <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 7, color: 'var(--cth-mint)', textTransform: 'uppercase' }}>
                         current
                       </span>
                     )}
                     {!t.built && !isCurrent && (
-                      <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 7, color: 'var(--cth-ink-500)', textTransform: 'uppercase' }}>
+                      <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 7, color: 'var(--cth-ink-500)', textTransform: 'uppercase' }}>
                         soon
                       </span>
                     )}
@@ -219,7 +219,7 @@ function ThemeSwitchConfirmModal({
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{
-                  fontFamily: 'var(--cth-font-display)', fontSize: 12, lineHeight: '20px',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '20px',
                   color: 'var(--cth-ink-900)', marginBottom: 4,
                 }}>
                   STARTS A FRESH CAST

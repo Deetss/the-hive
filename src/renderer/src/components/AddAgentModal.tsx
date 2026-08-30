@@ -40,7 +40,7 @@ const ossChip = (active: boolean, accent: AccentColorName): CSSProperties => ({
   color: 'var(--cth-ink-900)', cursor: 'pointer', border: 'none'
 });
 const ossGroupHead: CSSProperties = {
-  fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+  fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
   color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 4
 };
 const ossLink: CSSProperties = { color: 'var(--cth-ink-900)', textDecoration: 'underline', cursor: 'pointer' };
@@ -721,7 +721,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                       }}
                     >
                       <span style={{
-                        fontFamily: 'var(--cth-font-display)', fontSize: 9, lineHeight: '13px',
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 9, lineHeight: '13px',
                         color: 'var(--cth-ink-900)', textTransform: 'uppercase',
                         display: 'flex', alignItems: 'baseline', gap: 6
                       }}>
@@ -1265,7 +1265,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <span style={{
-        fontFamily: 'var(--cth-font-display)',
+        fontFamily: 'var(--cth-font-ui)',
         fontSize: 8, lineHeight: '12px',
         color: 'var(--cth-ink-700)',
         textTransform: 'uppercase'

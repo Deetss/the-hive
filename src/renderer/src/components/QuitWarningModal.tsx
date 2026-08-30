@@ -71,7 +71,7 @@ export function QuitWarningModal({ ptyCount, closing, onCancel, onConfirm, onClo
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{
-                      fontFamily: 'var(--cth-font-display)',
+                      fontFamily: 'var(--cth-font-ui)',
                       fontSize: 12, lineHeight: '20px',
                       color: 'var(--cth-ink-900)',
                       marginBottom: 4
@@ -102,7 +102,7 @@ export function QuitWarningModal({ ptyCount, closing, onCancel, onConfirm, onClo
                   boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
                   fontSize: 12, lineHeight: '18px',
                   color: 'var(--cth-ink-700)',
-                  fontFamily: 'var(--cth-font-display)'
+                  fontFamily: 'var(--cth-font-ui)'
                 }}>
                   {closing!.total > 0
                     ? `${closing!.acked} / ${closing!.total} WORKERS CONFIRMED${closing!.acked >= closing!.total ? ' — WAITING FOR THE ORCHESTRATOR' : ''}`
@@ -143,7 +143,7 @@ export function QuitWarningModal({ ptyCount, closing, onCancel, onConfirm, onClo
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{
-                      fontFamily: 'var(--cth-font-display)',
+                      fontFamily: 'var(--cth-font-ui)',
                       fontSize: 12, lineHeight: '20px',
                       color: 'var(--cth-ink-900)',
                       marginBottom: 4

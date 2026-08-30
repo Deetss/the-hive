@@ -259,7 +259,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     <SpritePortrait character="michael" scale={2} />
                   </div>
                   <div>
-                    <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 12, lineHeight: '18px' }}>
+                    <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '18px' }}>
                       A CLONE OF YOU, WORKING 24/7
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--cth-ink-700)', lineHeight: '19px' }}>
@@ -272,7 +272,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                   </div>
                 </div>
 
-                <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 10, color: 'var(--cth-ink-700)' }}>
+                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-700)' }}>
                   FIRST — WHO ARE YOU? (we'll tailor the setup)
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -307,7 +307,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                   </div>
                   <div>
                     <div style={{
-                      fontFamily: 'var(--cth-font-display)',
+                      fontFamily: 'var(--cth-font-ui)',
                       fontSize: 12, lineHeight: '18px'
                     }}>YOUR CLONE AND THE FLOOR IT RUNS</div>
                     <div style={{ fontSize: 12, color: 'var(--cth-ink-700)', lineHeight: '18px' }}>
@@ -336,7 +336,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <div style={{
-                          fontFamily: 'var(--cth-font-display)',
+                          fontFamily: 'var(--cth-font-ui)',
                           fontSize: 10, lineHeight: '14px', marginBottom: 3
                         }}>{f.label}</div>
                         <div style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-700)' }}>
@@ -464,7 +464,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                           <ProviderLogo provider={p.id} size={18} />
                         </span>
                         <span style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ display: 'block', fontFamily: 'var(--cth-font-display)', fontSize: 11 }}>
+                          <span style={{ display: 'block', fontFamily: 'var(--cth-font-ui)', fontSize: 11 }}>
                             {p.label.toUpperCase()}
                           </span>
                           {PROVIDER_BLURB[p.id] && (
@@ -484,7 +484,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                               background: a.state === 'installed' ? 'var(--cth-mint-light)' : bad ? 'var(--cth-paper-100)' : 'var(--cth-cream-200)',
                               color: bad ? 'var(--cth-ink-500)' : 'var(--cth-ink-900)',
                               boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                              fontFamily: 'var(--cth-font-display)', flexShrink: 0
+                              fontFamily: 'var(--cth-font-ui)', flexShrink: 0
                             }}>{badge}</span>
                           );
                         })()}
@@ -493,7 +493,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                             fontSize: 10, padding: '1px 5px', lineHeight: '16px',
                             background: 'var(--cth-lemon)',
                             boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                            fontFamily: 'var(--cth-font-display)', flexShrink: 0
+                            fontFamily: 'var(--cth-font-ui)', flexShrink: 0
                           }}>RECOMMENDED</span>
                         )}
                       </label>
@@ -600,7 +600,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     that maps to each engine's flag (item 6): autoMode → claude
                     bypassPermissions / codex --dangerously-bypass-approvals-and-sandbox,
                     etc.; off → each engine's ask-first default. */}
-                <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 10, color: 'var(--cth-ink-700)' }}>
+                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-700)' }}>
                   HOW MUCH CAN AGENTS DO ON THEIR OWN?
                 </div>
                 <label style={{
@@ -617,7 +617,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     style={{ width: 18, height: 18, flexShrink: 0 }}
                   />
                   <div>
-                    <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '14px' }}>
+                    <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px' }}>
                       {plain ? 'LET AGENTS WORK ON THEIR OWN' : 'WORK AUTONOMOUSLY (AUTO MODE)'}
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--cth-ink-700)' }}>
@@ -640,7 +640,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 <div style={{ height: 1, background: 'var(--cth-ink-300)', margin: '2px 0' }} />
 
                 {/* RELIABILITY — keeping work firing while you're away. */}
-                <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 10, color: 'var(--cth-ink-700)' }}>
+                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-700)' }}>
                   KEEP THINGS RUNNING WHILE YOU'RE AWAY
                 </div>
                 <p style={{ margin: 0, lineHeight: '20px', fontSize: 12, color: 'var(--cth-ink-700)' }}>
@@ -704,7 +704,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                   </span>
                   <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div>
-                      <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '14px', marginBottom: 3 }}>
+                      <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px', marginBottom: 3 }}>
                         STAY AWAKE ON POWER (MANUAL)
                       </div>
                       <div style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-700)' }}>
@@ -815,7 +815,7 @@ function PersonaCard({ icon, title, desc, selected, onClick }: {
       }}>
         <Icon name={icon} />
       </span>
-      <span style={{ fontFamily: 'var(--cth-font-display)', fontSize: 11, lineHeight: '15px', color: 'var(--cth-ink-900)' }}>
+      <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, lineHeight: '15px', color: 'var(--cth-ink-900)' }}>
         {title}
       </span>
       <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-700)' }}>
@@ -855,7 +855,7 @@ function ToggleRow({ icon, label, desc, on, tint, edge, onChange }: {
         <Icon name={icon} />
       </span>
       <span style={{ minWidth: 0 }}>
-        <span style={{ display: 'block', fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '14px', marginBottom: 3 }}>
+        <span style={{ display: 'block', fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '14px', marginBottom: 3 }}>
           {label}
         </span>
         <span style={{ display: 'block', fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-700)' }}>

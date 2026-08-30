@@ -59,7 +59,7 @@ function glyphFor(kind: string, label: string): { mono: string; bg: string } {
   return GLYPH[kind] ?? { mono: (label.replace(/[^A-Za-z0-9]/g, '').slice(0, 2) || '··'), bg: '#6B5878' };
 }
 
-const dispLabel: CSSProperties = { fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px', color: 'var(--cth-ink-500)', textTransform: 'uppercase' };
+const dispLabel: CSSProperties = { fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px', color: 'var(--cth-ink-500)', textTransform: 'uppercase' };
 const fieldLabel: CSSProperties = { ...dispLabel, color: 'var(--cth-ink-700)' };
 const subText: CSSProperties = { fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' };
 const hint: CSSProperties = { fontSize: 11, lineHeight: '15px', color: 'var(--cth-ink-500)' };
@@ -69,7 +69,7 @@ const linkBtn: CSSProperties = { background: 'none', border: 'none', cursor: 'po
 function Glyph({ mono, bg, lg }: { mono: string; bg: string; lg?: boolean }) {
   const size = lg ? 48 : 40;
   return (
-    <div style={{ width: size, height: size, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, color: '#fff', boxShadow: 'inset 0 0 0 1.5px var(--cth-ink-500)', fontFamily: 'var(--cth-font-display)', fontSize: lg ? 13 : 11 }}>{mono}</div>
+    <div style={{ width: size, height: size, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, color: '#fff', boxShadow: 'inset 0 0 0 1.5px var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)', fontSize: lg ? 13 : 11 }}>{mono}</div>
   );
 }
 
