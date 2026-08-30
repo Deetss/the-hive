@@ -50,7 +50,10 @@ type McpDefaultsMap = { [id: string]: { enabled: boolean } } | undefined;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type MessageAct = 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done';
+// 'warn' is system-originated only (pre-reap token-cap notices) — never a
+// worker reply act, so it doesn't need a place in the request/reply state
+// machine the other acts form.
+export type MessageAct = 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done' | 'warn';
 
 export type ActivityBadge = 'INFO' | 'PASS' | 'SHIPPED' | 'FINDING' | 'FAIL' | 'BLOCK';
 

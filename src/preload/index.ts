@@ -64,7 +64,7 @@ export interface HiveMessage {
   in_reply_to: string | null;
   from: string;
   to: string;
-  act: 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done';
+  act: 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done' | 'warn';
   subject: string;
   body: string;
   priority?: 'urgent' | 'normal' | 'backlog';
@@ -187,7 +187,7 @@ export interface HiveRouteEvent {
   id: string;
   from: string;
   to: string;
-  act: 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done';
+  act: 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done' | 'warn';
   subject: string;
   targets: string[];
   needsHuman: boolean;
@@ -210,7 +210,7 @@ export interface HiveTerminalHandoffEvent {
   id: string;
   from: string;
   to: string;
-  act: 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done';
+  act: 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done' | 'warn';
   subject: string;
   body: string;
   requiresReply: boolean;
