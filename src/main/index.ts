@@ -5594,6 +5594,17 @@ async function processSpawnRequest(filePath: string): Promise<void> {
     console.error('[worker] dispatch send failed:', e);
   }
 
+  // The renderer's inbox-wake can fire too early (Claude still booting) and
+  // ack the nudge out of the queue before Claude's readline is ready.  Fire a
+  // main-process nudge at 10s — well past Claude's boot — so the task actually
+  // lands.  The watchdog's 35s boot grace is too long for a first wake.
+  setTimeout(() => {
+    if (!liveWorkers.has(workerId)) return;
+    const pending = hive.inbox(workerId).map((m) => m.id).filter(Boolean);
+    if (!pending.length) return;
+    nudgeWorker(workerId, pending);
+  }, 10_000);
+
   console.log(`[worker] spawned ${workerId} (cwd=${cwd}, base=${baseBranch}${slack ? ', slack' : ''})`);
   archiveRequest(filePath, '.done');
 }
