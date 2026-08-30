@@ -73,7 +73,15 @@ interface PtySession {
   /** True after the child has emitted at least one frame. Automation waits for
    *  this before typing, so startup prompts cannot outrun the TUI subscription. */
   hasOutput: boolean;
+  /** Rolling tail of raw PTY output (ANSI included), capped at TAIL_BUFFER_MAX
+   *  chars. Lets a late subscriber (e.g. the Workers panel) see recent output
+   *  immediately instead of only what streams in after it attaches. */
+  tailBuffer: string;
 }
+
+/** Cap for `PtySession.tailBuffer` — enough for a screenful of scrollback
+ *  without holding a whole session's output in memory. */
+const TAIL_BUFFER_MAX = 20_000;
 
 export interface SpawnOptions {
   id: string;
@@ -695,6 +703,7 @@ export class PtyManager {
         command: resolved,
         lastOutputAt: Date.now(),
         hasOutput: false,
+        tailBuffer: '',
         owner
       };
       this.sessions.set(opts.id, session);
@@ -712,6 +721,10 @@ export class PtyManager {
         if (this.sessions.get(opts.id) !== session) return;
         session.hasOutput = true;
         session.lastOutputAt = Date.now();
+        session.tailBuffer += data;
+        if (session.tailBuffer.length > TAIL_BUFFER_MAX) {
+          session.tailBuffer = session.tailBuffer.slice(-TAIL_BUFFER_MAX);
+        }
         // One-shot auto-answer for blocking interactive prompts (e.g. codex trust dialog).
         if (autoPatterns.length > 0) {
           autoAccum += data;
@@ -808,6 +821,20 @@ export class PtyManager {
   /** Epoch ms of this PTY's most recent output, or undefined if no such PTY. */
   lastOutputAt(id: string): number | undefined {
     return this.sessions.get(id)?.lastOutputAt;
+  }
+
+  /** The last `maxChars` (default: the whole capped buffer) of this PTY's raw
+   *  output, ANSI included — same bytes the live terminal renders. Null when
+   *  there is no such session (already torn down). Backs the Workers panel's
+   *  read-only tail, so a viewer that opens the panel after the worker has
+   *  already been producing output still sees recent context. */
+  getTail(id: string, maxChars?: number): string | null {
+    const s = this.sessions.get(id);
+    if (!s) return null;
+    if (typeof maxChars === 'number' && maxChars > 0 && maxChars < s.tailBuffer.length) {
+      return s.tailBuffer.slice(-maxChars);
+    }
+    return s.tailBuffer;
   }
 
   /** Milliseconds since this PTY last produced output (Date.now() - lastOutputAt),

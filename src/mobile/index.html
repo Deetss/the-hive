@@ -1017,6 +1017,15 @@
       <button class="btn btn-dark" id="dispatch-send">Dispatch Message</button>
       <div id="dispatch-result" style="margin-top:8px;font-family:var(--cth-font-mono);font-size:11.5px;" hidden></div>
     </section>
+
+    <!-- Workers Screen -->
+    <section id="screen-workers" class="screen">
+      <div class="fleet-header">
+        <span class="fleet-header-title">Workers</span>
+        <button class="fleet-refresh-btn" id="workers-refresh">↻</button>
+      </div>
+      <div id="workers-list"><div class="spinner">⟳ loading…</div></div>
+    </section>
   </div>
 
   <nav>
@@ -1032,6 +1041,10 @@
     <button class="nav-btn" data-screen="tasks">
       <span class="nav-icon">📋</span>
       <span class="nav-label">Tasks</span>
+    </button>
+    <button class="nav-btn" data-screen="workers">
+      <span class="nav-icon">🤖</span>
+      <span class="nav-label">Workers</span>
     </button>
     <button class="nav-btn" data-screen="dispatch">
       <span class="nav-icon">✉️</span>
@@ -1211,6 +1224,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (screen === 'askme') loadAskMe();
     if (screen === 'tasks') loadTasks();
     if (screen === 'fleet') loadFleet();
+    if (screen === 'workers') loadWorkers();
     if (screen === 'dispatch') populateDispatchRecipients();
   });
 });
@@ -1308,6 +1322,74 @@ function agentCard(a) {
 }
 
 document.getElementById('fleet-refresh').addEventListener('click', loadFleet);
+
+// ── Workers (ephemeral Slack-triggered workers) ───────────────────
+function relAgeMs(ms) {
+  if (ms < 0) ms = 0;
+  const s = Math.round(ms / 1000);
+  if (s < 90) return s + 's';
+  const m = Math.round(s / 60);
+  if (m < 90) return m + 'm';
+  const h = Math.round(m / 60);
+  return h < 48 ? h + 'h' : Math.round(h / 24) + 'd';
+}
+
+async function loadWorkers() {
+  try {
+    const res = await apiFetch('/api/workers');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderWorkers(data);
+  } catch (e) { if (e.message !== '401') showError('Workers load failed'); }
+}
+
+function renderWorkers(data) {
+  const live = (data && data.live) || [];
+  const el = document.getElementById('workers-list');
+  if (live.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🕳</div><div class="empty-msg">No workers running</div></div>';
+    return;
+  }
+  el.innerHTML = live.map(w => workerCard(w)).join('');
+}
+
+function workerCard(w) {
+  const badgeColorClass = w.status === 'releasing' ? 'badge-yellow' : 'badge-green';
+  const statusLabel = w.status === 'releasing' ? 'stopping' : 'working';
+  return `
+<div class="card">
+  <div class="card-header">
+    <div class="avatar-box">${esc((w.name || w.workerId || 'W').charAt(0).toUpperCase())}</div>
+    <span class="agent-name">${esc(w.name || w.workerId)}</span>
+    <span class="pixel-badge ${badgeColorClass}">
+      <span class="pixel-badge-dot"></span>
+      ${esc(statusLabel)}
+    </span>
+    ${w.hasSlack ? '<span class="badge badge-default">slack</span>' : ''}
+  </div>
+  <div class="agent-role">base: ${esc(w.baseBranch)}</div>
+  <div class="agent-metrics">
+    <div class="metric">
+      <div class="metric-val">${fmtNum(w.tokensUsed)}${w.tokenCap != null ? ' / ' + fmtNum(w.tokenCap) : ''}</div>
+      <div class="metric-label">Tokens</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">${relAgeMs(w.ageMs)}</div>
+      <div class="metric-label">Up</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">${w.idleMs == null ? '—' : relAgeMs(w.idleMs)}</div>
+      <div class="metric-label">Idle</div>
+    </div>
+  </div>
+  <div class="agent-tool">
+    <span>${esc(w.workerId)}</span>
+    ${w.lastTool ? `<span style="color:var(--cth-ink-300)">·</span><span class="agent-tool-val">⌨ ${esc(w.lastTool)}</span>` : ''}
+  </div>
+</div>`;
+}
+
+document.getElementById('workers-refresh').addEventListener('click', loadWorkers);
 
 // ── Ask Me ───────────────────────────────────────────────────────
 async function loadAskMe() {
