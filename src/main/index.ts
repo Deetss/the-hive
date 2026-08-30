@@ -4790,6 +4790,15 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
 ipcMain.handle('config:setAgentTokenCap', (_evt, agentId: unknown, tokenCap: unknown) =>
   setAgentTokenCap(agentId, tokenCap)
 );
+// Renderer needs both to build the pairing URL: the LAN/Tailscale hostname the
+// phone will actually reach (window.location.hostname is useless here — the
+// renderer loads over file:// or a dev-server localhost, neither of which the
+// phone can dial into).
+ipcMain.handle('config:getMobileApiSecret', (): { secret: string; hostname: string; port: number } => ({
+  secret: ensureMobileApiSecret(),
+  hostname: hostname(),
+  port: BROWSER_SERVER_PORT
+}));
 ipcMain.handle('config:ensureHome', (_evt, path: unknown) => {
   if (typeof path !== 'string' || path.length === 0) return { ok: false, error: 'invalid path' };
   return ensureHarnessHome(path);

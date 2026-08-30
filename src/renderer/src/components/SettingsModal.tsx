@@ -1,4 +1,4 @@
-import { useState, useEffect, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import { AGENT_MODELS, type HarnessConfig } from '@/store/config';
 import { useStore } from '@/store/store';
 import {
@@ -24,6 +24,7 @@ import { AiEnginesSettings } from './AiEnginesSettings';
 import { REALTIME_MODEL } from '@shared/realtimePricing';
 import { RealtimeDevicePicker } from '@/realtime/DevicePicker';
 import { CostHud } from '@/realtime/CostHud';
+import QRCode from '@/lib/qrcodejs';
 
 export interface SettingsModalProps {
   config: HarnessConfig;
@@ -324,6 +325,14 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
   // Whether the connect-steps help panel is expanded.
   const [showSlackHelp, setShowSlackHelp] = useState(false);
 
+  // --- Mobile Remote pairing (QR code) ---
+  const [mobilePairing, setMobilePairing] = useState<{ secret: string; hostname: string; port: number } | null>(null);
+  const [mobileCopyNote, setMobileCopyNote] = useState('');
+  const mobileQrRef = useRef<HTMLDivElement | null>(null);
+  const mobileUrl = mobilePairing
+    ? `http://${mobilePairing.hostname}:${mobilePairing.port}/mobile?token=${mobilePairing.secret}`
+    : '';
+
   // --- Webhook triggers (a LIST; src/shared/triggers.ts owns the type) ---------
   // The list itself lives in the store, not in local state: the Triggers tab
   // edits the same webhooks, and one of the two surfaces holding a private copy
@@ -482,6 +491,9 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
       setFreeflowModel(cc.freeflowModel ?? 'whisper-large-v3-turbo');
       setIdleDisconnectMs((c as HarnessConfig).realtimeIdleDisconnectMs ?? 180_000);
     }).catch(() => { /* keep prop-seeded values */ });
+    window.cth.getMobileApiSecret().then((info) => {
+      if (alive) setMobilePairing(info);
+    }).catch(() => { /* mobile server not up yet — fallback link stays blank */ });
     window.cth.kgStatus().then((s) => { if (alive) setKgDocCount(s.docCount); })
       .catch(() => { /* status unavailable */ });
     // Hydrate live connection state + the persisted Request URL: the
@@ -513,6 +525,29 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
     })();
     return () => { alive = false; };
   }, []);
+
+  // Draw the pairing QR into its container. Depends on `activeSection` too:
+  // the container only exists in the DOM while Connections is the active tab,
+  // so switching tabs after the fetch resolved needs its own re-render pass.
+  useEffect(() => {
+    if (activeSection !== 'Connections' || !mobileUrl || !mobileQrRef.current) return;
+    mobileQrRef.current.innerHTML = '';
+    new QRCode(mobileQrRef.current, {
+      text: mobileUrl,
+      width: 168,
+      height: 168,
+      colorDark: '#1a1a1a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  }, [mobileUrl, activeSection]);
+
+  const copyMobileLink = () => {
+    if (!mobileUrl) return;
+    void window.cth.copyToClipboard(mobileUrl);
+    setMobileCopyNote('copied');
+    setTimeout(() => setMobileCopyNote(''), 1500);
+  };
 
   /** Persist the current Slack inputs. Returns the resolved config patch. */
   const slackPatch = (enabled: boolean) => ({
@@ -1856,6 +1891,56 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                           Configuration only for now. The organisation messaging service does not exist yet, so a
                           key here starts no transport — it is saved, shown in the Triggers tab, and waits.
                         </span>
+                      </div>
+
+                      {/* Mobile Remote — scan-to-pair QR code, no typing needed */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                          color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
+                        }}>
+                          Mobile Remote
+                        </div>
+                        <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+                          Scan to pair your phone
+                        </span>
+                        <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                          Point your phone's camera at the code to open the mobile remote — the link and token
+                          fill in automatically, no typing required.
+                        </span>
+                        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                          <div
+                            ref={mobileQrRef}
+                            style={{
+                              width: 168, height: 168, flexShrink: 0,
+                              background: '#ffffff', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
+                            }}
+                          />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220, flex: 1 }}>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <span style={slackLabelStyle}>Pairing link (fallback)</span>
+                              <input
+                                type="text"
+                                readOnly
+                                value={mobileUrl || 'starting mobile server…'}
+                                onFocus={(e) => e.target.select()}
+                                style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)', fontSize: 11 }}
+                              />
+                            </label>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <PixelButton variant="secondary" size="sm" onClick={copyMobileLink} disabled={!mobileUrl}>
+                                copy link
+                              </PixelButton>
+                              {mobileCopyNote && (
+                                <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{mobileCopyNote}</span>
+                              )}
+                            </div>
+                            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                              Works over your LAN or Tailscale. The token authenticates the phone — don't share
+                              this link outside your own network.
+                            </span>
+                          </div>
+                        </div>
                       </div>
 
                     </>

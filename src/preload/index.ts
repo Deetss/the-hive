@@ -702,6 +702,10 @@ const api = {
   /** Set or clear one per-agent token ceiling against main's latest config. */
   setAgentTokenCap: (agentId: string, tokenCap?: number): Promise<HarnessConfig> =>
     ipcRenderer.invoke('config:setAgentTokenCap', agentId, tokenCap),
+  /** Mobile Remote pairing info: the 32-char hex secret (generated on first boot),
+   *  plus the LAN hostname and port the phone dials into. */
+  getMobileApiSecret: (): Promise<{ secret: string; hostname: string; port: number }> =>
+    ipcRenderer.invoke('config:getMobileApiSecret'),
   ensureHarnessHome: (path: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('config:ensureHome', path),
   /** Change the harness home folder. 'move' copies the existing hive + palace
