@@ -1121,15 +1121,39 @@ async function apiFetch(path, opts = {}) {
   return res;
 }
 
+// ── QR auto-pair ────────────────────────────────────────────────────
+// Settings → Mobile Remote encodes http://<host>:48003/mobile?token=<secret>.
+// location.origin on first load IS that base URL, so a scanned token is
+// enough to register the machine and skip the setup form entirely.
+async function tryAutoPairFromQuery() {
+  const token = new URLSearchParams(location.search).get('token');
+  if (!token) return false;
+  const baseUrl = location.origin;
+  history.replaceState({}, '', location.pathname);
+  const existing = machines.find(m => m.baseUrl === baseUrl && m.secret === token);
+  if (existing) { activeMachineId = existing.id; return true; }
+  const id = 'machine-' + Date.now();
+  const m = { id, label: location.hostname, baseUrl, secret: token, status: 'checking', lastConnectedAt: null };
+  machines.push(m);
+  const ok = await pingMachine(m);
+  if (!ok) { machines.pop(); saveMachines(); return false; }
+  activeMachineId = id;
+  try { localStorage.setItem('hive_active', id); } catch {}
+  return true;
+}
+
 // ── Boot ─────────────────────────────────────────────────────────
 loadMachines();
-if (machines.length === 0) {
-  document.getElementById('setup-screen').hidden = false;
-} else {
-  activeMachineId = machines[0].id;
-  try { activeMachineId = localStorage.getItem('hive_active') || machines[0].id; } catch {}
-  bootApp();
-}
+tryAutoPairFromQuery().then((paired) => {
+  if (paired) { bootApp(); return; }
+  if (machines.length === 0) {
+    document.getElementById('setup-screen').hidden = false;
+  } else {
+    activeMachineId = machines[0].id;
+    try { activeMachineId = localStorage.getItem('hive_active') || machines[0].id; } catch {}
+    bootApp();
+  }
+});
 
 // ── Setup form ───────────────────────────────────────────────────
 document.getElementById('setup-connect-btn').addEventListener('click', async () => {

@@ -1806,6 +1806,11 @@ interface WorkerRec {
  *  force-removed) when it holds unintegrated work — god is the sole integrator. */
 const liveWorkers = new Map<string, WorkerRec>();
 
+/** Workers already sent their 75%-of-tokenCap pre-reap warning this session.
+ *  Rate-limits the warn to once — the loop re-checks every tick and the used/cap
+ *  ratio only grows, so without this a worker parked at 76% gets spammed forever. */
+const workerWarnedAt75 = new Set<string>();
+
 interface RecentWorkerSnapshot {
   workerId: string;
   reqId: string;
@@ -1967,6 +1972,7 @@ function teardownPty(id: string): void {
   if (liveWorkers.has(id)) {
     recordRecentWorker(id, 'stopped');
     liveWorkers.delete(id);
+    workerWarnedAt75.delete(id);
   }
   // Archive the dead worker's floor card (mirrors killAgent's voice-kill path;
   // the renderer's archiveAgent is a no-op if the card is already gone). NOT
@@ -4790,6 +4796,15 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
 ipcMain.handle('config:setAgentTokenCap', (_evt, agentId: unknown, tokenCap: unknown) =>
   setAgentTokenCap(agentId, tokenCap)
 );
+// Renderer needs both to build the pairing URL: the LAN/Tailscale hostname the
+// phone will actually reach (window.location.hostname is useless here — the
+// renderer loads over file:// or a dev-server localhost, neither of which the
+// phone can dial into).
+ipcMain.handle('config:getMobileApiSecret', (): { secret: string; hostname: string; port: number } => ({
+  secret: ensureMobileApiSecret(),
+  hostname: hostname(),
+  port: BROWSER_SERVER_PORT
+}));
 ipcMain.handle('config:ensureHome', (_evt, path: unknown) => {
   if (typeof path !== 'string' || path.length === 0) return { ok: false, error: 'invalid path' };
   return ensureHarnessHome(path);
@@ -6758,6 +6773,24 @@ async function ephemeralWorkerTick(): Promise<void> {
       const tokenCap = (rec.tokenCap && rec.tokenCap > 0) ? rec.tokenCap : defaultTokenCap;
       if (tokenCap > 0) {
         const used = workerTokensUsed(workerId);
+        // Pre-reap warning at 75%: workers were getting reaped at the cap without
+        // ever committing in-progress work. A nudge into their own inbox — sent
+        // once per worker (workerWarnedAt75 rate-limits it) — gives them a chance
+        // to commit before the hard reap below.
+        if (used >= tokenCap * 0.75 && !workerWarnedAt75.has(workerId)) {
+          workerWarnedAt75.add(workerId);
+          const pct = Math.floor((used / tokenCap) * 100);
+          try {
+            hive.send({
+              to: workerId,
+              act: 'warn',
+              subject: 'Token cap approaching — commit your work now',
+              body: `You have used ${pct}% of your token cap. Commit any in-progress work immediately. You will be reaped at 100%.`
+            }, 'system');
+          } catch (e) {
+            console.error('[worker] pre-reap warning failed:', e);
+          }
+        }
         if (used > tokenCap) {
           rec.releasing = true;
           recordRecentWorker(workerId, 'reaped');
