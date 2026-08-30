@@ -54,6 +54,8 @@ export type MessageAct = 'request' | 'inform' | 'propose' | 'query' | 'agree' | 
 
 export type ActivityBadge = 'INFO' | 'PASS' | 'SHIPPED' | 'FINDING' | 'FAIL' | 'BLOCK';
 
+export type MessagePriority = 'urgent' | 'normal' | 'backlog';
+
 export interface HiveMessage {
   id: string;
   conversation: string;
@@ -63,6 +65,7 @@ export interface HiveMessage {
   act: MessageAct;
   subject: string;
   body: string;
+  priority?: MessagePriority;
   hops: number;
   requires_reply: boolean;
   needs_human: boolean;
@@ -1531,6 +1534,7 @@ export class HiveManager {
       act,
       subject: partial.subject ?? '',
       body: partial.body ?? '',
+      priority: partial.priority ?? 'normal',
       hops: typeof partial.hops === 'number' ? partial.hops : 0,
       requires_reply: partial.requires_reply ?? ['request', 'query', 'propose'].includes(act),
       needs_human: partial.needs_human ?? false,

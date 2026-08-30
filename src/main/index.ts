@@ -553,13 +553,19 @@ function buildAskMePayload(hiveRoot: string | null) {
     assignee: string | null;
     index: number;
     question: string;
+    priority: 'urgent' | 'normal' | 'backlog';
     askedAt: string | null;
   }> = [];
 
   for (const task of tasks) {
     if (task && Array.isArray(task.humanQA)) {
+      const taskPriority: 'urgent' | 'normal' | 'backlog' =
+        (task.priority === 1 || task.priority === 'urgent' || task.isUrgent) ? 'urgent' :
+        (task.priority === 3 || task.priority === 'backlog') ? 'backlog' : 'normal';
+
       task.humanQA.forEach((qa: any, index: number) => {
         if (qa && typeof qa === 'object' && (qa.a === undefined || qa.a === null || qa.a === '')) {
+          const itemPriority = qa.priority === 'urgent' ? 'urgent' : qa.priority === 'backlog' ? 'backlog' : taskPriority;
           items.push({
             type: 'task_qa',
             taskId: task.id ?? '',
@@ -567,6 +573,7 @@ function buildAskMePayload(hiveRoot: string | null) {
             assignee: task.assignee ?? null,
             index,
             question: qa.q ?? '',
+            priority: itemPriority,
             askedAt: qa.askedAt ?? null
           });
         }
@@ -851,7 +858,7 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       res.end(JSON.stringify({ error: 'Method Not Allowed' }));
       return true;
     }
-    let body: { to?: string; act?: string; subject?: string; body?: string };
+    let body: { to?: string; act?: string; subject?: string; body?: string; priority?: string };
     try {
       body = await readJsonBody(req);
     } catch {
@@ -864,6 +871,9 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     const messageBody = typeof body?.body === 'string' ? body.body : '';
     const act = typeof body?.act === 'string' && body.act.trim() ? body.act.trim() : 'inform';
     const subject = typeof body?.subject === 'string' && body.subject.trim() ? body.subject.trim() : 'Message from human';
+    const priority = body?.priority === 'urgent' || body?.priority === 'backlog' || body?.priority === 'normal'
+      ? body.priority
+      : 'normal';
 
     if (!to) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -896,6 +906,7 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       act,
       subject: routeSubject,
       body: messageBody,
+      priority,
       hops: 0,
       requires_reply: false,
       needs_human: false,

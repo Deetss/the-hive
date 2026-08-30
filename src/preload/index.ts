@@ -67,6 +67,7 @@ export interface HiveMessage {
   act: 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done';
   subject: string;
   body: string;
+  priority?: 'urgent' | 'normal' | 'backlog';
   hops: number;
   requires_reply: boolean;
   needs_human: boolean;

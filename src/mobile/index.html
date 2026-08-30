@@ -735,6 +735,36 @@
     padding-right: 28px;
   }
   .field textarea { resize: none; min-height: 90px; }
+  .priority-selector { display: flex; gap: 6px; }
+  .priority-pill {
+    flex: 1;
+    padding: 7px 8px;
+    border: none;
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    background: var(--cth-cream-200);
+    color: var(--cth-ink-700);
+    font-family: var(--cth-font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .priority-pill.active {
+    background: var(--cth-paper-100);
+    box-shadow: inset 0 0 0 2px var(--cth-ink-900);
+    color: var(--cth-ink-900);
+  }
+  .priority-pill[data-priority="urgent"].active {
+    background: var(--cth-coral);
+    box-shadow: inset 0 0 0 2px var(--cth-ink-900);
+    color: #fff;
+  }
+  .priority-pill[data-priority="backlog"].active {
+    background: var(--cth-paper-100);
+    box-shadow: inset 0 0 0 2px var(--cth-ink-500);
+    color: var(--cth-ink-700);
+  }
 
   /* ── Modals & Sheets ── */
   .modal-overlay {
@@ -975,6 +1005,14 @@
       <div class="field">
         <label>Message</label>
         <textarea id="dispatch-body" placeholder="Describe the task for the fleet…"></textarea>
+      </div>
+      <div class="field">
+        <label>Priority</label>
+        <div class="priority-selector" id="dispatch-priority-selector">
+          <button type="button" class="priority-pill" data-priority="urgent">Urgent</button>
+          <button type="button" class="priority-pill active" data-priority="normal">Normal</button>
+          <button type="button" class="priority-pill" data-priority="backlog">Backlog</button>
+        </div>
       </div>
       <button class="btn btn-dark" id="dispatch-send">Dispatch Message</button>
       <div id="dispatch-result" style="margin-top:8px;font-family:var(--cth-font-mono);font-size:11.5px;" hidden></div>
@@ -1290,7 +1328,12 @@ function updateAskMeBadge() {
 }
 
 function renderAskMe() {
-  const items = (askMeData || {}).items || [];
+  const rawItems = (askMeData || {}).items || [];
+  const items = [...rawItems].sort((a, b) => {
+    if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+    if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+    return 0;
+  });
   const el = document.getElementById('askme-list');
   if (items.length === 0) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">🌿</div><div class="empty-msg">Nothing needs you right now</div></div>';
@@ -1324,13 +1367,15 @@ function renderAskMe() {
 
 function askItem(item, i) {
   const kind = item.kind || 'question';
+  const isUrgent = item.priority === 'urgent';
   const chipLabel = kind === 'action' ? 'ACTION' : kind === 'review' ? 'REVIEW' : 'QUESTION';
   return `
-<div class="card ask-item">
-  <div class="ask-header">
+<div class="card ask-item ${isUrgent ? 'urgent' : ''}" style="${isUrgent ? 'box-shadow: inset 0 0 0 2px var(--cth-coral), 2px 2px 0 0 rgba(0,0,0,0.3);' : ''}">
+  <div class="ask-header" style="${isUrgent ? 'background: var(--cth-coral); color: #fff;' : ''}">
+    ${isUrgent ? '<span class="ask-chip" style="background:var(--cth-coral);color:#fff;box-shadow:inset 0 0 0 1px #fff;">URGENT</span>' : ''}
     <span class="ask-chip">${chipLabel}</span>
-    <span class="ask-task-title">${esc(item.taskTitle || item.taskId)}</span>
-    ${item.assignee ? `<span class="ask-assignee">${esc(item.assignee).toUpperCase()}</span>` : ''}
+    <span class="ask-task-title" style="${isUrgent ? 'color:#fff;' : ''}">${esc(item.taskTitle || item.taskId)}</span>
+    ${item.assignee ? `<span class="ask-assignee" style="${isUrgent ? 'color:#fff;' : ''}">${esc(item.assignee).toUpperCase()}</span>` : ''}
   </div>
   <div class="ask-body">
     <div class="ask-question">${esc(item.question)}</div>
@@ -1422,18 +1467,28 @@ function populateDispatchRecipients() {
   });
 }
 
+let dispatchPriority = 'normal';
+document.querySelectorAll('#dispatch-priority-selector .priority-pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#dispatch-priority-selector .priority-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    dispatchPriority = btn.dataset.priority || 'normal';
+  });
+});
+
 document.getElementById('dispatch-send').addEventListener('click', async () => {
   const to = document.getElementById('dispatch-to').value;
   const act = document.getElementById('dispatch-act').value;
   const subject = document.getElementById('dispatch-subject').value.trim();
   const body = document.getElementById('dispatch-body').value.trim();
+  const priority = dispatchPriority;
   const result = document.getElementById('dispatch-result');
   result.hidden = true;
   if (!subject || !body) { result.style.color = 'var(--cth-coral)'; result.textContent = 'Subject and message are required.'; result.hidden = false; return; }
   try {
     const res = await apiFetch('/api/messages/send', {
       method: 'POST',
-      body: JSON.stringify({ to, act, subject, body })
+      body: JSON.stringify({ to, act, subject, body, priority })
     });
     if (res.ok) {
       result.style.color = 'var(--cth-mint)';
