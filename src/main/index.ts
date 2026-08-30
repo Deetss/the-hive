@@ -721,6 +721,19 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     return true;
   }
 
+  // GET /api/workers — ephemeral Slack-triggered workers, for the mobile Workers screen.
+  if (pathname === '/api/workers') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    const payload = buildWorkersPayload();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(payload));
+    return true;
+  }
+
   // GET /api/board
   if (pathname === '/api/board') {
     if (method !== 'GET') {
@@ -6759,14 +6772,15 @@ interface PreservedSnapshot {
   preservedAt: number;
 }
 
-/** List live ephemeral workers (+ preserved worktrees awaiting GC, + recently
- *  finished workers) for the Workers panel. */
-ipcMain.handle('workers:list', (): {
+/** Live ephemeral workers (+ preserved worktrees awaiting GC, + recently
+ *  finished workers) for the Workers panel — shared by the desktop IPC handler
+ *  and the mobile `/api/workers` route so the two surfaces never drift. */
+function buildWorkersPayload(): {
   live: WorkerSnapshot[];
   preserved: PreservedSnapshot[];
   maxWorkers: number;
   history: WorkerHistoryEntry[];
-} => {
+} {
   const cfg = readConfig();
   const defaultCap = typeof cfg.defaultWorkerTokenCap === 'number' && cfg.defaultWorkerTokenCap > 0
     ? cfg.defaultWorkerTokenCap : 0;
@@ -6794,7 +6808,8 @@ ipcMain.handle('workers:list', (): {
     workerId: e.workerId, wtPath: e.wtPath, baseBranch: e.baseBranch, preservedAt: e.preservedAt
   }));
   return { live, preserved, maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4), history: workerHistory };
-});
+}
+ipcMain.handle('workers:list', () => buildWorkersPayload());
 
 /** Manually stop a live ephemeral worker. Mirrors the done-release path: mark
  *  releasing, then kill + teardownPty runs the SAFETY-GATED worktree teardown
