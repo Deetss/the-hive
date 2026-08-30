@@ -473,12 +473,14 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
     }
   }, [seed.seq, seed.text, onSeedConsumed]);
 
-  // Load local skills once so they appear in the slash-suggest dropdown.
+  // Load local skills lazily when user types '/' in the dispatch box.
   useEffect(() => {
-    void window.cth.skillsLocal()
-      .then((skills) => setLocalSkills((skills ?? []).map((s) => ({ name: s.name, description: s.description ?? '' }))))
-      .catch(() => {});
-  }, []);
+    if (dispatchText.startsWith('/') && localSkills.length === 0) {
+      void window.cth.skillsLocal()
+        .then((skills) => setLocalSkills((skills ?? []).map((s) => ({ name: s.name, description: s.description ?? '' }))))
+        .catch(() => {});
+    }
+  }, [dispatchText, localSkills.length]);
 
   // Restart an agent's PTY in place. `resume:true` reattaches its prior Claude
   // conversation (`--resume <sessionId>`, resolved in the main process from the

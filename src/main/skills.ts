@@ -123,12 +123,21 @@ function scanPluginDir(dir: string, provider: LocalSkill['provider'], scope: Loc
   return out;
 }
 
+let localSkillsCache: { key: string; ts: number; skills: LocalSkill[] } | null = null;
+const LOCAL_SKILLS_CACHE_TTL_MS = 15_000;
+
 /**
  * Everything installed, deduped by (provider, name) with the most specific scope
  * winning — a project skill shadows the user's, which shadows the bundled copy,
  * which is the same precedence the CLIs themselves apply.
  */
 export function listLocalSkills(opts: { cwds: string[]; bundledDir: string | null }): LocalSkill[] {
+  const cacheKey = JSON.stringify({ cwds: opts.cwds, bundledDir: opts.bundledDir });
+  const now = Date.now();
+  if (localSkillsCache && localSkillsCache.key === cacheKey && (now - localSkillsCache.ts) < LOCAL_SKILLS_CACHE_TTL_MS) {
+    return localSkillsCache.skills;
+  }
+
   const home = homedir();
   const found: LocalSkill[] = [
     ...(opts.bundledDir ? scanSkillDir(opts.bundledDir, 'claude', 'bundled') : []),
@@ -148,7 +157,9 @@ export function listLocalSkills(opts: { cwds: string[]; bundledDir: string | nul
     const prev = best.get(key);
     if (!prev || rank[s.scope] > rank[prev.scope]) best.set(key, s);
   }
-  return [...best.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const result = [...best.values()].sort((a, b) => a.name.localeCompare(b.name));
+  localSkillsCache = { key: cacheKey, ts: now, skills: result };
+  return result;
 }
 
 const CATALOG_URL =
