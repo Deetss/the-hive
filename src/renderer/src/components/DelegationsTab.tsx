@@ -198,8 +198,15 @@ export function DelegationsTab() {
       <div>
         <span style={sectionHead}>Log ({log.length})</span>
         {log.length === 0 ? (
-          <div style={{ ...card, color: 'var(--cth-ink-700)', fontFamily: 'var(--cth-font-ui)', fontSize: 12 }}>
-            No delegations yet.
+          <div style={{ ...card, fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: 1.6 }}>
+            <div style={{ fontWeight: 600, color: 'var(--cth-ink-900)', marginBottom: 6 }}>No delegations this session.</div>
+            <div style={{ color: 'var(--cth-ink-700)' }}>
+              LDA (Local Delegation Assistant) delegates large reads to the edgentic model running on edgentic1.
+              To enable: make sure <code style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 11 }}>edgentic</code> is
+              reachable on PATH, then configure local delegation in{' '}
+              <strong>Settings → Connections → Local Delegates</strong>.
+              Once active, large file reads and grep operations will appear here.
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
