@@ -1426,13 +1426,13 @@ function renderFleet() {
         } else if (state.savedScrollTop !== undefined) {
           terminalEl.scrollTop = state.savedScrollTop;
         }
-        if (!state.interval) {
-          state.interval = setInterval(() => {
-            if (agentTerminalState.get(agentId)?.expanded && document.visibilityState === 'visible') {
-              loadAgentTerminal(agentId, terminalEl);
-            }
-          }, 3000);
-        }
+        if (state.interval) { clearInterval(state.interval); state.interval = null; }
+        state.interval = setInterval(() => {
+          if (agentTerminalState.get(agentId)?.expanded && document.visibilityState === 'visible') {
+            const el = document.querySelector(`.agent-terminal[data-agent-id="${CSS.escape(agentId)}"]`);
+            if (el) loadAgentTerminal(agentId, el);
+          }
+        }, 3000);
         terminalEl.addEventListener('scroll', () => {
           const s = agentTerminalState.get(agentId);
           if (!s) return;
@@ -1573,7 +1573,8 @@ async function toggleAgentTerminal(agentId) {
 
     state.interval = setInterval(() => {
       if (agentTerminalState.get(agentId)?.expanded && document.visibilityState === 'visible') {
-        loadAgentTerminal(agentId, terminalEl);
+        const el = document.querySelector(`.agent-terminal[data-agent-id="${CSS.escape(agentId)}"]`);
+        if (el) loadAgentTerminal(agentId, el);
       }
     }, 3000);
   }
@@ -1752,13 +1753,13 @@ function renderWorkers(data) {
         } else if (state.savedScrollTop !== undefined) {
           terminalEl.scrollTop = state.savedScrollTop;
         }
-        if (!state.interval) {
-          state.interval = setInterval(() => {
-            if (workerTerminalState.get(workerId)?.expanded && document.visibilityState === 'visible') {
-              loadWorkerTerminal(workerId, terminalEl);
-            }
-          }, 3000);
-        }
+        if (state.interval) { clearInterval(state.interval); state.interval = null; }
+        state.interval = setInterval(() => {
+          if (workerTerminalState.get(workerId)?.expanded && document.visibilityState === 'visible') {
+            const el = document.querySelector(`.worker-terminal[data-worker-id="${CSS.escape(workerId)}"]`);
+            if (el) loadWorkerTerminal(workerId, el);
+          }
+        }, 3000);
         terminalEl.addEventListener('scroll', () => {
           const s = workerTerminalState.get(workerId);
           if (!s) return;
@@ -1867,7 +1868,8 @@ async function toggleWorkerTerminal(workerId) {
 
     state.interval = setInterval(() => {
       if (workerTerminalState.get(workerId)?.expanded && document.visibilityState === 'visible') {
-        loadWorkerTerminal(workerId, terminalEl);
+        const el = document.querySelector(`.worker-terminal[data-worker-id="${CSS.escape(workerId)}"]`);
+        if (el) loadWorkerTerminal(workerId, el);
       }
     }, 3000);
   }
