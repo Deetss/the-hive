@@ -162,6 +162,10 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
             lastActivityTs={(telemetrySamples[a.id]?.ts) ?? a.recentTextTs ?? null}
             cwd={a.cwd}
             worktreePath={a.worktreePath}
+            command={a.command}
+            provider={a.provider}
+            model={a.model}
+            profileId={a.profileId}
           />
           {/* The note itself lives INSIDE the card (its own row above the gauge).
               This is the transient EDITOR: a fixed popover ABOVE the card —

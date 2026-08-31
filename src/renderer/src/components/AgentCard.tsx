@@ -9,6 +9,7 @@ import { AccentColorName } from '@/design/tokens';
 import { OfficeCharacterName } from '@/scene/office/cast';
 import { AgentNameEditor } from './AgentNameEditor';
 import { Icon } from './Icon';
+import { inferAgentProvider, providerPreset, type AgentProvider } from '@/store/config';
 
 export interface AgentCardProps {
   name: string;
@@ -55,6 +56,10 @@ export interface AgentCardProps {
   cwd?: string;
   /** Isolated worktree path, when present. */
   worktreePath?: string;
+  command?: string;
+  provider?: AgentProvider;
+  model?: string;
+  profileId?: string;
 }
 
 const fmtK = (n: number): string => `${Math.round(n / 1000)}k`;
@@ -95,7 +100,7 @@ export function AgentCard({
   name, character, accent, status, ptyId, project, action, progress = 0,
   contextTokens, contextLimit, selected, isOvermind, onClick, onRename,
   doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold,
-  lastTool, lastActivityTs, cwd, worktreePath
+  lastTool, lastActivityTs, cwd, worktreePath, command, provider, model, profileId
 }: AgentCardProps) {
   const [hover, setHover] = useState(false);
   const typing = useHasTerminalDraft(ptyId);
@@ -172,6 +177,9 @@ export function AgentCard({
   const activityLabel = formatAgo(lastActivityTs, now);
   const location = shortenPath(worktreePath ?? cwd);
   const toolLabel = lastTool ?? ((status !== 'idle' && action) ? action : undefined);
+  const prov = inferAgentProvider(command, provider);
+  const isNonClaude = prov !== 'claude';
+  const preset = providerPreset(prov);
 
   return (
     <div
@@ -266,6 +274,15 @@ export function AgentCard({
                     padding: '1px 4px 0', flexShrink: 0
                   }}>BOSS</span>
                 )}
+                {isNonClaude && (
+                  <span title={`Engine: ${preset.label}`} style={{
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '11px',
+                    background: 'var(--cth-sky-light)', color: 'var(--cth-ink-900)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-sky)',
+                    padding: '1px 4px 0', flexShrink: 0, textTransform: 'uppercase',
+                    fontWeight: 600
+                  }}>{prov === 'antigravity' ? 'AGY' : preset.label}</span>
+                )}
               </span>
               {/* flexShrink:0 — the badge is a fixed 2-to-5 character chip; when
                   it was allowed to shrink, the browser resolved the overflow by
@@ -285,9 +302,9 @@ export function AgentCard({
 
             {/* Context line: action while working, repo while idle. */}
             <div
-              title={`${project}${action && status !== 'idle' ? ` — ${action}` : ''}`}
+              title={`${project}${action && status !== 'idle' ? ` — ${action}` : ''}${isNonClaude ? ` · Engine: ${preset.label}` : ''}`}
               style={{
-                fontSize: 13, lineHeight: '14px',
+                fontSize: 13, lineHeight: '15px',
                 color: 'var(--cth-ink-500)',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
               }}

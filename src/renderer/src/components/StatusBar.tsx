@@ -132,9 +132,11 @@ export function StatusBar() {
 
   // Resolve the badge for the currently focused agent.
   // Uses its profileId → runtimeProfiles.claudeConfigDir if available;
-  // falls back to the app-wide CLAUDE_CONFIG_DIR badge otherwise.
+  // falls back to the app-wide CLAUDE_CONFIG_DIR badge otherwise (Claude only).
   const displayBadge = useMemo<'WORK' | 'PERSONAL' | null>(() => {
     if (!accountBadge) return null;
+    const provider = focusAgent ? inferAgentProvider(focusAgent.command, focusAgent.provider) : 'claude';
+    if (provider !== 'claude') return null;
     if (focusAgent?.profileId) {
       const profile = runtimeProfiles.find((p) => p.id === focusAgent.profileId);
       if (profile?.claudeConfigDir) {
@@ -143,7 +145,7 @@ export function StatusBar() {
       }
     }
     return accountBadge;
-  }, [focusAgent?.profileId, runtimeProfiles, accountBadge]);
+  }, [focusAgent?.id, focusAgent?.command, focusAgent?.provider, focusAgent?.profileId, runtimeProfiles, accountBadge]);
 
   // Async git branch for the focused agent's cwd.
   const [branch, setBranch] = useState<string | null>(null);

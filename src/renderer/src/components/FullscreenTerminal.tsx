@@ -23,7 +23,7 @@ import { GitTab } from './GitTab';
 import { FilesTab } from './FilesTab';
 import { useAppTheme, toggleAppTheme } from '@/design/theme';
 import { UpdateBadge } from './UpdateBadge';
-import type { HarnessConfig } from '@/store/config';
+import { inferAgentProvider, providerPreset, type HarnessConfig } from '@/store/config';
 
 /** Roster rail width. A fixed 232px is right on a 14" laptop but reads as a
  *  sliver on a 27" display, where names truncate for no reason — so it tracks
@@ -51,9 +51,9 @@ function rosterScale(zoom: number) {
   // tell two hires apart at a glance, which is the tile's whole job.
   const portraitScale = Math.min(2.5, Math.max(1.5, Math.round(zoom * 0.11 * 2) / 2));
   return {
-    name: clamp(zoom * 0.48, 7, 14),
-    group: clamp(zoom * 0.45, 7, 13),
-    note: clamp(zoom * 0.68, 10, 20),
+    name: clamp(zoom * 0.9, 12, 16),
+    group: clamp(zoom * 0.85, 11, 14),
+    note: clamp(zoom * 0.85, 11, 15),
     portraitScale,
     portrait: Math.round(PORTRAIT_W * portraitScale)
   };
@@ -857,30 +857,39 @@ function SidebarRow({
               }}
             >✎</span>
           </div>
-          {/* WHAT this agent is, at a glance. The roster used to carry only a
-              name, a portrait and a status dot — enough to tell rows apart, not
-              enough to answer "which model is this on, where is it working, and
-              how full is its context", which is exactly what you need when the
-              terminal is the whole screen and the sidebar is your only index. */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
-            fontSize: Math.max(9, scale.name - 3), lineHeight: 1.4,
-            color: 'var(--cth-ink-500)'
-          }}>
-            <span style={{
-              flexShrink: 0, maxWidth: '52%',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-            }} title={agent.model ? `Model: ${agent.model}` : 'Runs the CLI default model'}>
-              {shortModel(agent.model) ?? 'CLI default'}
-            </span>
-            <span style={{ flexShrink: 0, opacity: 0.5 }}>·</span>
-            <span style={{
-              flex: 1, minWidth: 0,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-            }} title={agent.worktreePath || agent.cwd}>
-              {basename(agent.worktreePath || agent.cwd) || agent.project}
-            </span>
-          </div>
+          {/* WHAT this agent is, at a glance. */}
+          {(() => {
+            const prov = inferAgentProvider(agent.command, agent.provider);
+            const isClaude = prov === 'claude';
+            const preset = providerPreset(prov);
+            const modelLabel = agent.model ? shortModel(agent.model) : (isClaude ? 'CLI default' : preset.label);
+            const engineTooltip = agent.model
+              ? `Model: ${agent.model} (${preset.label})`
+              : (isClaude ? 'Runs the CLI default model' : `Engine: ${preset.label}`);
+            return (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
+                fontSize: Math.max(11, scale.name - 2), lineHeight: 1.4,
+                color: 'var(--cth-ink-500)'
+              }}>
+                <span style={{
+                  flexShrink: 0, maxWidth: '52%',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  color: !isClaude ? 'var(--cth-ink-700)' : undefined,
+                  fontWeight: !isClaude ? 500 : undefined
+                }} title={engineTooltip}>
+                  {modelLabel}
+                </span>
+                <span style={{ flexShrink: 0, opacity: 0.5 }}>·</span>
+                <span style={{
+                  flex: 1, minWidth: 0,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                }} title={agent.worktreePath || agent.cwd}>
+                  {basename(agent.worktreePath || agent.cwd) || agent.project}
+                </span>
+              </div>
+            );
+          })()}
           {/* Live activity: current tool/command from the pty stream. Quieter
               than the animated office — just the text, no motion. Only shown
               while the agent is actively doing something. */}

@@ -1087,9 +1087,20 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                 onClick={() => select(a.id)}
                 style={{
                   border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-900)'
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)',
+                  display: 'inline-flex', alignItems: 'center', gap: 6
                 }}
-              >{a.name}{a.isOvermind ? ' (Overmind)' : ''}</button>
+              >
+                <span>{a.name}{a.isOvermind ? ' (Overmind)' : ''}</span>
+                {agentProvider !== 'claude' && (
+                  <span title={`Engine: ${agentPreset.label}`} style={{
+                    fontSize: 8, lineHeight: '11px', padding: '1px 4px 0',
+                    background: 'var(--cth-sky-light)', color: 'var(--cth-ink-900)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-sky)', textTransform: 'uppercase',
+                    fontWeight: 600
+                  }}>{agentProvider === 'antigravity' ? 'AGY' : agentPreset.label}</span>
+                )}
+              </button>
               <PixelBadge status={armed ? 'looping' : a.status} />
               {armed && <span title={breaker?.reason} style={{ color: 'var(--cth-coral)', fontSize: 12 }}>⚠</span>}
               <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--cth-ink-500)' }}>
