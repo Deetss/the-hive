@@ -296,7 +296,7 @@ export function AgentCard({
             {(toolLabel || activityLabel || location) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
                 {(toolLabel || activityLabel) && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, lineHeight: '14px', color: 'var(--cth-ink-500)', opacity: 0.85 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', opacity: 0.85 }}>
                     {toolLabel && (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }} title={`Last tool: ${toolLabel}`}>
                         <Icon name="terminal" size={1} style={{ color: 'var(--cth-ink-500)' }} />
@@ -312,7 +312,7 @@ export function AgentCard({
                   </div>
                 )}
                 {location && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, lineHeight: '14px', color: 'var(--cth-ink-500)', opacity: 0.85 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', opacity: 0.85 }}>
                     <Icon name="folder" size={1} style={{ color: 'var(--cth-ink-500)' }} />
                     <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }} title={location.title}>{location.display}</span>
                   </div>
@@ -346,7 +346,7 @@ export function AgentCard({
                   <span
                     title={note}
                     style={{
-                      flex: 1, minWidth: 0, fontSize: 10.5, lineHeight: '14px',
+                      flex: 1, minWidth: 0, fontSize: 12, lineHeight: '16px',
                       color: 'var(--cth-ink-500)', fontStyle: 'italic',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                     }}
