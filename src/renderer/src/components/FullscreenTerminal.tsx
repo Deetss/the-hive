@@ -459,21 +459,23 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                   scale={scale}
                 />
                 {a.isOvermind && (
-                  <div style={{ display: 'flex', gap: 4, padding: '4px 8px 6px' }}>
-                    <PixelButton
-                      variant="primary"
-                      size="sm"
-                      style={{ flex: 1 }}
+                  <div style={{ display: 'flex', padding: '0 8px 6px' }}>
+                    <button
                       onClick={() => {
                         if (!window.confirm(`Archive and respawn ${a.name}? It will start a fresh session.`)) return;
-                        if (a.ptyId) {
-                          void window.cth.killPty(a.ptyId).catch(() => {});
-                        }
+                        if (a.ptyId) void window.cth.killPty(a.ptyId).catch(() => {});
                         void window.cth.respawnAgent(a.id).catch((e: unknown) => console.error('[respawn]', e));
+                      }}
+                      title="Archive this session and spawn a fresh Abathur"
+                      style={{
+                        border: 'none', cursor: 'pointer', padding: '2px 8px',
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+                        color: 'var(--cth-ink-500)',
+                        background: 'transparent'
                       }}
                     >
                       ↺ respawn
-                    </PixelButton>
+                    </button>
                   </div>
                 )}
               </div>
