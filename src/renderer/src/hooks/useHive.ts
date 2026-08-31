@@ -44,6 +44,11 @@ const QUIESCE_POLL_MS = 1500;
 // After a god/agent spawn, hold off the inbox-wake + queue-drain typers for this
 // long while the readiness handshake + provider-specific boot sequence runs.
 const BOOT_GRACE_MS = 35_000;
+// Watchdog for the god bootstrap: a spawnPty that hangs (or rejects with no
+// handler) must not pin the floor on 'booting' forever. If the spawn hasn't
+// resolved in this window we surface 'failed' so the retry UI appears instead of
+// an endless "clocking in" spinner.
+const GOD_SPAWN_TIMEOUT_MS = 20_000;
 // Delay before typing a one-time TUI protocol seed into a fresh worker (3b) —
 // long enough for the TUI to finish painting and surface any permission prompt.
 // submitToPty additionally waits for the terminal's readiness handshake.
@@ -383,22 +388,39 @@ export function useHive(config: HarnessConfig | null): void {
       const overmindModel = config.overmindModel;
       const command = buildSpawnCommand(config, overmindModel, overmindProvider);
       const [exe, ...args] = tokenizeCommand(command.trim());
-      const res = await window.cth.spawnPty({
-        id: GOD_PTY,
-        cwd: config.harnessHome!,
-        command: exe,
-        provider: overmindProvider,
-        args,
-        cols: 100,
-        rows: 30,
-        // Restore Abathur's prior conversation across an app restart. His session
-        // id lives in the hive registry (recorded from his hooks), so the main
-        // process attaches `--resume <id>`; a missing transcript falls back to a
-        // fresh session. Without this the most important context on the floor —
-        // the orchestrator's — was lost on every restart.
-        resume: true,
-        hive: { id: GOD_ID, name: 'Abathur', provider: overmindProvider, cwd: config.harnessHome!, isOvermind: true, role: 'Overmind' }
-      });
+      // The spawn is raced against a watchdog: a hang OR a rejection both land in
+      // the catch below as 'failed' + a cleared spawn latch, so the floor can never
+      // be stranded on 'booting' and the retry UI always becomes reachable. If a
+      // timed-out spawn later lands its PTY anyway, the next bootstrap run's
+      // listPtys() check re-seats it as 'ready', so nothing is orphaned.
+      let res: Awaited<ReturnType<typeof window.cth.spawnPty>>;
+      try {
+        res = await Promise.race([
+          window.cth.spawnPty({
+            id: GOD_PTY,
+            cwd: config.harnessHome!,
+            command: exe,
+            provider: overmindProvider,
+            args,
+            cols: 100,
+            rows: 30,
+            // Restore Abathur's prior conversation across an app restart. His session
+            // id lives in the hive registry (recorded from his hooks), so the main
+            // process attaches `--resume <id>`; a missing transcript falls back to a
+            // fresh session. Without this the most important context on the floor —
+            // the orchestrator's — was lost on every restart.
+            resume: true,
+            hive: { id: GOD_ID, name: 'Abathur', provider: overmindProvider, cwd: config.harnessHome!, isOvermind: true, role: 'Overmind' }
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Abathur spawn timed out')), GOD_SPAWN_TIMEOUT_MS))
+        ]);
+      } catch (e) {
+        godSpawning.current = false;
+        if (!cancelled) useStore.getState().setGodStatus('failed');
+        console.error('[god bootstrap] spawn failed:', e);
+        return;
+      }
       if (cancelled) { godSpawning.current = false; return; }
       if (!res.ok) { godSpawning.current = false; useStore.getState().setGodStatus('failed'); return; }
       const god: Agent = {
