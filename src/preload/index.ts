@@ -1015,6 +1015,14 @@ const api = {
     ipcRenderer.on('hive:contextUpdate', listener);
     return () => ipcRenderer.removeListener('hive:contextUpdate', listener);
   },
+  /** Fleet token data from fleet.json (PTY-parsed tokens/ctx for non-Claude agents). */
+  onFleetTokens: (
+    cb: (data: Record<string, { tokens: number; ctxPct: number | null; usd: number }>) => void
+  ): (() => void) => {
+    const listener = (_e: IpcRendererEvent, data: Record<string, { tokens: number; ctxPct: number | null; usd: number }>) => cb(data);
+    ipcRenderer.on('hive:fleetTokens', listener);
+    return () => ipcRenderer.removeListener('hive:fleetTokens', listener);
+  },
   onHiveMessage: (cb: (e: HiveRouteEvent) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, payload: HiveRouteEvent) => cb(payload);
     ipcRenderer.on('hive:message', listener);
