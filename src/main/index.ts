@@ -5259,17 +5259,21 @@ ipcMain.handle('ai:improveText', async (_evt, text: unknown, context: unknown) =
   // never as an instruction (even if the text itself is a verb like "Rewrite").
   const prompt = `You are a text editor for AI agent configuration. The user has typed the following as an agent ${context}. Rewrite it to be specific, clear, and actionable. Output ONLY the improved version — no commentary, no preamble, no quotes.\n\nText to improve:\n\`\`\`\n${text}\n\`\`\`\n\nImproved version:`;
   return new Promise<{ ok: boolean; result?: string; error?: string }>((resolve) => {
-    // Pass prompt as a direct argv element (no shell=true) so special chars in the
-    // text (newlines, backticks, quotes) are never shell-parsed or mangled.
-    // On Windows, npm installs claude as claude.cmd; without shell:true we must use
-    // that name directly so the OS can find it.
-    const cmd = process.platform === 'win32' ? 'claude.cmd' : 'claude';
-    const child = spawn(cmd, ['--print', prompt], {
+    // Pipe prompt via stdin to avoid shell argument mangling (newlines, backticks).
+    // On Windows, .cmd files require cmd.exe — spawn them directly to avoid EINVAL.
+    // We invoke cmd.exe /c claude --print with stdio:pipe so the prompt flows through
+    // stdin without touching argv, keeping special characters intact.
+    const [cmd, args] = process.platform === 'win32'
+      ? ['cmd.exe', ['/c', 'claude', '--print']]
+      : ['claude', ['--print']];
+    const child = spawn(cmd, args, {
       shell: false,
       cwd: require('node:os').tmpdir(),
       env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe']
     });
+    child.stdin?.write(prompt);
+    child.stdin?.end();
     let stdout = '';
     let stderr = '';
     child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
