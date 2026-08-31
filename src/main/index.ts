@@ -436,6 +436,25 @@ function readJsonBody<T = any>(req: IncomingMessage): Promise<T> {
   });
 }
 
+// Counts newlines in a file, stopping early once `threshold` is reached so a
+// huge file never costs a full scan. Files above `maxBytes` are treated as
+// "at least threshold" without reading — the delegation guard only cares
+// whether a Read is large enough to redirect to edgentic.
+function countLinesAtLeast(filePath: string, threshold: number, maxBytes = 5_000_000): number {
+  const size = statSync(filePath).size;
+  if (size > maxBytes) return threshold;
+  const buf = readFileSync(filePath);
+  let count = 0;
+  for (let i = 0; i < buf.length; i++) {
+    if (buf[i] === 0x0a) {
+      count++;
+      if (count >= threshold) return count;
+    }
+  }
+  if (buf.length > 0 && buf[buf.length - 1] !== 0x0a) count++;
+  return count;
+}
+
 function atomicWriteJson(filePath: string, data: unknown): void {
   mkdirSync(dirname(filePath), { recursive: true });
   const tmpPath = `${filePath}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`;
@@ -632,6 +651,76 @@ function updateSseWatchers(): void {
     try { unwatchFile(tasksPath); } catch {}
     try { unwatchFile(boardPath); } catch {}
   }
+}
+
+// Claude Code PreToolUse hook endpoint. Receives { tool_name, tool_input,
+// session_id } and returns an allow/block decision that routes edgentic
+// delegation guards through TheHive instead of a WSL bash shell. Fails open:
+// a malformed payload or unexpected error never blocks Claude Code.
+async function handleHookRequest(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
+  if (pathname !== '/hooks/pre-tool') return false;
+
+  const method = req.method?.toUpperCase() ?? 'GET';
+  if (method !== 'POST') {
+    res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+    return true;
+  }
+
+  const respond = (decision: 'allow' | 'block', reason?: string): true => {
+    const hookSpecificOutput: Record<string, unknown> = {
+      hookEventName: 'PreToolUse',
+      permissionDecision: decision
+    };
+    if (reason) hookSpecificOutput.permissionDecisionReason = reason;
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ hookSpecificOutput }));
+    return true;
+  };
+
+  let body: { tool_name?: string; tool_input?: Record<string, unknown> };
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    return respond('allow');
+  }
+
+  const toolName = typeof body?.tool_name === 'string' ? body.tool_name : '';
+  const toolInput = (body?.tool_input && typeof body.tool_input === 'object')
+    ? (body.tool_input as Record<string, unknown>)
+    : {};
+
+  try {
+    // Read of a large file -> redirect to edgentic-find. Bounded reads
+    // (offset/limit) are exempt: those already avoid pulling the whole file.
+    if (toolName === 'Read') {
+      const filePath = typeof toolInput.file_path === 'string' ? toolInput.file_path : '';
+      const bounded = toolInput.offset != null || toolInput.limit != null;
+      if (filePath && !bounded && existsSync(filePath) && statSync(filePath).isFile()) {
+        if (countLinesAtLeast(filePath, 350) >= 350) {
+          return respond('block', `Redirect to edgentic: edgentic-find "your question" ${filePath}`);
+        }
+      }
+      return respond('allow');
+    }
+
+    // Bash/Grep pulling context blocks (-A/-B/-C) -> redirect to edgentic-run.
+    if (toolName === 'Bash' || toolName === 'Grep') {
+      const text = [
+        typeof toolInput.command === 'string' ? toolInput.command : '',
+        typeof toolInput.pattern === 'string' ? toolInput.pattern : ''
+      ].join(' ');
+      if (/(?:^|\s)-[ABC](?:$|\s|=|\d)/.test(text)) {
+        return respond('block', 'Redirect to edgentic: edgentic-run -- <cmd>');
+      }
+      return respond('allow');
+    }
+  } catch (err) {
+    console.error('[hook] pre-tool guard error:', err);
+    return respond('allow');
+  }
+
+  return respond('allow');
 }
 
 async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathname: string, url: URL): Promise<boolean> {
@@ -1236,6 +1325,12 @@ function ensureBrowserServer(): Promise<string> {
 
         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Not Found');
+        return;
+      }
+
+      // Handle unauthenticated Claude Code PreToolUse hook endpoint
+      if (pathname === '/hooks/pre-tool') {
+        void handleHookRequest(req, res, pathname);
         return;
       }
 
