@@ -4851,10 +4851,14 @@ ipcMain.handle('ai:improveText', async (_evt, text: unknown, context: unknown) =
   if (typeof text !== 'string' || typeof context !== 'string') {
     return { ok: false, error: 'text and context must be strings' };
   }
-  const prompt = `Improve this ${context} for an AI agent. Make it specific, clear, and actionable. Return ONLY the improved text, no preamble, no quotes.\n\n${text}`;
+  // Completion-template format: Claude fills in the blank after "IMPROVED:" which
+  // prevents it from asking clarifying questions. Run in os.tmpdir() so no CLAUDE.md
+  // or git repo is picked up and Claude stays in pure text-transformation mode.
+  const prompt = `Rewrite the following ${context} to be specific, clear, and actionable for an AI agent. Output only the rewritten text — no explanation, no preamble.\n\n${context.toUpperCase()}: ${text}\n\nREWRITTEN ${context.toUpperCase()}:`;
   return new Promise<{ ok: boolean; result?: string; error?: string }>((resolve) => {
     const child = spawn('claude', ['--print', prompt], {
       shell: true,
+      cwd: require('node:os').tmpdir(),
       env: process.env
     });
     let stdout = '';
