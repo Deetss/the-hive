@@ -1433,10 +1433,10 @@ function workerCard(w) {
     <span>${esc(w.workerId)}</span>
     ${w.lastTool ? `<span style="color:var(--cth-ink-300)">·</span><span class="agent-tool-val">⌨ ${esc(w.lastTool)}</span>` : ''}
   </div>
-  <button class="btn btn-secondary" style="margin-top:8px;width:100%;" onclick="toggleWorkerTerminal('${esc(w.workerId)}')">
-    <span id="terminal-toggle-${esc(w.workerId)}">Show Terminal</span>
+  <button class="btn btn-secondary worker-terminal-toggle" style="margin-top:8px;width:100%;" data-worker-id="${esc(w.workerId)}">
+    <span class="terminal-toggle-text">Show Terminal</span>
   </button>
-  <div id="terminal-${esc(w.workerId)}" class="worker-terminal" hidden>
+  <div class="worker-terminal" data-worker-id="${esc(w.workerId)}" hidden>
     <div class="spinner" style="padding:12px;text-align:center;">⟳ loading…</div>
   </div>
 </div>`;
@@ -1445,19 +1445,28 @@ function workerCard(w) {
 document.getElementById('workers-refresh').addEventListener('click', loadWorkers);
 
 // Worker terminal expansion state and polling
-const workerTerminalState = new Map(); // workerId -> { expanded: boolean, interval: number | null }
+const workerTerminalState = new Map(); // workerId -> { expanded: boolean, interval: null }
+
+// Event delegation for terminal toggle buttons
+document.getElementById('workers-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('.worker-terminal-toggle');
+  if (!btn) return;
+  const workerId = btn.dataset.workerId;
+  if (workerId) toggleWorkerTerminal(workerId);
+});
 
 async function toggleWorkerTerminal(workerId) {
-  const terminalEl = document.getElementById(`terminal-${workerId}`);
-  const toggleEl = document.getElementById(`terminal-toggle-${workerId}`);
-  if (!terminalEl || !toggleEl) return;
+  const terminalEl = document.querySelector(`.worker-terminal[data-worker-id="${CSS.escape(workerId)}"]`);
+  const toggleBtn = document.querySelector(`.worker-terminal-toggle[data-worker-id="${CSS.escape(workerId)}"]`);
+  const toggleText = toggleBtn?.querySelector('.terminal-toggle-text');
+  if (!terminalEl || !toggleText) return;
 
   const state = workerTerminalState.get(workerId) || { expanded: false, interval: null };
 
   if (state.expanded) {
     // Collapse
     terminalEl.hidden = true;
-    toggleEl.textContent = 'Show Terminal';
+    toggleText.textContent = 'Show Terminal';
     if (state.interval) {
       clearInterval(state.interval);
       state.interval = null;
@@ -1466,16 +1475,16 @@ async function toggleWorkerTerminal(workerId) {
   } else {
     // Expand
     terminalEl.hidden = false;
-    toggleEl.textContent = 'Hide Terminal';
+    toggleText.textContent = 'Hide Terminal';
     state.expanded = true;
 
     // Load immediately
-    await loadWorkerTerminal(workerId);
+    await loadWorkerTerminal(workerId, terminalEl);
 
     // Poll every 3s while expanded
     state.interval = setInterval(() => {
       if (workerTerminalState.get(workerId)?.expanded) {
-        loadWorkerTerminal(workerId);
+        loadWorkerTerminal(workerId, terminalEl);
       }
     }, 3000);
   }
@@ -1483,8 +1492,7 @@ async function toggleWorkerTerminal(workerId) {
   workerTerminalState.set(workerId, state);
 }
 
-async function loadWorkerTerminal(workerId) {
-  const terminalEl = document.getElementById(`terminal-${workerId}`);
+async function loadWorkerTerminal(workerId, terminalEl) {
   if (!terminalEl) return;
 
   try {
