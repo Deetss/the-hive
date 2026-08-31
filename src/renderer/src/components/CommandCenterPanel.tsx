@@ -70,7 +70,7 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
   { key: 'terminal', label: 'terminal', icon: 'terminal' },
   { key: 'floor', label: 'monitor', icon: 'mcp' },
   { key: 'tasks', label: 'tasks', icon: 'check' },
-  { key: 'ask', label: 'dispatch', icon: 'sparkle' },
+  { key: 'ask', label: 'ask', icon: 'sparkle' },
   { key: 'human', label: 'for you', icon: 'bell' },
   { key: 'triggers', label: 'triggers', icon: 'clock' },
   { key: 'trigger-history', label: 'history', icon: 'ledger' },
