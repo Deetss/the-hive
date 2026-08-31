@@ -1,33 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <!-- Multi-Layer Depth Drop Shadow Filter -->
-    <filter id="dropShadow" x="-30%" y="-30%" width="160%" height="160%">
-      <!-- Ambient Soft Shadow -->
-      <feGaussianBlur in="SourceAlpha" stdDeviation="20" result="blurSoft"/>
-      <feOffset in="blurSoft" dx="0" dy="22" result="offsetSoft"/>
-      <feComponentTransfer in="offsetSoft" result="shadowSoft">
-        <feFuncA type="linear" slope="0.45"/>
-      </feComponentTransfer>
-
-      <!-- Crisp Directional Contact Shadow -->
-      <feGaussianBlur in="SourceAlpha" stdDeviation="7" result="blurSharp"/>
-      <feOffset in="blurSharp" dx="0" dy="8" result="offsetSharp"/>
-      <feComponentTransfer in="offsetSharp" result="shadowSharp">
-        <feFuncA type="linear" slope="0.35"/>
-      </feComponentTransfer>
-
-      <!-- Merge Shadows with Source Graphic -->
-      <feMerge>
-        <feMergeNode in="shadowSoft"/>
-        <feMergeNode in="shadowSharp"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+    <!-- Subtle Dimensional Lift Shadow (5-color palette: #F59E0B, #FBBF24, #FEF3C7, #FDE68A, #D97706) -->
+    <filter id="subtleShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000000" flood-opacity="0.25"/>
     </filter>
   </defs>
 
-  <!-- ==================== HONEYCOMB ICON WITH LIFT DROP SHADOW ==================== -->
-  <g filter="url(#dropShadow)">
-    <!-- ==================== MATTE HONEYCOMB TRIAD STRUCTURE ==================== -->
+  <!-- ==================== HONEYCOMB ICON (5 SOLID COLORS) ==================== -->
+  <g filter="url(#subtleShadow)">
+    <!-- 1. Hexagon Walls (#F59E0B) -->
     <g fill="none" stroke="#F59E0B" stroke-width="26" stroke-linejoin="round" stroke-linecap="round">
       <!-- Top Hexagon (Center: 512, 330) -->
       <polygon points="512,140 676.5,235 676.5,425 512,520 347.5,425 347.5,235" />
@@ -39,54 +20,54 @@
       <polygon points="676.5,425 841,520 841,710 676.5,805 512,710 512,520" />
     </g>
 
-    <!-- ==================== CELL 1: TOP (QUEEN BEE) ==================== -->
+    <!-- 2. Top Cell: Queen Bee -->
     <g transform="translate(512, 330)">
-      <!-- Queen Crown & Antennae -->
+      <!-- Queen Crown & Antennae (#FBBF24 with #FEF3C7 jewels) -->
       <polygon points="-24,-84 -34,-106 0,-95 34,-106 24,-84" fill="#FBBF24"/>
       <circle cx="-34" cy="-106" r="6" fill="#FEF3C7"/>
       <circle cx="0" cy="-95" r="7" fill="#FEF3C7"/>
       <circle cx="34" cy="-106" r="6" fill="#FEF3C7"/>
 
-      <!-- Queen Wings (Solid Matte Cream) -->
+      <!-- Queen Wings (Upper: #FEF3C7, Lower: #FDE68A) -->
       <polygon points="-25,-30 -120,-68 -98,-15 -25,5" fill="#FEF3C7"/>
       <polygon points="-25,12 -88,18 -68,60 -25,32" fill="#FDE68A"/>
       <polygon points="25,-30 120,-68 98,-15 25,5" fill="#FEF3C7"/>
       <polygon points="25,12 88,18 68,60 25,32" fill="#FDE68A"/>
 
-      <!-- Queen Head & Thorax -->
+      <!-- Queen Head (#FBBF24) & Thorax (#F59E0B with #FEF3C7 core) -->
       <circle cx="0" cy="-56" r="24" fill="#FBBF24"/>
       <polygon points="0,-32 28,-14 28,20 0,38 -28,20 -28,-14" fill="#F59E0B"/>
       <circle cx="0" cy="2" r="8" fill="#FEF3C7"/>
 
-      <!-- Abdomen -->
+      <!-- Abdomen (#FBBF24 with #D97706 tip) -->
       <path d="M -26,46 Q 0,54 26,46 L 22,64 Q 0,72 -22,64 Z" fill="#FBBF24"/>
       <path d="M -20,70 Q 0,78 20,70 L 15,88 Q 0,96 -15,88 Z" fill="#FBBF24"/>
       <polygon points="-11,94 11,94 0,118" fill="#D97706"/>
     </g>
 
-    <!-- ==================== CELL 2: BOTTOM-LEFT (WORKER A) ==================== -->
+    <!-- 3. Bottom-Left Cell: Worker Bee A -->
     <g transform="translate(347.5, 615) scale(0.8) translate(0, -10)">
-      <!-- Wings -->
+      <!-- Wings (#FEF3C7) -->
       <polygon points="-20,-25 -100,-58 -82,-10 -20,5" fill="#FEF3C7"/>
       <polygon points="20,-25 100,-58 82,-10 20,5" fill="#FEF3C7"/>
-      <!-- Body -->
+      <!-- Head (#FBBF24) & Thorax (#F59E0B) -->
       <circle cx="0" cy="-46" r="20" fill="#FBBF24"/>
       <ellipse cx="0" cy="-12" rx="24" ry="20" fill="#F59E0B"/>
-      <!-- Abdomen -->
+      <!-- Abdomen (#FBBF24 with #D97706 tip) -->
       <path d="M -20,14 Q 0,22 20,14 L 16,34 Q 0,42 -16,34 Z" fill="#FBBF24"/>
       <path d="M -14,40 Q 0,48 14,40 L 9,58 Q 0,66 -9,58 Z" fill="#FBBF24"/>
       <polygon points="-7,64 7,64 0,86" fill="#D97706"/>
     </g>
 
-    <!-- ==================== CELL 3: BOTTOM-RIGHT (WORKER B) ==================== -->
+    <!-- 4. Bottom-Right Cell: Worker Bee B -->
     <g transform="translate(676.5, 615) scale(0.8) translate(0, -10)">
-      <!-- Wings -->
+      <!-- Wings (#FEF3C7) -->
       <polygon points="-20,-25 -100,-58 -82,-10 -20,5" fill="#FEF3C7"/>
       <polygon points="20,-25 100,-58 82,-10 20,5" fill="#FEF3C7"/>
-      <!-- Body -->
+      <!-- Head (#FBBF24) & Thorax (#F59E0B) -->
       <circle cx="0" cy="-46" r="20" fill="#FBBF24"/>
       <ellipse cx="0" cy="-12" rx="24" ry="20" fill="#F59E0B"/>
-      <!-- Abdomen -->
+      <!-- Abdomen (#FBBF24 with #D97706 tip) -->
       <path d="M -20,14 Q 0,22 20,14 L 16,34 Q 0,42 -16,34 Z" fill="#FBBF24"/>
       <path d="M -14,40 Q 0,48 14,40 L 9,58 Q 0,66 -9,58 Z" fill="#FBBF24"/>
       <polygon points="-7,64 7,64 0,86" fill="#D97706"/>
