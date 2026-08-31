@@ -171,7 +171,7 @@ export class RosterStore {
         // protecting, and a copy of it costs nothing. `wrote` stays false: the
         // guard disarms only when a non-empty write lands, never on a refusal.
         this.backup(home, p, 'declined');
-        console.warn('[roster] refused to overwrite a non-empty roster with an empty one');
+        console.debug('[roster] skipped empty-first-write (guard active)');
         return { ok: false, skipped: 'empty-first-write' };
       }
 
