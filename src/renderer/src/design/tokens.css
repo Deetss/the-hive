@@ -6,23 +6,28 @@
    - Red:    #ef3e2d
    - Salmon: #f47d55
    - Gray:   #6e7167
+   Theme direction: "honey & hive" — warm honeycomb surfaces and an espresso→honey
+   ink ramp in light; a deep comb-wax brown base with honey-cream text in dark.
+   Brand accents (red/green/blue/salmon/lilac) are preserved for semantic meaning;
+   the neutral chrome carries the honey identity. All text/border pairs are
+   contrast-checked (primary >= 14:1, secondary >= 9:1, borders >= 3:1).
 */
 
 :root {
-  /* Base Surfaces — Light Theme (Refined warm cream & parchment) */
-  --cth-cream-50:  #FBFDF6;
-  --cth-cream-100: #F5F9E7;   /* Canonical Brand Cream */
-  --cth-cream-200: #EBF0D8;
-  --cth-cream-300: #DFE5C8;
-  --cth-paper-100: #FCFDF8;
-  --cth-paper-200: #EDF2DC;
+  /* Base Surfaces — Light Theme (warm honeycomb cream & comb wax) */
+  --cth-cream-50:  #FEFCF4;
+  --cth-cream-100: #FAF2DD;   /* Canonical honey cream */
+  --cth-cream-200: #F2E6C6;
+  --cth-cream-300: #E9D9AD;
+  --cth-paper-100: #FEFDF7;
+  --cth-paper-200: #F6ECD3;
 
-  /* Ink (Text & Structure) */
-  --cth-ink-900: #1A2416;     /* Deep forest ink — 14:1 primary contrast */
-  --cth-ink-700: #334130;     /* Secondary text */
-  --cth-ink-500: #5A6657;     /* Tertiary text / helper labels */
-  --cth-ink-300: #9DA899;     /* Structural borders — >= 3.0:1 crisp lines */
-  --cth-ink-100: #D6DEC0;     /* Subtle dividers */
+  /* Ink (Text & Structure) — espresso → honey ramp */
+  --cth-ink-900: #2A1D08;     /* Deep comb-wax espresso — ~14.7:1 primary contrast */
+  --cth-ink-700: #4C3814;     /* Secondary text — ~10:1 */
+  --cth-ink-500: #6F5628;     /* Tertiary text / helper labels — ~6:1 */
+  --cth-ink-300: #A6893F;     /* Honey-gold structural borders */
+  --cth-ink-100: #E7D6A6;     /* Subtle comb dividers */
 
   /* Accents — Brand Palettes */
   --cth-coral: #EF3E2D;       --cth-coral-light: #FCE2DF;  /* Brand Red */
@@ -39,7 +44,7 @@
   --cth-status-waiting:    #5B73C4;
   --cth-status-blocked:    #EF3E2D; /* Brand Red */
   --cth-status-success:    #75AA5C; /* Brand Green */
-  --cth-status-ghost:      #D0D6C8;
+  --cth-status-ghost:      #DED2AE; /* Warm honey ghost */
   --cth-status-compacting: #8B7AC2;
   --cth-status-looping:    #E67332;
   --cth-status-typing:     #C29026;
@@ -79,12 +84,12 @@
   --cth-lh-body-sm:    18px;
   --cth-lh-mono:       20px;
 
-  /* Hard drop shadow */
-  --cth-shadow-hard: 3px 3px 0 rgba(26, 36, 22, 0.16);
+  /* Hard drop shadow — warm comb-brown cast */
+  --cth-shadow-hard: 3px 3px 0 rgba(42, 29, 8, 0.18);
 
   /* Panel borders */
   --cth-panel-border:          inset 0 0 0 1px var(--cth-ink-300);
-  --cth-on-accent:             #1A2416;
+  --cth-on-accent:             #2A1D08;
   --cth-panel-border-inset:    inset 0 0 0 1px var(--cth-ink-100);
   --cth-panel-border-terminal: inset 0 0 0 1px var(--cth-ink-300);
   --cth-panel-border-dialog:   inset 0 0 0 1px var(--cth-ink-500);
@@ -95,18 +100,18 @@
 :root[data-cth-theme='light'],
 [data-theme='light'],
 [data-cth-theme='light'] {
-  --cth-cream-50:  #FBFDF6;
-  --cth-cream-100: #F5F9E7;
-  --cth-cream-200: #EBF0D8;
-  --cth-cream-300: #DFE5C8;
-  --cth-paper-100: #FCFDF8;
-  --cth-paper-200: #EDF2DC;
+  --cth-cream-50:  #FEFCF4;
+  --cth-cream-100: #FAF2DD;
+  --cth-cream-200: #F2E6C6;
+  --cth-cream-300: #E9D9AD;
+  --cth-paper-100: #FEFDF7;
+  --cth-paper-200: #F6ECD3;
 
-  --cth-ink-900: #1A2416;
-  --cth-ink-700: #334130;
-  --cth-ink-500: #5A6657;
-  --cth-ink-300: #9DA899;
-  --cth-ink-100: #D6DEC0;
+  --cth-ink-900: #2A1D08;
+  --cth-ink-700: #4C3814;
+  --cth-ink-500: #6F5628;
+  --cth-ink-300: #A6893F;
+  --cth-ink-100: #E7D6A6;
 
   --cth-coral: #EF3E2D;       --cth-coral-light: #FCE2DF;
   --cth-mint:  #75AA5C;       --cth-mint-light:  #E5F2DF;
@@ -121,57 +126,57 @@
   --cth-status-waiting:    #5B73C4;
   --cth-status-blocked:    #EF3E2D;
   --cth-status-success:    #75AA5C;
-  --cth-status-ghost:      #D0D6C8;
+  --cth-status-ghost:      #DED2AE;
   --cth-status-compacting: #8B7AC2;
   --cth-status-looping:    #E67332;
   --cth-status-typing:     #C29026;
 
-  --cth-shadow-hard: 3px 3px 0 rgba(26, 36, 22, 0.16);
-  --cth-on-accent:   #1A2416;
+  --cth-shadow-hard: 3px 3px 0 rgba(42, 29, 8, 0.18);
+  --cth-on-accent:   #2A1D08;
 }
 
 /* ── Dark theme ──────────────────────────────────────────────────────────────
-   Uses Brand Blue (#274579) as the deep background base elevation, with
-   cream (#F5F9E7) text and vibrant green/red/salmon accents.
+   "Honeycomb night" — deep comb-wax brown surfaces (a warm amber-black instead
+   of the old navy) carrying honey-cream text and the vibrant brand accents.
 */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']):not([data-cth-theme='light']) {
-    --cth-cream-50:  #101826;   /* App ground — deep brand midnight navy */
-    --cth-cream-100: #172338;   /* Main dialog / panel surface */
-    --cth-cream-200: #1E2F4A;   /* Layer 2 elevation / tab headers */
-    --cth-cream-300: #283E61;   /* Layer 3 elevation / active insets */
-    --cth-paper-100: #141F32;   /* Card, terminal & input surfaces */
-    --cth-paper-200: #1B2A42;
+    --cth-cream-50:  #191207;   /* App ground — dark honey wax */
+    --cth-cream-100: #221A0C;   /* Main dialog / panel surface */
+    --cth-cream-200: #2E2410;   /* Layer 2 elevation / tab headers */
+    --cth-cream-300: #3C3016;   /* Layer 3 elevation / active insets */
+    --cth-paper-100: #1E1609;   /* Card, terminal & input surfaces */
+    --cth-paper-200: #281F0E;
 
-    /* Ink → Brand cream text ramp */
-    --cth-ink-900: #F5F9E7;     /* Brand Cream — 13:1 primary text */
-    --cth-ink-700: #CCD4B8;     /* Secondary text — 8.5:1 */
-    --cth-ink-500: #8FA092;     /* Tertiary text / helper labels — 5:1 */
-    --cth-ink-300: #4B668D;     /* Structural borders — >= 3.0:1 crisp lines */
-    --cth-ink-100: #2A3F5E;     /* Recessed dividers */
+    /* Ink → honey-cream text ramp */
+    --cth-ink-900: #FBEFCF;     /* Honey cream — ~14.9:1 primary text */
+    --cth-ink-700: #E4D3A6;     /* Secondary text — ~11:1 */
+    --cth-ink-500: #AC9769;     /* Tertiary text / helper labels — ~6:1 */
+    --cth-ink-300: #806A3C;     /* Amber-brown borders — >= 3.3:1 crisp lines */
+    --cth-ink-100: #3D2F16;     /* Recessed comb dividers */
 
     /* Accents — Dark calibrated */
     --cth-coral: #F86B5D;       --cth-coral-light: #3D1B1B;
-    --cth-mint:  #8CC770;       --cth-mint-light:  #1C3620;
-    --cth-sky:   #5D8CE0;       --cth-sky-light:   #1E3154;
-    --cth-lemon: #F0C45C;       --cth-lemon-light: #3D3216;
+    --cth-mint:  #8CC770;       --cth-mint-light:  #223318;
+    --cth-sky:   #6E9BE6;       --cth-sky-light:   #1E2A4A;
+    --cth-lemon: #F2C55A;       --cth-lemon-light: #3D3216;
     --cth-lilac: #B0A0F0;       --cth-lilac-light: #2C2548;
     --cth-peach: #FA9878;       --cth-peach-light: #42261E;
 
     /* Status */
-    --cth-status-idle:       #8C9B90;
-    --cth-status-thinking:   #5D8CE0;
-    --cth-status-working:    #F0C45C;
+    --cth-status-idle:       #948B72;
+    --cth-status-thinking:   #6E9BE6;
+    --cth-status-working:    #F2C55A;
     --cth-status-waiting:    #8DA2EE;
     --cth-status-blocked:    #F86B5D;
     --cth-status-success:    #8CC770;
-    --cth-status-ghost:      #50647D;
+    --cth-status-ghost:      #5B4E2E;
     --cth-status-compacting: #B0A0F0;
     --cth-status-looping:    #FA9878;
-    --cth-status-typing:     #F0C45C;
+    --cth-status-typing:     #F2C55A;
 
-    --cth-shadow-hard: 4px 4px 0 rgba(8, 12, 20, 0.65);
-    --cth-on-accent:   #101826;
+    --cth-shadow-hard: 4px 4px 0 rgba(10, 7, 2, 0.7);
+    --cth-on-accent:   #191207;
   }
 }
 
@@ -179,38 +184,37 @@
 :root[data-cth-theme='dark'],
 [data-theme='dark'],
 [data-cth-theme='dark'] {
-  --cth-cream-50:  #101826;
-  --cth-cream-100: #172338;
-  --cth-cream-200: #1E2F4A;
-  --cth-cream-300: #283E61;
-  --cth-paper-100: #141F32;
-  --cth-paper-200: #1B2A42;
+  --cth-cream-50:  #191207;
+  --cth-cream-100: #221A0C;
+  --cth-cream-200: #2E2410;
+  --cth-cream-300: #3C3016;
+  --cth-paper-100: #1E1609;
+  --cth-paper-200: #281F0E;
 
-  --cth-ink-900: #F5F9E7;
-  --cth-ink-700: #CCD4B8;
-  --cth-ink-500: #8FA092;
-  --cth-ink-300: #4B668D;
-  --cth-ink-100: #2A3F5E;
+  --cth-ink-900: #FBEFCF;
+  --cth-ink-700: #E4D3A6;
+  --cth-ink-500: #AC9769;
+  --cth-ink-300: #806A3C;
+  --cth-ink-100: #3D2F16;
 
   --cth-coral: #F86B5D;       --cth-coral-light: #3D1B1B;
-  --cth-mint:  #8CC770;       --cth-mint-light:  #1C3620;
-  --cth-sky:   #5D8CE0;       --cth-sky-light:   #1E3154;
-  --cth-lemon: #F0C45C;       --cth-lemon-light: #3D3216;
+  --cth-mint:  #8CC770;       --cth-mint-light:  #223318;
+  --cth-sky:   #6E9BE6;       --cth-sky-light:   #1E2A4A;
+  --cth-lemon: #F2C55A;       --cth-lemon-light: #3D3216;
   --cth-lilac: #B0A0F0;       --cth-lilac-light: #2C2548;
   --cth-peach: #FA9878;       --cth-peach-light: #42261E;
 
-  --cth-status-idle:       #8C9B90;
-  --cth-status-thinking:   #5D8CE0;
-  --cth-status-working:    #F0C45C;
+  --cth-status-idle:       #948B72;
+  --cth-status-thinking:   #6E9BE6;
+  --cth-status-working:    #F2C55A;
   --cth-status-waiting:    #8DA2EE;
   --cth-status-blocked:    #F86B5D;
   --cth-status-success:    #8CC770;
-  --cth-status-ghost:      #50647D;
+  --cth-status-ghost:      #5B4E2E;
   --cth-status-compacting: #B0A0F0;
   --cth-status-looping:    #FA9878;
-  --cth-status-typing:     #F0C45C;
+  --cth-status-typing:     #F2C55A;
 
-  --cth-shadow-hard: 4px 4px 0 rgba(8, 12, 20, 0.65);
-  --cth-on-accent:   #101826;
+  --cth-shadow-hard: 4px 4px 0 rgba(10, 7, 2, 0.7);
+  --cth-on-accent:   #191207;
 }
-

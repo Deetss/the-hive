@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#17171B">
+<meta name="theme-color" content="#191207">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>TheHive Remote</title>
@@ -15,40 +15,40 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    /* ── TheHive Design Tokens (Dark theme parity) ── */
-    --cth-cream-50:  #17171B;   /* app ground */
-    --cth-cream-100: #1D1D22;   /* panels, header, nav bar */
-    --cth-cream-200: #26262C;   /* inputs, tabs, secondary controls */
-    --cth-cream-300: #313139;   /* disabled fills, elevated borders */
-    --cth-paper-100: #1A1A1F;   /* cards, input backgrounds */
-    --cth-paper-200: #222229;   /* container backgrounds */
+    /* ── TheHive Design Tokens — "Honeycomb night" dark (matches tokens.css) ── */
+    --cth-cream-50:  #191207;   /* app ground — dark honey wax */
+    --cth-cream-100: #221A0C;   /* panels, header, nav bar */
+    --cth-cream-200: #2E2410;   /* inputs, tabs, secondary controls */
+    --cth-cream-300: #3C3016;   /* disabled fills, elevated borders */
+    --cth-paper-100: #1E1609;   /* cards, input backgrounds */
+    --cth-paper-200: #281F0E;   /* container backgrounds */
 
-    /* Ink → off-white text ramp */
-    --cth-ink-900: #DEDBD6;   /* primary text, warm off-white */
-    --cth-ink-700: #B3B0AC;   /* secondary text */
-    --cth-ink-500: #96919F;   /* tertiary / hints / metadata */
-    --cth-ink-300: #787684;   /* structural borders */
-    --cth-ink-100: #3E3D46;   /* dividers / subtle insets */
+    /* Ink → honey-cream text ramp */
+    --cth-ink-900: #FBEFCF;   /* primary text — honey cream */
+    --cth-ink-700: #E4D3A6;   /* secondary text */
+    --cth-ink-500: #AC9769;   /* tertiary / hints / metadata */
+    --cth-ink-300: #806A3C;   /* structural borders — amber-brown */
+    --cth-ink-100: #3D2F16;   /* dividers / subtle insets */
 
     /* Accents (dark-calibrated) */
-    --cth-coral:       #E08C82;   --cth-coral-light: #3B2724;
-    --cth-mint:        #74C096;   --cth-mint-light:  #1E3227;
-    --cth-sky:         #6FB3C4;   --cth-sky-light:   #1F3238;
-    --cth-lemon:       #CFAA57;   --cth-lemon-light: #332C1D;
-    --cth-lilac:       #A896E3;   --cth-lilac-light: #2B2740;
-    --cth-peach:       #DFA57F;   --cth-peach-light: #352822;
+    --cth-coral:       #F86B5D;   --cth-coral-light: #3D1B1B;
+    --cth-mint:        #8CC770;   --cth-mint-light:  #223318;
+    --cth-sky:         #6E9BE6;   --cth-sky-light:   #1E2A4A;
+    --cth-lemon:       #F2C55A;   --cth-lemon-light: #3D3216;
+    --cth-lilac:       #B0A0F0;   --cth-lilac-light: #2C2548;
+    --cth-peach:       #FA9878;   --cth-peach-light: #42261E;
 
     /* Status indicators */
-    --cth-status-idle:       #6F6C77;
-    --cth-status-thinking:   #64ACBB;
-    --cth-status-working:    #D8B052;
-    --cth-status-waiting:    #8095DC;
-    --cth-status-blocked:    #DF8078;
-    --cth-status-success:    #6FB88B;
-    --cth-status-ghost:      #6C6A76;
-    --cth-status-compacting: #9D8BD2;
-    --cth-status-looping:    #D69A55;
-    --cth-status-typing:     #CBA24A;
+    --cth-status-idle:       #948B72;
+    --cth-status-thinking:   #6E9BE6;
+    --cth-status-working:    #F2C55A;
+    --cth-status-waiting:    #8DA2EE;
+    --cth-status-blocked:    #F86B5D;
+    --cth-status-success:    #8CC770;
+    --cth-status-ghost:      #5B4E2E;
+    --cth-status-compacting: #B0A0F0;
+    --cth-status-looping:    #FA9878;
+    --cth-status-typing:     #F2C55A;
 
     /* Fonts */
     --cth-font-display: "Press Start 2P", monospace;

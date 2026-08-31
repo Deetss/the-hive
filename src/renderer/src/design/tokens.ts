@@ -3,21 +3,21 @@
 
 export const colors = {
   cream: {
-    50: 0xfbfdf6,
-    100: 0xf5f9e7,
-    200: 0xebf0d8,
-    300: 0xdfe5c8
+    50: 0xfefcf4,
+    100: 0xfaf2dd,
+    200: 0xf2e6c6,
+    300: 0xe9d9ad
   },
   paper: {
-    100: 0xfcfdf8,
-    200: 0xedf2dc
+    100: 0xfefdf7,
+    200: 0xf6ecd3
   },
   ink: {
-    900: 0x1a2416,
-    700: 0x334130,
-    500: 0x5a6657,
-    300: 0x9da899,
-    100: 0xd6dec0
+    900: 0x2a1d08,
+    700: 0x4c3814,
+    500: 0x6f5628,
+    300: 0xa6893f,
+    100: 0xe7d6a6
   },
   // Brand color calibrations: Blue #274579, Green #75aa5c, Cream #f5f9e7, Red #ef3e2d, Salmon #f47d55, Gray #6e7167
   accent: {
@@ -40,7 +40,7 @@ export const colors = {
     working: 0xd4a02a,
     blocked: 0xef3e2d,
     success: 0x75aa5c,
-    ghost: 0xd0d6c8
+    ghost: 0xded2ae
   },
   world: {
     grassLight: 0xd4eab0,
