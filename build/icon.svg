@@ -1,154 +1,130 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <!-- Background Gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#181920"/>
-      <stop offset="50%" stop-color="#101115"/>
-      <stop offset="100%" stop-color="#08090B"/>
+    <!-- Warm Dark Chocolate Ground -->
+    <linearGradient id="bgGrad41" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A140E"/>
+      <stop offset="50%" stop-color="#110D09"/>
+      <stop offset="100%" stop-color="#070503"/>
     </linearGradient>
 
-    <!-- Neon Glow Filter -->
-    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="12" result="blur1"/>
-      <feGaussianBlur stdDeviation="24" result="blur2"/>
-      <feMerge>
-        <feMergeNode in="blur2"/>
-        <feMergeNode in="blur1"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <filter id="coreGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <!-- Core Gradients -->
-    <linearGradient id="neonGreen" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#9EFFB0"/>
-      <stop offset="50%" stop-color="#75FF8A"/>
-      <stop offset="100%" stop-color="#2BE868"/>
+    <!-- Rich Honey Gradients -->
+    <linearGradient id="goldApex" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="45%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#D97706"/>
     </linearGradient>
 
-    <linearGradient id="cyanAccent" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#75FF8A"/>
-      <stop offset="100%" stop-color="#00F5D4"/>
+    <linearGradient id="amberBase" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#B45309"/>
     </linearGradient>
 
-    <!-- Hexagon Tile Clip -->
-    <clipPath id="appTileClip">
+    <linearGradient id="goldWall" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE68A"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+
+    <clipPath id="appTile41">
       <rect x="32" y="32" width="960" height="960" rx="216" />
     </clipPath>
   </defs>
 
-  <!-- App Tile Base -->
-  <g clip-path="url(#appTileClip)">
-    <rect x="32" y="32" width="960" height="960" fill="url(#bgGrad)"/>
+  <g clip-path="url(#appTile41)">
+    <rect x="32" y="32" width="960" height="960" fill="url(#bgGrad41)"/>
+
+    <!-- ==================== CENTRAL HONEY CHANNEL BRIDGE ==================== -->
+    <!-- The Y-channel connecting all three cells together -->
+    <path d="M 512,470 L 512,580 L 410,640 M 512,580 L 614,640" 
+          fill="none" stroke="url(#goldWall)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
     
-    <!-- Subtle Sub-grid Background -->
-    <g opacity="0.06" stroke="#FFFFFF" stroke-width="1.5">
-      <line x1="128" y1="32" x2="128" y2="992" />
-      <line x1="256" y1="32" x2="256" y2="992" />
-      <line x1="384" y1="32" x2="384" y2="992" />
-      <line x1="512" y1="32" x2="512" y2="992" />
-      <line x1="640" y1="32" x2="640" y2="992" />
-      <line x1="768" y1="32" x2="768" y2="992" />
-      <line x1="896" y1="32" x2="896" y2="992" />
-      <line x1="32" y1="128" x2="992" y2="128" />
-      <line x1="32" y1="256" x2="992" y2="256" />
-      <line x1="32" y1="384" x2="992" y2="384" />
-      <line x1="32" y1="512" x2="992" y2="512" />
-      <line x1="32" y1="640" x2="992" y2="640" />
-      <line x1="32" y1="768" x2="992" y2="768" />
-      <line x1="32" y1="896" x2="992" y2="896" />
+    <!-- Central Nectar Junction Dot -->
+    <circle cx="512" cy="580" r="22" fill="#FEF08A"/>
+
+    <!-- ==================== CELL 1: TOP (OVERMIND QUEEN BEE) ==================== -->
+    <g transform="translate(512, 335)">
+      <!-- Outer Hex Wall -->
+      <polygon points="0,-175 152,-87 152,87 0,175 -152,87 -152,-87" 
+               fill="url(#goldApex)" stroke="url(#goldWall)" stroke-width="22" stroke-linejoin="round"/>
+      
+      <!-- Inner Dark Nectar Bed for High Contrast -->
+      <polygon points="0,-140 120,-70 120,70 0,140 -120,70 -120,-70" 
+               fill="#22180F" stroke="#FDE68A" stroke-width="4" opacity="0.5"/>
+
+      <!-- Queen Crown & Antennae -->
+      <polygon points="-22,-82 -32,-102 0,-92 32,-102 22,-82" fill="#FDE047"/>
+      <circle cx="-32" cy="-102" r="5" fill="#FEF08A"/>
+      <circle cx="0" cy="-92" r="6" fill="#FEF08A"/>
+      <circle cx="32" cy="-102" r="5" fill="#FEF08A"/>
+
+      <!-- Geometric Queen Wings -->
+      <!-- Left Upper -->
+      <polygon points="-25,-30 -115,-65 -95,-15 -25,5" fill="#FEF08A" opacity="0.95"/>
+      <polygon points="-25,10 -85,15 -65,55 -25,30" fill="#FDE68A" opacity="0.9"/>
+      <!-- Right Upper -->
+      <polygon points="25,-30 115,-65 95,-15 25,5" fill="#FEF08A" opacity="0.95"/>
+      <polygon points="25,10 85,15 65,55 25,30" fill="#FDE68A" opacity="0.9"/>
+
+      <!-- Head & Thorax -->
+      <circle cx="0" cy="-55" r="22" fill="#FDE047"/>
+      <polygon points="0,-32 26,-15 26,18 0,35 -26,18 -26,-15" fill="#FBBF24"/>
+
+      <!-- Striped Abdomen -->
+      <path d="M -24,40 Q 0,48 24,40 L 20,64 Q 0,72 -20,64 Z" fill="#FDE047"/>
+      <path d="M -18,68 Q 0,76 18,68 L 14,90 Q 0,98 -14,90 Z" fill="#FDE047"/>
+      <polygon points="-10,94 10,94 0,115" fill="#FDE047"/>
     </g>
 
-    <!-- Ambient Core Radial Glow Behind Logo -->
-    <circle cx="512" cy="512" r="320" fill="#75FF8A" opacity="0.12" filter="blur(60px)"/>
+    <!-- ==================== CELL 2: BOTTOM-LEFT (WORKER NODE A) ==================== -->
+    <g transform="translate(346, 625)">
+      <!-- Outer Hex Wall -->
+      <polygon points="0,-175 152,-87 152,87 0,175 -152,87 -152,-87" 
+               fill="url(#amberBase)" stroke="url(#goldWall)" stroke-width="22" stroke-linejoin="round"/>
+      
+      <!-- Inner Dark Nectar Bed -->
+      <polygon points="0,-140 120,-70 120,70 0,140 -120,70 -120,-70" 
+               fill="#22180F" stroke="#FDE68A" stroke-width="4" opacity="0.5"/>
 
-    <!-- Outer Tech Hexagon Rim (Stealth Dark) -->
-    <polygon points="512,148 828,330 828,694 512,876 196,694 196,330" 
-             fill="#14171D" stroke="#262B35" stroke-width="8" stroke-linejoin="round"/>
+      <!-- Worker Bee Silhouette Inside Left Cell -->
+      <g transform="scale(0.72) translate(0, -10)">
+        <!-- Wings -->
+        <polygon points="-20,-25 -95,-55 -80,-10 -20,5" fill="#FEF08A" opacity="0.95"/>
+        <polygon points="20,-25 95,-55 80,-10 20,5" fill="#FEF08A" opacity="0.95"/>
+        <!-- Body -->
+        <circle cx="0" cy="-45" r="18" fill="#FDE047"/>
+        <ellipse cx="0" cy="-12" rx="22" ry="18" fill="#FBBF24"/>
+        <path d="M -18,12 Q 0,18 18,12 L 14,36 Q 0,42 -14,36 Z" fill="#FDE047"/>
+        <path d="M -12,40 Q 0,46 12,40 L 8,60 Q 0,66 -8,60 Z" fill="#FDE047"/>
+        <polygon points="-6,64 6,64 0,82" fill="#FDE047"/>
+      </g>
+    </g>
 
-    <!-- Outer Glowing Hexagon Wire -->
-    <polygon points="512,180 798,345 798,679 512,844 226,679 226,345" 
-             fill="none" stroke="url(#neonGreen)" stroke-width="12" stroke-linejoin="round"
-             filter="url(#neonGlow)"/>
+    <!-- ==================== CELL 3: BOTTOM-RIGHT (WORKER NODE B) ==================== -->
+    <g transform="translate(678, 625)">
+      <!-- Outer Hex Wall -->
+      <polygon points="0,-175 152,-87 152,87 0,175 -152,87 -152,-87" 
+               fill="url(#amberBase)" stroke="url(#goldWall)" stroke-width="22" stroke-linejoin="round"/>
+      
+      <!-- Inner Dark Nectar Bed -->
+      <polygon points="0,-140 120,-70 120,70 0,140 -120,70 -120,-70" 
+               fill="#22180F" stroke="#FDE68A" stroke-width="4" opacity="0.5"/>
 
-    <!-- Secondary Inner Hex Wire (Channeled) -->
-    <polygon points="512,230 754,370 754,654 512,794 270,654 270,370" 
-             fill="none" stroke="#2F3642" stroke-width="6" stroke-dasharray="32 16" stroke-linejoin="round"/>
-
-    <!-- 6 Neural Bus Traces from Center to Periphery -->
-    <!-- Top -->
-    <line x1="512" y1="512" x2="512" y2="230" stroke="url(#cyanAccent)" stroke-width="8" filter="url(#coreGlow)"/>
-    <!-- Top Right -->
-    <line x1="512" y1="512" x2="754" y2="370" stroke="url(#cyanAccent)" stroke-width="8" filter="url(#coreGlow)"/>
-    <!-- Bottom Right -->
-    <line x1="512" y1="512" x2="754" y2="654" stroke="url(#cyanAccent)" stroke-width="8" filter="url(#coreGlow)"/>
-    <!-- Bottom -->
-    <line x1="512" y1="512" x2="512" y2="794" stroke="url(#cyanAccent)" stroke-width="8" filter="url(#coreGlow)"/>
-    <!-- Bottom Left -->
-    <line x1="512" y1="512" x2="270" y2="654" stroke="url(#cyanAccent)" stroke-width="8" filter="url(#coreGlow)"/>
-    <!-- Top Left -->
-    <line x1="512" y1="512" x2="270" y2="370" stroke="url(#cyanAccent)" stroke-width="8" filter="url(#coreGlow)"/>
-
-    <!-- Mid-tier Node Satellite Hexagons (Agent Sockets) -->
-    <!-- Top Node -->
-    <polygon points="512,206 534,218 534,242 512,254 490,242 490,218" fill="#75FF8A" filter="url(#coreGlow)"/>
-    <!-- Top Right Node -->
-    <polygon points="754,346 776,358 776,382 754,394 732,382 732,358" fill="#75FF8A" filter="url(#coreGlow)"/>
-    <!-- Bottom Right Node -->
-    <polygon points="754,630 776,642 776,666 754,678 732,666 732,642" fill="#75FF8A" filter="url(#coreGlow)"/>
-    <!-- Bottom Node -->
-    <polygon points="512,770 534,782 534,806 512,818 490,806 490,782" fill="#75FF8A" filter="url(#coreGlow)"/>
-    <!-- Bottom Left Node -->
-    <polygon points="270,630 292,642 292,666 270,678 248,666 248,642" fill="#75FF8A" filter="url(#coreGlow)"/>
-    <!-- Top Left Node -->
-    <polygon points="270,346 292,358 292,382 270,394 248,382 248,358" fill="#75FF8A" filter="url(#coreGlow)"/>
-
-    <!-- Circuit Branch Accents -->
-    <path d="M 512,330 L 590,375 L 590,440" fill="none" stroke="#75FF8A" stroke-width="5" opacity="0.8"/>
-    <circle cx="590" cy="440" r="6" fill="#75FF8A"/>
-    
-    <path d="M 512,694 L 434,649 L 434,584" fill="none" stroke="#75FF8A" stroke-width="5" opacity="0.8"/>
-    <circle cx="434" cy="584" r="6" fill="#75FF8A"/>
-
-    <path d="M 670,512 L 610,512 L 580,560" fill="none" stroke="#75FF8A" stroke-width="5" opacity="0.8"/>
-    <circle cx="670" cy="512" r="6" fill="#75FF8A"/>
-
-    <path d="M 354,512 L 414,512 L 444,464" fill="none" stroke="#75FF8A" stroke-width="5" opacity="0.8"/>
-    <circle cx="354" cy="512" r="6" fill="#75FF8A"/>
-
-    <!-- Central Hive Core (Overmind Nexus) -->
-    <polygon points="512,392 616,452 616,572 512,632 408,572 408,452" 
-             fill="#0E1014" stroke="#75FF8A" stroke-width="10" stroke-linejoin="round"
-             filter="url(#neonGlow)"/>
-             
-    <!-- Inner Glowing Core Pulse -->
-    <polygon points="512,432 581,472 581,552 512,592 443,552 443,472" 
-             fill="url(#neonGreen)" opacity="0.25" stroke="#FFFFFF" stroke-width="3"/>
-             
-    <circle cx="512" cy="512" r="28" fill="#FFFFFF" filter="url(#coreGlow)"/>
-    <circle cx="512" cy="512" r="14" fill="#75FF8A"/>
-
-    <!-- Corner Neo-Brutalist Pixel Badges -->
-    <g fill="#75FF8A" opacity="0.6">
-      <rect x="96" y="96" width="16" height="4"/>
-      <rect x="96" y="96" width="4" height="16"/>
-      <rect x="912" y="96" width="16" height="4"/>
-      <rect x="924" y="96" width="4" height="16"/>
-      <rect x="96" y="924" width="16" height="4"/>
-      <rect x="96" y="912" width="4" height="16"/>
-      <rect x="912" y="924" width="16" height="4"/>
-      <rect x="924" y="912" width="4" height="16"/>
+      <!-- Worker Bee Silhouette Inside Right Cell -->
+      <g transform="scale(0.72) translate(0, -10)">
+        <!-- Wings -->
+        <polygon points="-20,-25 -95,-55 -80,-10 -20,5" fill="#FEF08A" opacity="0.95"/>
+        <polygon points="20,-25 95,-55 80,-10 20,5" fill="#FEF08A" opacity="0.95"/>
+        <!-- Body -->
+        <circle cx="0" cy="-45" r="18" fill="#FDE047"/>
+        <ellipse cx="0" cy="-12" rx="22" ry="18" fill="#FBBF24"/>
+        <path d="M -18,12 Q 0,18 18,12 L 14,36 Q 0,42 -14,36 Z" fill="#FDE047"/>
+        <path d="M -12,40 Q 0,46 12,40 L 8,60 Q 0,66 -8,60 Z" fill="#FDE047"/>
+        <polygon points="-6,64 6,64 0,82" fill="#FDE047"/>
+      </g>
     </g>
   </g>
 
-  <!-- App Tile Inset Chamfer Border -->
+  <!-- App Tile Inset Border -->
   <rect x="32" y="32" width="960" height="960" rx="216" 
-        fill="none" stroke="#282C37" stroke-width="16" />
+        fill="none" stroke="#382618" stroke-width="16" />
 </svg>
