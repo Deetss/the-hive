@@ -20,6 +20,7 @@ type WorkersData = Awaited<ReturnType<typeof window.cth.listWorkers>>;
 type WorkerSnapshot = WorkersData['live'][number];
 type PreservedWorktreeSnapshot = WorkersData['preserved'][number];
 type WorkerHistoryEntry = WorkersData['recent'][number];
+type ProcessSnapshot = Awaited<ReturnType<typeof window.cth.listProcesses>>[number];
 
 const POLL_MS = 2000;
 /** Chars of PTY tail to fetch on open / retain client-side as new chunks stream in. */
@@ -168,12 +169,20 @@ function WorkerLogPanel({ workerId }: { workerId: string }) {
 
 export function WorkersTab() {
   const [data, setData] = useState<WorkersData | null>(null);
+  const [processes, setProcesses] = useState<ProcessSnapshot[]>([]);
   const [stopping, setStopping] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<'running' | 'completed' | 'reaped'>('running');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [showTerminalForm, setShowTerminalForm] = useState(false);
+  const [terminalForm, setTerminalForm] = useState({
+    cwd: 'C:\\Users\\dylan\\HarnessAgents',
+    shell: 'wsl-bash' as 'wsl-bash' | 'powershell' | 'cmd',
+    label: ''
+  });
 
   const refresh = useCallback(() => {
     window.cth.listWorkers().then(setData).catch(() => { /* main not ready */ });
+    window.cth.listProcesses().then(setProcesses).catch(() => { /* main not ready */ });
   }, []);
 
   useEffect(() => {
@@ -193,6 +202,23 @@ export function WorkersTab() {
     setExpanded((e) => ({ ...e, [workerId]: !e[workerId] }));
   }, []);
 
+  const launchTerminal = useCallback(() => {
+    const { cwd, shell, label } = terminalForm;
+    if (!cwd.trim()) return;
+    const finalLabel = label.trim() || cwd.split(/[/\\]/).pop() || 'terminal';
+    window.cth.spawnProcess({ cmd: 'bash', args: [], cwd, label: finalLabel, shell })
+      .then(() => {
+        refresh();
+        setShowTerminalForm(false);
+        setTerminalForm({ cwd: 'C:\\Users\\dylan\\HarnessAgents', shell: 'wsl-bash', label: '' });
+      })
+      .catch(console.error);
+  }, [terminalForm, refresh]);
+
+  const killProcess = useCallback((processId: string) => {
+    window.cth.killProcess(processId).then(() => refresh()).catch(console.error);
+  }, [refresh]);
+
   const live = data?.live ?? [];
   const preserved = data?.preserved ?? [];
   const history = data?.recent ?? [];
@@ -203,17 +229,68 @@ export function WorkersTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '12px 14px 16px', overflow: 'auto' }}>
-      <div style={filterBtnRow}>
-        <PixelButton onClick={() => setFilter('running')} disabled={filter === 'running'}>
-          running ({live.length})
-        </PixelButton>
-        <PixelButton onClick={() => setFilter('completed')} disabled={filter === 'completed'}>
-          completed ({completedHistory.length})
-        </PixelButton>
-        <PixelButton onClick={() => setFilter('reaped')} disabled={filter === 'reaped'}>
-          reaped ({reapedHistory.length})
-        </PixelButton>
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={filterBtnRow}>
+          <PixelButton onClick={() => setFilter('running')} disabled={filter === 'running'}>
+            running ({live.length})
+          </PixelButton>
+          <PixelButton onClick={() => setFilter('completed')} disabled={filter === 'completed'}>
+            completed ({completedHistory.length})
+          </PixelButton>
+          <PixelButton onClick={() => setFilter('reaped')} disabled={filter === 'reaped'}>
+            reaped ({reapedHistory.length})
+          </PixelButton>
+        </div>
+        {filter === 'running' && (
+          <PixelButton onClick={() => setShowTerminalForm(!showTerminalForm)}>
+            {showTerminalForm ? 'cancel' : 'new terminal'}
+          </PixelButton>
+        )}
       </div>
+
+      {showTerminalForm && filter === 'running' && (
+        <div style={{ ...card, gap: 8 }}>
+          <span style={{ ...sectionHead, margin: 0 }}>Launch Terminal</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <input
+              type="text"
+              placeholder="Directory (e.g., C:\Users\dylan\HarnessAgents)"
+              value={terminalForm.cwd}
+              onChange={(e) => setTerminalForm({ ...terminalForm, cwd: e.target.value })}
+              style={{
+                fontFamily: 'var(--cth-font-ui)', fontSize: 12, padding: '4px 8px',
+                background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', border: 'none'
+              }}
+            />
+            <select
+              value={terminalForm.shell}
+              onChange={(e) => setTerminalForm({ ...terminalForm, shell: e.target.value as any })}
+              style={{
+                fontFamily: 'var(--cth-font-ui)', fontSize: 12, padding: '4px 8px',
+                background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', border: 'none'
+              }}
+            >
+              <option value="wsl-bash">WSL bash (Ubuntu)</option>
+              <option value="powershell">PowerShell</option>
+              <option value="cmd">cmd</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Label (optional)"
+              value={terminalForm.label}
+              onChange={(e) => setTerminalForm({ ...terminalForm, label: e.target.value })}
+              style={{
+                fontFamily: 'var(--cth-font-ui)', fontSize: 12, padding: '4px 8px',
+                background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', border: 'none'
+              }}
+            />
+            <PixelButton onClick={launchTerminal}>launch</PixelButton>
+          </div>
+        </div>
+      )}
 
       {filter === 'running' && (
         <div>
@@ -278,6 +355,51 @@ export function WorkersTab() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {filter === 'running' && processes.length > 0 && (
+        <div>
+          <span style={sectionHead}>Processes</span>
+          <p style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)', margin: '2px 0 8px' }}>
+            Tracked terminal sessions and long-running processes spawned by agents or the user.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {processes.map((p) => (
+              <div key={p.processId} style={card}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <span style={{
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 13, padding: '1px 6px',
+                      textTransform: 'uppercase', letterSpacing: 0.5,
+                      color: p.status === 'running' ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)',
+                      background: p.status === 'running' ? 'var(--cth-green, #2f8f4e)' : 'var(--cth-ink-700)',
+                      boxShadow: p.status === 'running' ? 'inset 0 0 0 1px var(--cth-ink-100)' : 'none'
+                    }}>
+                      {p.status}
+                    </span>
+                    <span style={{
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 600, color: 'var(--cth-ink-900)',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                    }}>{p.label}</span>
+                    <span title="shell type" style={{
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
+                      boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', padding: '0 5px'
+                    }}>{p.shell}</span>
+                  </div>
+                  {p.status === 'running' && (
+                    <PixelButton onClick={() => killProcess(p.processId)}>kill</PixelButton>
+                  )}
+                </div>
+                <div style={metaRow}>
+                  <span title="process id">pid {p.pid}</span>
+                  <span title="working directory" style={{ wordBreak: 'break-all' }}>{p.cwd}</span>
+                  {p.status === 'running' && <span title="time since spawn">up {relAge(p.uptimeMs)}</span>}
+                  {p.status === 'exited' && p.exitCode !== undefined && <span title="exit code">exit {p.exitCode}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
