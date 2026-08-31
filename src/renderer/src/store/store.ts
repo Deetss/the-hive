@@ -830,7 +830,7 @@ export const useStore = create<State>((set, get) => ({
   setPendingArtifacts: (items) => set({ pendingArtifacts: items }),
   sidebarWidth: initialSidebarWidth,
   sidebarTab: initialSidebarTab,
-  godStatus: 'booting',
+  godStatus: 'ready',
   messageQueues: initialQueues,
   toolCounts: {},
   bumpToolCount: (id) =>
