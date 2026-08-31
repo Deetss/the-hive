@@ -51,11 +51,11 @@ export function waitsOnHuman(t: HiveTask): boolean {
 
 type Status = HiveTask['status'];
 
-const COLUMNS: { key: Status; label: string; accent: string }[] = [
-  { key: 'todo',    label: 'TODO',    accent: 'var(--cth-sky)' },
-  { key: 'doing',   label: 'DOING',   accent: 'var(--cth-lemon)' },
-  { key: 'blocked', label: 'BLOCKED', accent: 'var(--cth-coral)' },
-  { key: 'done',    label: 'DONE',    accent: 'var(--cth-mint)' }
+const COLUMNS: { key: Status; label: string; accent: string; pipColor: string }[] = [
+  { key: 'todo',    label: 'TODO',    accent: 'var(--cth-ink-300)', pipColor: 'var(--cth-ink-500)' },
+  { key: 'doing',   label: 'DOING',   accent: 'var(--cth-sky)',     pipColor: 'var(--cth-sky)' },
+  { key: 'blocked', label: 'BLOCKED', accent: 'var(--cth-coral)',   pipColor: 'var(--cth-coral)' },
+  { key: 'done',    label: 'DONE',    accent: 'var(--cth-mint)',    pipColor: 'var(--cth-mint)' }
 ];
 
 const POLL_MS = 5000;
@@ -662,12 +662,18 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
               background: 'var(--cth-cream-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
             }}>
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px 4px',
-                background: col.accent, boxShadow: 'inset 0 -1px 0 var(--cth-ink-900)',
-                fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)'
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px',
+                background: 'var(--cth-cream-200)',
+                boxShadow: 'inset 0 -1px 0 var(--cth-ink-300)',
+                fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 700, color: 'var(--cth-ink-900)'
               }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: col.pipColor, flexShrink: 0 }} />
                 {col.label}
-                <span style={{ marginLeft: 'auto', fontSize: 13, fontFamily: 'var(--cth-font-ui)' }}>{cards.length}</span>
+                <span style={{
+                  marginLeft: 'auto', fontSize: 11, fontWeight: 600,
+                  background: 'var(--cth-cream-100)', color: 'var(--cth-ink-500)',
+                  padding: '0 5px', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
+                }}>{cards.length}</span>
               </div>
               <div style={{
                 flex: 1,
@@ -1269,15 +1275,15 @@ function ProgressBar({ value }: { value: number }) {
 }
 
 function PriorityDots({ level }: { level: number }) {
-  // 1 = lowest, 5 = highest. Warmer fill as priority climbs.
-  const color = level >= 4 ? 'var(--cth-coral)' : level === 3 ? 'var(--cth-lemon)' : 'var(--cth-mint)';
+  // Subtle priority pips: desaturated for lower levels, muted coral for high priority.
+  const color = level >= 4 ? 'var(--cth-coral)' : level === 3 ? 'var(--cth-ink-700)' : 'var(--cth-ink-500)';
   return (
-    <span title={`Priority ${level}/5`} style={{ display: 'inline-flex', gap: 1, flexShrink: 0, marginTop: 2 }}>
+    <span title={`Priority ${level}/5`} style={{ display: 'inline-flex', gap: 2, flexShrink: 0, marginTop: 2 }}>
       {[1, 2, 3, 4, 5].map((i) => (
         <span key={i} style={{
-          width: 4, height: 8,
+          width: 3, height: 7,
           background: i <= level ? color : 'var(--cth-cream-200)',
-          boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
+          boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
         }} />
       ))}
     </span>

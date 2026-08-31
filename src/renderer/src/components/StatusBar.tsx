@@ -327,8 +327,17 @@ export function StatusBar() {
           <Sep />
           <Chip title={`5h rate limit: ${worstFiveHour.pct}% used · resets ${fmtReset(worstFiveHour.resetsAt)}`}>
             <span style={{ color: 'var(--cth-ink-500)' }}>5h</span>
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: ratePaceColor(worstFiveHour.pct, worstFiveHour.resetsAt, 300), letterSpacing: 1 }}>
-              {ctxBar(worstFiveHour.pct)}
+            <span style={{
+              display: 'inline-block', width: 36, height: 5,
+              background: 'var(--cth-cream-200)',
+              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+              overflow: 'hidden', verticalAlign: 'middle', margin: '0 2px'
+            }}>
+              <span style={{
+                display: 'block', height: '100%',
+                width: `${Math.min(100, Math.max(0, worstFiveHour.pct))}%`,
+                background: ratePaceColor(worstFiveHour.pct, worstFiveHour.resetsAt, 300)
+              }} />
             </span>
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
               {worstFiveHour.pct.toFixed(2)}%
@@ -345,8 +354,17 @@ export function StatusBar() {
           <Sep />
           <Chip title={`7d rate limit: ${worstSevenDay.pct}% used · resets ${fmtReset(worstSevenDay.resetsAt)}`}>
             <span style={{ color: 'var(--cth-ink-500)' }}>7d</span>
-            <span style={{ fontFamily: 'var(--cth-font-mono)', color: ratePaceColor(worstSevenDay.pct, worstSevenDay.resetsAt, 10080), letterSpacing: 1 }}>
-              {ctxBar(worstSevenDay.pct)}
+            <span style={{
+              display: 'inline-block', width: 36, height: 5,
+              background: 'var(--cth-cream-200)',
+              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+              overflow: 'hidden', verticalAlign: 'middle', margin: '0 2px'
+            }}>
+              <span style={{
+                display: 'block', height: '100%',
+                width: `${Math.min(100, Math.max(0, worstSevenDay.pct))}%`,
+                background: ratePaceColor(worstSevenDay.pct, worstSevenDay.resetsAt, 10080)
+              }} />
             </span>
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
               {worstSevenDay.pct.toFixed(2)}%
