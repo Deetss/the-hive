@@ -59,7 +59,15 @@ const headStyle: CSSProperties = {
 };
 const linkStyle: CSSProperties = { color: 'var(--cth-ink-900)', textDecoration: 'underline', cursor: 'pointer' };
 
-export function AiEnginesSettings({ config, onOpenProfileWalkthrough }: { config: HarnessConfig; onOpenProfileWalkthrough?: () => void }) {
+export function AiEnginesSettings({
+  config,
+  onOpenProfileWalkthrough,
+  onProfilesChanged
+}: {
+  config: HarnessConfig;
+  onOpenProfileWalkthrough?: () => void;
+  onProfilesChanged?: (profiles: RuntimeProfile[]) => void;
+}) {
   // Keep the global "OpenAI key present" signal (boolean only) live so the Talk
   // button's missing-key warning clears the instant the user saves their OpenAI key
   // here — without it the gate only refreshes on next app start. apikey:openai is
@@ -134,7 +142,10 @@ export function AiEnginesSettings({ config, onOpenProfileWalkthrough }: { config
 
   const persistProfiles = async (next: RuntimeProfile[]) => {
     setProfiles(next);
-    try { await window.cth.updateConfig({ runtimeProfiles: next }); } catch { /* noop */ }
+    try {
+      await window.cth.updateConfig({ runtimeProfiles: next });
+      onProfilesChanged?.(next);
+    } catch { /* noop */ }
   };
   const addProfile = async () => {
     const name = draftName.trim();
@@ -297,12 +308,25 @@ export function AiEnginesSettings({ config, onOpenProfileWalkthrough }: { config
               style={{ ...inputStyle, flex: 1, minWidth: 160 }}
             />
             {isClaudeProvider(draftProvider) && (
-              <input
-                placeholder="Claude config dir (account login path)"
-                value={draftConfigDir}
-                onChange={(e) => setDraftConfigDir(e.target.value)}
-                style={{ ...inputStyle, flex: 1, minWidth: 160 }}
-              />
+              <div style={{ display: 'flex', gap: 6, flex: 1, minWidth: 160 }}>
+                <input
+                  placeholder="Claude config dir (account login path)"
+                  value={draftConfigDir}
+                  onChange={(e) => setDraftConfigDir(e.target.value)}
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <PixelButton
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => {
+                    const result = await window.cth.chooseFolder();
+                    if (result.ok) setDraftConfigDir(result.path);
+                  }}
+                  style={{ padding: '6px 10px' }}
+                >
+                  ...
+                </PixelButton>
+              </div>
             )}
             <PixelButton variant="secondary" size="sm" onClick={addProfile}>Add profile</PixelButton>
           </div>
