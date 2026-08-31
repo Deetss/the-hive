@@ -7334,6 +7334,20 @@ function runGovernorBeat(): void {
     const savedSeven = reviveWindow(saved.sevenDay);
     if (savedSeven && (!maxSevenDay || savedSeven.pct > maxSevenDay.pct)) maxSevenDay = savedSeven;
 
+    // Global fallback: the persisted fleet-wide window carries no profile
+    // attribution, so it governs the DEFAULT bucket (no-profile spawns). This
+    // keeps a cold start pacing default work until fresh per-profile samples
+    // arrive; real per-profile buckets are seeded below and never inherit this.
+    if (savedFive || savedSeven) {
+      let dflt = profileUsage.get(DEFAULT_CLAUDE_PROFILE_KEY);
+      if (!dflt) {
+        dflt = { settings: baselineSettings, fiveHour: null, sevenDay: null };
+        profileUsage.set(DEFAULT_CLAUDE_PROFILE_KEY, dflt);
+      }
+      if (savedFive && (!dflt.fiveHour || savedFive.pct > dflt.fiveHour.pct)) dflt.fiveHour = savedFive;
+      if (savedSeven && (!dflt.sevenDay || savedSeven.pct > dflt.sevenDay.pct)) dflt.sevenDay = savedSeven;
+    }
+
     if (saved.profiles) {
       for (const [key, value] of Object.entries(saved.profiles)) {
         const savedProfileFive = reviveWindow(value?.fiveHour);
@@ -7421,26 +7435,31 @@ function runGovernorBeat(): void {
     if (best.level === 'red') redProfiles.push(key);
   }
 
-  const globalBest = (sevenEval && rank(sevenEval.level) > rank(fiveEval?.level)) ? sevenEval : fiveEval;
-  if (globalBest) profileStates.set(DEFAULT_CLAUDE_PROFILE_KEY, { level: globalBest.level, reason: globalBest.reason });
-
   governorProfileStates.clear();
   for (const [key, value] of profileStates.entries()) {
     if (value.level === 'green') continue;
     governorProfileStates.set(key, { mode: value.level, reason: value.reason });
   }
 
+  // Floor mode = the worst per-profile state, where each profile was evaluated
+  // against its OWN window overrides, never a cross-profile aggregate. A profile
+  // tripping its own cap must not drag an unrelated, well-under-cap profile into
+  // RED. The DEFAULT bucket holds the global fallback for no-profile usage and
+  // is ranked here alongside the real profiles.
   let newMode: GovernorLevel = 'green';
   let reason = 'all clear';
-  if ((rank(fiveEval?.level) >= rank(sevenEval?.level)) && fiveEval) { newMode = fiveEval.level; reason = `5h: ${fiveEval.reason}`; }
-  else if (sevenEval) { newMode = sevenEval.level; reason = `7d: ${sevenEval.reason}`; }
+  for (const [key, value] of profileStates.entries()) {
+    if (rank(value.level) <= rank(newMode)) continue;
+    newMode = value.level;
+    const label = key === DEFAULT_CLAUDE_PROFILE_KEY ? 'default' : (runtimeProfiles.get(key)?.name ?? key);
+    reason = `${label}: ${value.reason}`;
+  }
 
   const prevMode = governorMode;
   governorMode = newMode;
 
   if (newMode === 'red') {
     const redSet = new Set(redProfiles);
-    const pauseAll = redSet.size === 0;
     if (prevMode !== 'red') {
       for (const [id, a] of Object.entries(reg.agents)) {
         if (a.archived || a.isOvermind) continue;
@@ -7451,7 +7470,7 @@ function runGovernorBeat(): void {
         const runtimeProfile = a.profileId ? runtimeProfiles.get(a.profileId) : undefined;
         const modelSlug = runtimeProfile?.model?.trim().toLowerCase() ?? '';
         if (settings.spawnGate.governModels.length && (!modelSlug || !settings.spawnGate.governModels.includes(modelSlug))) continue;
-        if (!pauseAll && !redSet.has(claudeAccountKey(a.profileId))) continue;
+        if (!redSet.has(claudeAccountKey(a.profileId))) continue;
         if (!ptyForAgent(id)) continue;
         try { control.pause(id, true); governorPausedAgents.add(id); } catch { /* */ }
       }
