@@ -1,51 +1,76 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <filter id="liftShadow7" x="-20%" y="-20%" width="140%" height="140%">
+    <!-- Soft Ambient Lift Shadow -->
+    <filter id="liftShadowClassic" x="-20%" y="-20%" width="140%" height="140%">
       <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000000" flood-opacity="0.26"/>
     </filter>
   </defs>
 
-  <!-- ==================== V6-7HEX: 7-CELL HONEYCOMB MEDALLION ==================== -->
-  <!-- 1 Center + 6 Orbiting Cells — Natural, symmetrical, balanced -->
-  <g filter="url(#liftShadow7)">
-    <!-- 1. Surrounding 6 Hexagon Cells (Amber #F59E0B) -->
-    <g fill="#F59E0B" fill-opacity="0.12" stroke="#F59E0B" stroke-width="20" stroke-linejoin="round" stroke-linecap="round">
-      <!-- Top (512, 230) -->
-      <polygon points="512,90 633,160 633,300 512,370 391,300 391,160" />
-      <!-- Top Right (754, 370) -->
-      <polygon points="754,230 875,300 875,440 754,510 633,440 633,300" />
-      <!-- Bottom Right (754, 650) -->
-      <polygon points="754,510 875,580 875,720 754,790 633,720 633,580" />
-      <!-- Bottom (512, 790) -->
-      <polygon points="512,650 633,720 633,860 512,930 391,860 391,720" />
-      <!-- Bottom Left (270, 650) -->
-      <polygon points="270,510 391,580 391,720 270,790 149,720 149,580" />
-      <!-- Top Left (270, 370) -->
-      <polygon points="270,230 391,300 391,440 270,510 149,440 149,300" />
-    </g>
+  <!-- ==================== CLASSIC FLAT-TOPPED 7-CELL SEAMLESS HONEYCOMB (ZERO GAPS) ==================== -->
+  <!-- Strict 5 Colors: #F59E0B (Amber), #FBBF24 (Gold), #FEF08A (Honey Wing), #D97706 (Caramel Trim), #FFFBEB (Ivory) -->
+  <g filter="url(#liftShadowClassic)">
+    <!-- 1. All 7 Honeycomb Cells (14% Nectar Fill + Seamless #F59E0B Walls) -->
+    <!-- Top Cell (512, 252.2) -->
+    <polygon points="437,122.3 587,122.3 662,252.2 587,382.1 437,382.1 362,252.2" 
+             fill="#F59E0B" fill-opacity="0.14" stroke="#F59E0B" stroke-width="24" stroke-linejoin="round" stroke-linecap="round" />
 
-    <!-- 2. Central Queen Honey Cell (512, 510) -->
-    <polygon points="512,370 633,440 633,580 512,650 391,580 391,440" 
-             fill="#FBBF24" fill-opacity="0.18" stroke="#F59E0B" stroke-width="24" stroke-linejoin="round"/>
+    <!-- Top-Right Cell (737, 382.1) -->
+    <polygon points="662,252.2 812,252.2 887,382.1 812,512 662,512 587,382.1" 
+             fill="#F59E0B" fill-opacity="0.14" stroke="#F59E0B" stroke-width="24" stroke-linejoin="round" stroke-linecap="round" />
+
+    <!-- Bottom-Right Cell (737, 641.9) -->
+    <polygon points="662,512 812,512 887,641.9 812,771.8 662,771.8 587,641.9" 
+             fill="#F59E0B" fill-opacity="0.14" stroke="#F59E0B" stroke-width="24" stroke-linejoin="round" stroke-linecap="round" />
+
+    <!-- Bottom Cell (512, 771.8) -->
+    <polygon points="437,641.9 587,641.9 662,771.8 587,901.7 437,901.7 362,771.8" 
+             fill="#F59E0B" fill-opacity="0.14" stroke="#F59E0B" stroke-width="24" stroke-linejoin="round" stroke-linecap="round" />
+
+    <!-- Bottom-Left Cell (287, 641.9) -->
+    <polygon points="212,512 362,512 437,641.9 362,771.8 212,771.8 137,641.9" 
+             fill="#F59E0B" fill-opacity="0.14" stroke="#F59E0B" stroke-width="24" stroke-linejoin="round" stroke-linecap="round" />
+
+    <!-- Top-Left Cell (287, 382.1) -->
+    <polygon points="212,252.2 362,252.2 437,382.1 362,512 212,512 137,382.1" 
+             fill="#F59E0B" fill-opacity="0.14" stroke="#F59E0B" stroke-width="24" stroke-linejoin="round" stroke-linecap="round" />
+
+    <!-- 2. Central Queen Honeycomb Cell (512, 512) -->
+    <polygon points="437,382.1 587,382.1 662,512 587,641.9 437,641.9 362,512" 
+             fill="#FBBF24" fill-opacity="0.18" stroke="#F59E0B" stroke-width="26" stroke-linejoin="round" stroke-linecap="round" />
 
     <!-- 3. Heraldic Queen Bee in Central Cell -->
-    <g transform="translate(512, 508) scale(0.85) translate(0, -6)">
-      <!-- Sweeping Wings -->
+    <g transform="translate(512, 508) scale(0.92) translate(0, -6)">
+      <!-- Sweeping Faceted Wings (#FEF08A with #D97706 Trim) -->
+      <!-- Left Upper Wing -->
       <path d="M -20,-30 C -68,-78 -120,-68 -124,-34 C -126,-6 -84,12 -20,4 Z" 
             fill="#FEF08A" stroke="#D97706" stroke-width="6" stroke-linejoin="round"/>
+      <!-- Left Lower Winglet -->
+      <path d="M -20,12 C -55,18 -80,42 -68,64 C -55,76 -28,52 -20,28 Z" 
+            fill="#FEF08A" stroke="#D97706" stroke-width="5" stroke-linejoin="round"/>
+
+      <!-- Right Upper Wing -->
       <path d="M 20,-30 C 68,-78 120,-68 124,-34 C 126,-6 84,12 20,4 Z" 
             fill="#FEF08A" stroke="#D97706" stroke-width="6" stroke-linejoin="round"/>
+      <!-- Right Lower Winglet -->
+      <path d="M 20,12 C 55,18 80,42 68,64 C 55,76 28,52 20,28 Z" 
+            fill="#FEF08A" stroke="#D97706" stroke-width="5" stroke-linejoin="round"/>
 
-      <!-- Crown & Head -->
-      <polygon points="-22,-82 -32,-104 0,-94 32,-104 22,-82" fill="#FBBF24" stroke="#D97706" stroke-width="4"/>
+      <!-- Queen Crown & Antennae -->
+      <path d="M -12,-66 Q -22,-90 -34,-106" fill="none" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="-34" cy="-106" r="6" fill="#FFFBEB"/>
+      <path d="M 12,-66 Q 22,-90 34,-106" fill="none" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="34" cy="-106" r="6" fill="#FFFBEB"/>
+
+      <!-- Triple-Point Crown -->
+      <polygon points="-22,-82 -32,-104 0,-94 32,-104 22,-82" fill="#FBBF24" stroke="#D97706" stroke-width="4" stroke-linejoin="round"/>
       <circle cx="0" cy="-94" r="6" fill="#FFFBEB"/>
-      <circle cx="0" cy="-56" r="23" fill="#FBBF24" stroke="#D97706" stroke-width="4"/>
 
-      <!-- Thorax -->
-      <polygon points="0,-32 26,-15 26,17 0,34 -26,17 -26,-15" fill="#F59E0B" stroke="#D97706" stroke-width="4"/>
+      <!-- Queen Head & Thorax -->
+      <circle cx="0" cy="-56" r="23" fill="#FBBF24" stroke="#D97706" stroke-width="4"/>
+      <polygon points="0,-32 26,-15 26,17 0,34 -26,17 -26,-15" fill="#F59E0B" stroke="#D97706" stroke-width="4" stroke-linejoin="round"/>
       <circle cx="0" cy="1" r="7" fill="#FFFBEB"/>
 
-      <!-- Abdomen -->
+      <!-- Segmented Abdomen -->
       <path d="M -24,42 Q 0,50 24,42 L 20,60 Q 0,68 -20,60 Z" fill="#FBBF24" stroke="#D97706" stroke-width="3"/>
       <path d="M -18,64 Q 0,72 18,64 L 14,80 Q 0,88 -14,80 Z" fill="#FBBF24" stroke="#D97706" stroke-width="3"/>
       <polygon points="-10,84 10,84 0,108" fill="#D97706"/>
