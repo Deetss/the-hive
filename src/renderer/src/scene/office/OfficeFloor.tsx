@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Application, Container, Graphics, Ticker, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Ticker, Texture, Sprite, TilingSprite } from 'pixi.js';
 // PixiJS uses new Function() internally, blocked by Electron CSP — this patches it.
 import 'pixi.js/unsafe-eval';
 import { useStore, type Agent } from '@/store/store';
@@ -14,6 +14,9 @@ import { colors } from '@/design/tokens';
 import { loadTheme, resolveThemeMap, themeTilesetUrls } from './themeLoader';
 import { installContextLossRecovery } from './glRecovery';
 import type { Tile, Facing, ErrandKind, ErrandSpot } from './themeRegistry';
+import honeycombFloorUrl from '@/assets/hive/honeycomb-floor.png?url';
+import waxWallUrl from '@/assets/hive/wax-wall.png?url';
+import hiveDeskUrl from '@/assets/hive/hive-desk.png?url';
 
 // The map, tileset atlases, desk-claim order, errand spots, coffee-economy
 // tiles, prop anchors, monitor gids and palette all come from the active
@@ -89,6 +92,24 @@ const ERRAND_THOUGHTS: Record<ErrandKind, readonly string[]> = {
   bin:       ['out with the scrap paper 🗑️', 'desk cleanup day', 'tidying up a little'],
   smoke:     ['the floor runs itself 🚬', 'boss break.', 'thinking big thoughts 🚬', 'I DECLARE… a break']
 };
+
+function mixColor(c1: number, c2: number, t: number): number {
+  const r1 = (c1 >> 16) & 0xff;
+  const g1 = (c1 >> 8) & 0xff;
+  const b1 = c1 & 0xff;
+  const r2 = (c2 >> 16) & 0xff;
+  const g2 = (c2 >> 8) & 0xff;
+  const b2 = c2 & 0xff;
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  return (r << 16) | (g << 8) | b;
+}
+
+function pseudoNoise(x: number, y: number): number {
+  const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return v - Math.floor(v);
+}
 
 interface HexOptions {
   alpha?: number;
@@ -325,6 +346,18 @@ export function OfficeFloor() {
       );
       if (mountIdRef.current !== mountId) { safeDestroy(app); return; }
 
+      let hiveFloorTex: Texture | null = null;
+      let hiveWallTex: Texture | null = null;
+      let hiveDeskTex: Texture | null = null;
+      if (theme.id === 'hive') {
+        [hiveFloorTex, hiveWallTex, hiveDeskTex] = await Promise.all([
+          loadTexture(honeycombFloorUrl),
+          loadTexture(waxWallUrl),
+          loadTexture(hiveDeskUrl)
+        ]);
+        if (mountIdRef.current !== mountId) { safeDestroy(app); return; }
+      }
+
       const world = new Container();
       app.stage.addChild(world);
 
@@ -337,65 +370,66 @@ export function OfficeFloor() {
 
       const isHiveTheme = theme.id === 'hive';
 
-      const drawHiveFloorTexture = (target: Graphics): void => {
-        const tile = mapRenderer.tileSize;
-        const widthPx = mapRenderer.width * tile;
-        const heightPx = mapRenderer.height * tile;
-        target.clear();
-        target.rect(0, 0, widthPx, heightPx).fill({ color: colors.cream[50], alpha: 0.55 });
-        const rx = tile * 0.9;
-        const ry = tile * 0.65;
-        const horizontalStep = rx * 1.55;
-        const verticalStep = ry * 1.45;
-        let row = 0;
-        for (let y = -ry * 1.5; y <= heightPx + ry * 1.5; y += verticalStep, row++) {
-          const offset = row % 2 === 0 ? 0 : horizontalStep / 2;
-          for (let x = -rx * 2; x <= widthPx + rx * 2; x += horizontalStep) {
-            const cx = x + offset;
-            drawHex(target, cx, y, rx, ry, colors.accent.lemonLight, {
-              alpha: 0.25,
-              stroke: colors.accent.lemon,
-              strokeAlpha: 0.25,
-              strokeWidth: 1
-            });
-            drawHex(target, cx, y - ry * 0.35, rx * 0.55, ry * 0.45, colors.accent.lemon, { alpha: 0.18 });
-          }
-        }
-      };
-
-      const drawHiveDeskCell = (target: Graphics): void => {
-        const tile = mapRenderer.tileSize;
-        const rx = tile * 0.55;
-        const ry = tile * 0.42;
-        drawHex(target, 0, 0, rx, ry, colors.accent.lemonLight, {
-          alpha: 0.95,
-          stroke: colors.accent.lemon,
-          strokeAlpha: 0.75,
-          strokeWidth: 1.5
-        });
-        drawHex(target, 0, -ry * 0.1, rx * 0.6, ry * 0.5, colors.accent.lemon, { alpha: 0.9 });
-        drawHex(target, 0, -ry * 0.45, rx * 0.35, ry * 0.25, colors.cream[50], { alpha: 0.35 });
-        target.ellipse(0, ry * 0.8, rx * 0.85, ry * 0.45).fill({ color: 0x2b1a0c, alpha: 0.35 });
-      };
-
       const applyHiveSceneDecor = (): void => {
+        if (!hiveFloorTex || !hiveWallTex || !hiveDeskTex) return;
         const mapContainer = mapRenderer.getContainer();
         mapContainer.sortableChildren = true;
         const initialCharIndex = mapContainer.getChildIndex(charLayer);
+        const tile = mapRenderer.tileSize;
+
         for (const child of mapContainer.children) {
           const label = (child as Container & { label?: string }).label;
-          if (label === 'floor') {
+          if (label === 'floor' || label === 'walls') {
             child.visible = false;
           } else if (label === 'furniture-below' || label === 'furniture-above') {
-            child.alpha = 0.9;
+            child.alpha = 0.88;
           }
         }
-        const honeyFloor = new Graphics();
+
+        // 1. Honeycomb Floor (TilingSprite across entire map)
+        const floorWidth = mapRenderer.width * tile;
+        const floorHeight = mapRenderer.height * tile;
+        const honeyFloor = new TilingSprite({
+          texture: hiveFloorTex,
+          width: floorWidth,
+          height: floorHeight
+        });
+        const floorScale = (tile * 4) / 512;
+        honeyFloor.tileScale.set(floorScale, floorScale);
         honeyFloor.eventMode = 'none';
-        drawHiveFloorTexture(honeyFloor);
+        honeyFloor.position.set(0, 0);
+        honeyFloor.tint = 0xfff8e8;
+        honeyFloor.alpha = 0.95;
         const insertIndex = initialCharIndex >= 0 ? initialCharIndex : mapContainer.children.length;
         mapContainer.addChildAt(honeyFloor, insertIndex);
 
+        // 2. Wax Wall Layer (Sprite tiles using waxWallTex)
+        const hiveWallLayer = new Container();
+        hiveWallLayer.sortableChildren = true;
+        (hiveWallLayer as Container & { label?: string }).label = 'hive-walls';
+        for (let y = 0; y < mapRenderer.height; y++) {
+          for (let x = 0; x < mapRenderer.width; x++) {
+            const gid = mapRenderer.gidAt('walls', x, y);
+            if (!gid) continue;
+            const above = mapRenderer.gidAt('walls', x, y - 1);
+            const segment = new Sprite(hiveWallTex);
+            segment.eventMode = 'none';
+            segment.width = tile;
+            segment.height = tile;
+            segment.position.set(x * tile, y * tile);
+            segment.zIndex = (y + 0.1) * tile;
+            if (!above) {
+              segment.tint = 0xfff4d0;
+            } else {
+              segment.tint = 0xf5ebd6;
+            }
+            hiveWallLayer.addChild(segment);
+          }
+        }
+        const wallInsertIndex = mapContainer.getChildIndex(charLayer);
+        mapContainer.addChildAt(hiveWallLayer, wallInsertIndex >= 0 ? wallInsertIndex : mapContainer.children.length);
+
+        // 3. Hive Desks (Sprite instances using hiveDeskTex)
         const hiveDeskLayer = new Container();
         hiveDeskLayer.sortableChildren = true;
         const charInsertIndex = mapContainer.getChildIndex(charLayer);
@@ -406,12 +440,16 @@ export function OfficeFloor() {
           .filter(([name]) => name.startsWith('desk-') || name.startsWith('pc-'))
           .sort((a, b) => a[1].y - b[1].y || a[1].x - b[1].x)
           .forEach(([, point]) => {
-            const deskCell = new Graphics();
-            deskCell.eventMode = 'none';
-            drawHiveDeskCell(deskCell);
-            deskCell.position.set((point.x + 0.5) * mapRenderer.tileSize, (point.y + 0.25) * mapRenderer.tileSize);
-            deskCell.zIndex = (point.y + 0.2) * mapRenderer.tileSize;
-            hiveDeskLayer.addChild(deskCell);
+            const deskNoise = pseudoNoise(point.x * 0.37, point.y * 0.41);
+            const deskSprite = new Sprite(hiveDeskTex);
+            deskSprite.eventMode = 'none';
+            deskSprite.width = tile * 2.4;
+            deskSprite.height = tile * 2.0;
+            deskSprite.anchor.set(0.5, 0.5);
+            deskSprite.position.set((point.x + 0.5) * tile, (point.y + 0.35) * tile);
+            deskSprite.tint = mixColor(0xffffff, colors.accent.lemon, 0.08 + deskNoise * 0.12);
+            deskSprite.zIndex = (point.y + 0.25) * tile;
+            hiveDeskLayer.addChild(deskSprite);
           });
         hiveDeskLayer.sortChildren();
       };
