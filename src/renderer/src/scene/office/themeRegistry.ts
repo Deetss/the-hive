@@ -35,6 +35,12 @@ import {
   getDefaultZergCharacter,
   type ZergCharacterName,
 } from './zergCast';
+import {
+  HIVE_CAST_BY_NAME,
+  getHiveCastFrames,
+  getDefaultHiveCharacter,
+  type HiveCharacterName,
+} from './hiveCast';
 
 /** Theme identifiers. Only `office` exists in Phase 0; the five TV-show themes
  *  (friends, brooklyn99, siliconvalley, got, hogwarts) land in later phases. */
@@ -45,7 +51,8 @@ export type ThemeId =
   | 'siliconvalley'
   | 'got'
   | 'hogwarts'
-  | 'zerg';
+  | 'zerg'
+  | 'hive';
 
 export interface Tile { x: number; y: number; }
 export type Facing = 'up' | 'down' | 'left' | 'right';
@@ -317,12 +324,32 @@ export const ZERG_THEME: ThemeConfig = {
   },
 };
 
+/** The Hive — BeeYoncé's bee colony (the honey/hive rebrand). The cast is the
+ *  authored bee roster (hiveCast.ts) with BeeYoncé the queen as god/default; the
+ *  palette clears to a warm comb-wax ground. Map, tilesets, and layout still
+ *  reuse the office until a hive map lands — the cast's getFrames is the scene's
+ *  only character indirection, so the floor renders bees over the office floor. */
+export const HIVE_THEME: ThemeConfig = {
+  ...OFFICE_THEME,
+  id: 'hive',
+  palette: {
+    background: 0x1f1608, // warm comb-wax ground
+    noteColors: OFFICE_THEME.palette.noteColors,
+  },
+  cast: {
+    byName: HIVE_CAST_BY_NAME as unknown as Record<string, CastMember>,
+    getFrames: (name: string) => getHiveCastFrames(name as HiveCharacterName),
+    defaultCharacter: getDefaultHiveCharacter,
+  },
+};
+
 /** All registered themes. Phase 0 ships only the office; show themes register
  *  here as their content lands (Phase 2). */
 export const THEMES: Partial<Record<ThemeId, ThemeConfig>> = {
   office: OFFICE_THEME,
   brooklyn99: BROOKLYN99_THEME,
   zerg: ZERG_THEME,
+  hive: HIVE_THEME,
 };
 
 /** Look up a theme by id, falling back to the office theme if unknown/missing
