@@ -364,6 +364,13 @@ export function App() {
     return <HivePicker config={config} onOpenCurrent={() => setHiveOpened(true)} />;
   }
 
+  // skipHarnessPickerOnLaunch skips the picker but hiveOpened still needs to be true
+  // so useHive() receives the config and the bootstrap runs.
+  if (!hiveOpened) {
+    setHiveOpened(true);
+    return null;
+  }
+
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',
