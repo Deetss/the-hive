@@ -1,12 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <!-- Warm Dark Chocolate Ground -->
-    <linearGradient id="bgGrad41" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1A140E"/>
-      <stop offset="50%" stop-color="#110D09"/>
-      <stop offset="100%" stop-color="#070503"/>
-    </linearGradient>
-
     <!-- Rich Honey Gradients -->
     <linearGradient id="goldApex" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FEF08A"/>
@@ -24,107 +17,94 @@
       <stop offset="0%" stop-color="#FDE68A"/>
       <stop offset="100%" stop-color="#F59E0B"/>
     </linearGradient>
-
-    <clipPath id="appTile41">
-      <rect x="32" y="32" width="960" height="960" rx="216" />
-    </clipPath>
   </defs>
 
-  <g clip-path="url(#appTile41)">
-    <rect x="32" y="32" width="960" height="960" fill="url(#bgGrad41)"/>
+  <!-- ==================== CENTRAL HONEY CHANNEL BRIDGE ==================== -->
+  <path d="M 512,470 L 512,580 L 410,640 M 512,580 L 614,640" 
+        fill="none" stroke="url(#goldWall)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Central Nectar Junction Dot -->
+  <circle cx="512" cy="580" r="22" fill="#FEF08A"/>
 
-    <!-- ==================== CENTRAL HONEY CHANNEL BRIDGE ==================== -->
-    <!-- The Y-channel connecting all three cells together -->
-    <path d="M 512,470 L 512,580 L 410,640 M 512,580 L 614,640" 
-          fill="none" stroke="url(#goldWall)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- ==================== CELL 1: TOP (OVERMIND QUEEN BEE) ==================== -->
+  <g transform="translate(512, 335)">
+    <!-- Outer Hex Wall -->
+    <polygon points="0,-175 152,-87 152,87 0,175 -152,87 -152,-87" 
+             fill="url(#goldApex)" stroke="url(#goldWall)" stroke-width="22" stroke-linejoin="round"/>
     
-    <!-- Central Nectar Junction Dot -->
-    <circle cx="512" cy="580" r="22" fill="#FEF08A"/>
+    <!-- Inner Dark Nectar Bed for High Contrast -->
+    <polygon points="0,-140 120,-70 120,70 0,140 -120,70 -120,-70" 
+             fill="#22180F" stroke="#FDE68A" stroke-width="4" opacity="0.75"/>
 
-    <!-- ==================== CELL 1: TOP (OVERMIND QUEEN BEE) ==================== -->
-    <g transform="translate(512, 335)">
-      <!-- Outer Hex Wall -->
-      <polygon points="0,-175 152,-87 152,87 0,175 -152,87 -152,-87" 
-               fill="url(#goldApex)" stroke="url(#goldWall)" stroke-width="22" stroke-linejoin="round"/>
-      
-      <!-- Inner Dark Nectar Bed for High Contrast -->
-      <polygon points="0,-140 120,-70 120,70 0,140 -120,70 -120,-70" 
-               fill="#22180F" stroke="#FDE68A" stroke-width="4" opacity="0.5"/>
+    <!-- Queen Crown & Antennae -->
+    <polygon points="-22,-82 -32,-102 0,-92 32,-102 22,-82" fill="#FDE047"/>
+    <circle cx="-32" cy="-102" r="5" fill="#FEF08A"/>
+    <circle cx="0" cy="-92" r="6" fill="#FEF08A"/>
+    <circle cx="32" cy="-102" r="5" fill="#FEF08A"/>
 
-      <!-- Queen Crown & Antennae -->
-      <polygon points="-22,-82 -32,-102 0,-92 32,-102 22,-82" fill="#FDE047"/>
-      <circle cx="-32" cy="-102" r="5" fill="#FEF08A"/>
-      <circle cx="0" cy="-92" r="6" fill="#FEF08A"/>
-      <circle cx="32" cy="-102" r="5" fill="#FEF08A"/>
+    <!-- Geometric Queen Wings -->
+    <!-- Left Upper -->
+    <polygon points="-25,-30 -115,-65 -95,-15 -25,5" fill="#FEF08A" opacity="0.95"/>
+    <polygon points="-25,10 -85,15 -65,55 -25,30" fill="#FDE68A" opacity="0.9"/>
+    <!-- Right Upper -->
+    <polygon points="25,-30 115,-65 95,-15 25,5" fill="#FEF08A" opacity="0.95"/>
+    <polygon points="25,10 85,15 65,55 25,30" fill="#FDE68A" opacity="0.9"/>
 
-      <!-- Geometric Queen Wings -->
-      <!-- Left Upper -->
-      <polygon points="-25,-30 -115,-65 -95,-15 -25,5" fill="#FEF08A" opacity="0.95"/>
-      <polygon points="-25,10 -85,15 -65,55 -25,30" fill="#FDE68A" opacity="0.9"/>
-      <!-- Right Upper -->
-      <polygon points="25,-30 115,-65 95,-15 25,5" fill="#FEF08A" opacity="0.95"/>
-      <polygon points="25,10 85,15 65,55 25,30" fill="#FDE68A" opacity="0.9"/>
+    <!-- Head & Thorax -->
+    <circle cx="0" cy="-55" r="22" fill="#FDE047"/>
+    <polygon points="0,-32 26,-15 26,18 0,35 -26,18 -26,-15" fill="#FBBF24"/>
 
-      <!-- Head & Thorax -->
-      <circle cx="0" cy="-55" r="22" fill="#FDE047"/>
-      <polygon points="0,-32 26,-15 26,18 0,35 -26,18 -26,-15" fill="#FBBF24"/>
+    <!-- Striped Abdomen -->
+    <path d="M -24,40 Q 0,48 24,40 L 20,64 Q 0,72 -20,64 Z" fill="#FDE047"/>
+    <path d="M -18,68 Q 0,76 18,68 L 14,90 Q 0,98 -14,90 Z" fill="#FDE047"/>
+    <polygon points="-10,94 10,94 0,115" fill="#FDE047"/>
+  </g>
 
-      <!-- Striped Abdomen -->
-      <path d="M -24,40 Q 0,48 24,40 L 20,64 Q 0,72 -20,64 Z" fill="#FDE047"/>
-      <path d="M -18,68 Q 0,76 18,68 L 14,90 Q 0,98 -14,90 Z" fill="#FDE047"/>
-      <polygon points="-10,94 10,94 0,115" fill="#FDE047"/>
-    </g>
+  <!-- ==================== CELL 2: BOTTOM-LEFT (WORKER NODE A) ==================== -->
+  <g transform="translate(346, 625)">
+    <!-- Outer Hex Wall -->
+    <polygon points="0,-175 152,-87 152,87 0,175 -152,87 -152,-87" 
+             fill="url(#amberBase)" stroke="url(#goldWall)" stroke-width="22" stroke-linejoin="round"/>
+    
+    <!-- Inner Dark Nectar Bed -->
+    <polygon points="0,-140 120,-70 120,70 0,140 -120,70 -120,-70" 
+             fill="#22180F" stroke="#FDE68A" stroke-width="4" opacity="0.75"/>
 
-    <!-- ==================== CELL 2: BOTTOM-LEFT (WORKER NODE A) ==================== -->
-    <g transform="translate(346, 625)">
-      <!-- Outer Hex Wall -->
-      <polygon points="0,-175 152,-87 152,87 0,175 -152,87 -152,-87" 
-               fill="url(#amberBase)" stroke="url(#goldWall)" stroke-width="22" stroke-linejoin="round"/>
-      
-      <!-- Inner Dark Nectar Bed -->
-      <polygon points="0,-140 120,-70 120,70 0,140 -120,70 -120,-70" 
-               fill="#22180F" stroke="#FDE68A" stroke-width="4" opacity="0.5"/>
-
-      <!-- Worker Bee Silhouette Inside Left Cell -->
-      <g transform="scale(0.72) translate(0, -10)">
-        <!-- Wings -->
-        <polygon points="-20,-25 -95,-55 -80,-10 -20,5" fill="#FEF08A" opacity="0.95"/>
-        <polygon points="20,-25 95,-55 80,-10 20,5" fill="#FEF08A" opacity="0.95"/>
-        <!-- Body -->
-        <circle cx="0" cy="-45" r="18" fill="#FDE047"/>
-        <ellipse cx="0" cy="-12" rx="22" ry="18" fill="#FBBF24"/>
-        <path d="M -18,12 Q 0,18 18,12 L 14,36 Q 0,42 -14,36 Z" fill="#FDE047"/>
-        <path d="M -12,40 Q 0,46 12,40 L 8,60 Q 0,66 -8,60 Z" fill="#FDE047"/>
-        <polygon points="-6,64 6,64 0,82" fill="#FDE047"/>
-      </g>
-    </g>
-
-    <!-- ==================== CELL 3: BOTTOM-RIGHT (WORKER NODE B) ==================== -->
-    <g transform="translate(678, 625)">
-      <!-- Outer Hex Wall -->
-      <polygon points="0,-175 152,-87 152,87 0,175 -152,87 -152,-87" 
-               fill="url(#amberBase)" stroke="url(#goldWall)" stroke-width="22" stroke-linejoin="round"/>
-      
-      <!-- Inner Dark Nectar Bed -->
-      <polygon points="0,-140 120,-70 120,70 0,140 -120,70 -120,-70" 
-               fill="#22180F" stroke="#FDE68A" stroke-width="4" opacity="0.5"/>
-
-      <!-- Worker Bee Silhouette Inside Right Cell -->
-      <g transform="scale(0.72) translate(0, -10)">
-        <!-- Wings -->
-        <polygon points="-20,-25 -95,-55 -80,-10 -20,5" fill="#FEF08A" opacity="0.95"/>
-        <polygon points="20,-25 95,-55 80,-10 20,5" fill="#FEF08A" opacity="0.95"/>
-        <!-- Body -->
-        <circle cx="0" cy="-45" r="18" fill="#FDE047"/>
-        <ellipse cx="0" cy="-12" rx="22" ry="18" fill="#FBBF24"/>
-        <path d="M -18,12 Q 0,18 18,12 L 14,36 Q 0,42 -14,36 Z" fill="#FDE047"/>
-        <path d="M -12,40 Q 0,46 12,40 L 8,60 Q 0,66 -8,60 Z" fill="#FDE047"/>
-        <polygon points="-6,64 6,64 0,82" fill="#FDE047"/>
-      </g>
+    <!-- Worker Bee Silhouette Inside Left Cell -->
+    <g transform="scale(0.72) translate(0, -10)">
+      <!-- Wings -->
+      <polygon points="-20,-25 -95,-55 -80,-10 -20,5" fill="#FEF08A" opacity="0.95"/>
+      <polygon points="20,-25 95,-55 80,-10 20,5" fill="#FEF08A" opacity="0.95"/>
+      <!-- Body -->
+      <circle cx="0" cy="-45" r="18" fill="#FDE047"/>
+      <ellipse cx="0" cy="-12" rx="22" ry="18" fill="#FBBF24"/>
+      <path d="M -18,12 Q 0,18 18,12 L 14,36 Q 0,42 -14,36 Z" fill="#FDE047"/>
+      <path d="M -12,40 Q 0,46 12,40 L 8,60 Q 0,66 -8,60 Z" fill="#FDE047"/>
+      <polygon points="-6,64 6,64 0,82" fill="#FDE047"/>
     </g>
   </g>
 
-  <!-- App Tile Inset Border -->
-  <rect x="32" y="32" width="960" height="960" rx="216" 
-        fill="none" stroke="#382618" stroke-width="16" />
+  <!-- ==================== CELL 3: BOTTOM-RIGHT (WORKER NODE B) ==================== -->
+  <g transform="translate(678, 625)">
+    <!-- Outer Hex Wall -->
+    <polygon points="0,-175 152,-87 152,87 0,175 -152,87 -152,-87" 
+             fill="url(#amberBase)" stroke="url(#goldWall)" stroke-width="22" stroke-linejoin="round"/>
+    
+    <!-- Inner Dark Nectar Bed -->
+    <polygon points="0,-140 120,-70 120,70 0,140 -120,70 -120,-70" 
+             fill="#22180F" stroke="#FDE68A" stroke-width="4" opacity="0.75"/>
+
+    <!-- Worker Bee Silhouette Inside Right Cell -->
+    <g transform="scale(0.72) translate(0, -10)">
+      <!-- Wings -->
+      <polygon points="-20,-25 -95,-55 -80,-10 -20,5" fill="#FEF08A" opacity="0.95"/>
+      <polygon points="20,-25 95,-55 80,-10 20,5" fill="#FEF08A" opacity="0.95"/>
+      <!-- Body -->
+      <circle cx="0" cy="-45" r="18" fill="#FDE047"/>
+      <ellipse cx="0" cy="-12" rx="22" ry="18" fill="#FBBF24"/>
+      <path d="M -18,12 Q 0,18 18,12 L 14,36 Q 0,42 -14,36 Z" fill="#FDE047"/>
+      <path d="M -12,40 Q 0,46 12,40 L 8,60 Q 0,66 -8,60 Z" fill="#FDE047"/>
+      <polygon points="-6,64 6,64 0,82" fill="#FDE047"/>
+    </g>
+  </g>
 </svg>
