@@ -15,7 +15,7 @@ const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--cth-font-ui)',
   fontSize: 13,
   lineHeight: '12px',
-  color: 'var(--cth-ink-500)',
+  color: 'var(--cth-ink-700)',
   textTransform: 'uppercase' as const
 };
 
@@ -303,7 +303,7 @@ export function LocalDelegateSettings() {
 
       {!showForm && (
         <div>
-          <button style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-400)', borderRadius: 4, color: 'var(--cth-ink-700)' }}
+          <button style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 4, color: 'var(--cth-ink-700)' }}
             onClick={() => openForm()}>+ add delegate</button>
         </div>
       )}
@@ -507,7 +507,7 @@ export function LocalDelegateSettings() {
               save
             </button>
             <button onClick={() => void testConnection()}
-              style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-400)', borderRadius: 4, color: 'var(--cth-ink-700)' }}>
+              style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-300)', borderRadius: 4, color: 'var(--cth-ink-700)' }}>
               test connection
             </button>
             {testResult && (

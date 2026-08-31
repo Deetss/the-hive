@@ -22,7 +22,7 @@ const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--cth-font-ui)',
   fontSize: 13,
   lineHeight: '12px',
-  color: 'var(--cth-ink-500)',
+  color: 'var(--cth-ink-700)',
   textTransform: 'uppercase'
 };
 
