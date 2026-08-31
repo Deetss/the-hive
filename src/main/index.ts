@@ -5194,15 +5194,21 @@ ipcMain.handle('agent:respawn', async (_evt, agentId: unknown) => {
     if (!dir) return { ok: false, error: 'spawn-requests dir unavailable' };
     mkdirSync(dir, { recursive: true });
     const reqId = `respawn-${id}-${Date.now().toString(36)}`;
-    const memPath = join(root, 'agents', id, 'memory.md');
+    const harnessHome = entry.isOvermind ? resolveHarnessHome() : null;
+    if (entry.isOvermind && !harnessHome) return { ok: false, error: 'harnessHome unavailable' };
+    const overmindAgentDir = entry.isOvermind && harnessHome ? join(harnessHome, 'agents', 'god') : undefined;
+    const memPath = entry.isOvermind && overmindAgentDir
+      ? join(overmindAgentDir, 'memory.md')
+      : join(root, 'agents', id, 'memory.md');
     const objective = entry.isOvermind
-      ? `You are resuming as ${entry.name}, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.`
+      ? `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.`
       : `You are a respawn of ${entry.name}. First read your prior session's memory at ${memPath}, then resume that work where the previous session left off.${entry.role ? ` Role: ${entry.role}.` : ''}`;
+    const spawnCwd = entry.isOvermind && overmindAgentDir ? overmindAgentDir : entry.cwd;
     const req: SpawnRequest = {
       id: reqId,
-      name: entry.name,
+      name: entry.isOvermind ? 'BeeYoncé' : entry.name,
       objective,
-      cwd: entry.cwd,
+      cwd: spawnCwd,
       provider: entry.provider,
       profile: entry.profileId,
       isolate: false
@@ -8856,6 +8862,7 @@ app.on('will-quit', (e) => {
     new Promise<void>((r) => setTimeout(r, 1200))
   ]).then(finish, finish);
 });
+
 
 
 
