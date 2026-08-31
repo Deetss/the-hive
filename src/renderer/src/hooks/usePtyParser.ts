@@ -217,7 +217,7 @@ export function usePtyParser(agentId: string) {
         }
         updateAgent(agentId, {
           status: 'waiting',
-          action: 'waiting on the Overmind',
+          action: 'waiting on the Queen',
           currentStation: 'desk',
           blockReason: undefined
         });

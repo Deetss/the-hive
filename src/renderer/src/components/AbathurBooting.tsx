@@ -37,8 +37,7 @@ export function AbathurBooting() {
               margin: 0, fontSize: 13, lineHeight: '20px', textAlign: 'center',
               color: 'var(--cth-ink-700)'
             }}>
-              Abathur is settling into the corner office and getting the floor
-              ready. Hang tight…
+              The Queen is settling in and waking the hive. Hang tight…
             </p>
           </div>
         </PixelPanel>

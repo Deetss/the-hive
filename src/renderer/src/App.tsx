@@ -522,10 +522,10 @@ export function App() {
                   // Abathur's spawn hung or errored (watchdog in useHive). Give a
                   // real way out instead of a dead spinner: a reload re-runs the
                   // bootstrap, which re-attaches an already-live god PTY or respawns.
-                  <PixelPanel variant="dialog" title="ABATHUR DIDN'T CLOCK IN" noPadding>
+                  <PixelPanel variant="dialog" title="QUEEN DIDN'T CLOCK IN" noPadding>
                     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <p style={{ margin: 0, fontSize: 13, lineHeight: '20px' }}>
-                        The Overmind failed to start (the spawn timed out or errored). Retry to re-run the boot sequence.
+                        The Queen failed to start (the spawn timed out or errored). Retry to re-run the boot sequence.
                       </p>
                       <PixelButton variant="primary" size="md" onClick={() => window.location.reload()}>
                         <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
@@ -589,10 +589,10 @@ export function App() {
               <div style={{
                 fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px',
                 color: 'var(--cth-ink-500)'
-              }}>WAKING THE FLOOR</div>
+              }}>WAKING THE HIVE</div>
               <p style={{ margin: 0, fontSize: 13, textAlign: 'center', color: 'var(--cth-ink-700)' }}>
-                Abathur is clocking in.<br />
-                The terminal will land here once he's seated.
+                The Queen is clocking in.<br />
+                The terminal will land here once she's seated.
               </p>
             </PixelPanel>
           ) : (

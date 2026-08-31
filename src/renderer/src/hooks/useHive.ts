@@ -391,7 +391,7 @@ export function useHive(config: HarnessConfig | null): void {
             const overmindProvider = config.overmindProvider ?? 'claude';
             useStore.getState().addAgent({
               id: GOD_ID, name: 'Abathur', character: 'michael', accent: 'lemon',
-              description: 'Overmind — runs the floor, triages requests, escalates only critical calls to you',
+              description: 'Queen — runs the hive, triages requests, escalates only critical calls to you',
               project: 'hive', tmuxTarget: '', cwd: config.harnessHome!,
               status: 'idle', action: 'running the floor', progress: 0,
               currentStation: 'desk', ptyId: GOD_PTY,
@@ -432,7 +432,7 @@ export function useHive(config: HarnessConfig | null): void {
             // Resume Abathur's prior conversation in production. Skipped in dev
             // to avoid loading the production session's massive transcript.
             resume: import.meta.env.PROD,
-            hive: { id: GOD_ID, name: 'Abathur', provider: overmindProvider, cwd: config.harnessHome!, isOvermind: true, role: 'Overmind' }
+            hive: { id: GOD_ID, name: 'Abathur', provider: overmindProvider, cwd: config.harnessHome!, isOvermind: true, role: 'Queen' }
           }),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Abathur spawn timed out')), GOD_SPAWN_TIMEOUT_MS))
@@ -450,7 +450,7 @@ export function useHive(config: HarnessConfig | null): void {
         name: 'Abathur',
         character: 'michael',
         accent: 'lemon',
-        description: 'Overmind — runs the floor, triages requests, escalates only critical calls to you',
+        description: 'Queen — runs the hive, triages requests, escalates only critical calls to you',
         project: 'hive',
         tmuxTarget: '',
         cwd: config.harnessHome!,
