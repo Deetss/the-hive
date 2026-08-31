@@ -295,12 +295,17 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
   // renderer tsconfig's program). Deliberately loose: only the leaves this
   // panel edits, everything else round-trips through `raw` untouched.
   interface GovernorWindowView { enabled?: boolean; absoluteBackstopPct?: number }
+  interface ProfilePolicyView {
+    enabled?: boolean;
+    windows?: { fiveHour?: GovernorWindowView; sevenDay?: GovernorWindowView };
+  }
   type GovernorPolicyView = {
     manualOverride?: 'force-green';
     global?: {
       windows?: { fiveHour?: GovernorWindowView; sevenDay?: GovernorWindowView };
       autoOffload?: { enabled?: boolean };
     };
+    profiles?: Record<string, ProfilePolicyView | undefined>;
   };
   const [govPolicy, setGovPolicy] = useState<GovernorPolicyView>(
     (config as HarnessConfig & { governorPolicy?: GovernorPolicyView }).governorPolicy ?? {}
@@ -333,6 +338,22 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
   const setGovOverride = (forceGreen: boolean) => {
     saveGovPolicy({ ...govPolicy, manualOverride: forceGreen ? 'force-green' : undefined });
     void window.cth.setGovernorOverride(forceGreen ? 'force-green' : null);
+  };
+  const setProfilePolicy = (profileId: string, patch: Partial<ProfilePolicyView>) => {
+    const current = govPolicy.profiles?.[profileId] ?? {};
+    const updated = { ...current, ...patch };
+    saveGovPolicy({
+      ...govPolicy,
+      profiles: { ...govPolicy.profiles, [profileId]: updated }
+    });
+  };
+  const setProfileWindow = (profileId: string, window: 'fiveHour' | 'sevenDay', patch: Partial<GovernorWindowView>) => {
+    const current = govPolicy.profiles?.[profileId] ?? {};
+    const currentWindows = current.windows ?? {};
+    const currentWindow = currentWindows[window] ?? {};
+    setProfilePolicy(profileId, {
+      windows: { ...currentWindows, [window]: { ...currentWindow, ...patch } }
+    });
   };
 
   const saveBudget = async () => {
@@ -1503,6 +1524,90 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               {govOverrideOn ? 'force-green' : 'auto'}
                             </PixelButton>
                           </div>
+
+                          {/* Per-profile overrides */}
+                          {runtimeProfiles.length > 0 && (
+                            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--cth-ink-300)' }}>
+                              <div style={{
+                                fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '12px',
+                                color: 'var(--cth-ink-700)', textTransform: 'uppercase', marginBottom: 10
+                              }}>
+                                Per-Profile Overrides
+                              </div>
+                              <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', display: 'block', marginBottom: 12 }}>
+                                Each profile can override global thresholds for isolated account tracking.
+                              </span>
+                              {runtimeProfiles.map((profile) => {
+                                const profilePolicy = govPolicy.profiles?.[profile.id] ?? {};
+                                const profileEnabled = profilePolicy.enabled !== false;
+                                const profile5h = profilePolicy.windows?.fiveHour ?? {};
+                                const profile7d = profilePolicy.windows?.sevenDay ?? {};
+                                return (
+                                  <div key={profile.id} style={{
+                                    padding: 10, marginBottom: 8,
+                                    background: 'var(--cth-paper-100)',
+                                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)',
+                                    display: 'flex', flexDirection: 'column', gap: 8
+                                  }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                      <span style={{ fontSize: 13, color: 'var(--cth-ink-900)', fontFamily: 'var(--cth-font-ui)' }}>
+                                        {profile.name}
+                                      </span>
+                                      <PixelButton
+                                        variant={profileEnabled ? 'primary' : 'secondary'}
+                                        size="sm"
+                                        onClick={() => setProfilePolicy(profile.id, { enabled: !profileEnabled })}
+                                      >
+                                        {profileEnabled ? 'override on' : 'use global'}
+                                      </PixelButton>
+                                    </div>
+                                    {profileEnabled && (
+                                      <>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                                          <PixelButton
+                                            variant={profile5h.enabled !== false ? 'primary' : 'secondary'}
+                                            size="sm"
+                                            onClick={() => setProfileWindow(profile.id, 'fiveHour', { enabled: profile5h.enabled === false })}
+                                          >
+                                            5h: {profile5h.enabled !== false ? 'on' : 'off'}
+                                          </PixelButton>
+                                          <input
+                                            type="range" min={5} max={100} step={5}
+                                            value={profile5h.absoluteBackstopPct ?? govFiveHour.absoluteBackstopPct ?? 20}
+                                            onChange={(e) => setProfileWindow(profile.id, 'fiveHour', { absoluteBackstopPct: Number(e.target.value) })}
+                                            disabled={profile5h.enabled === false}
+                                            style={{ width: 140 }}
+                                          />
+                                          <span style={{ fontSize: 12, color: 'var(--cth-ink-700)', minWidth: 80 }}>
+                                            {profile5h.absoluteBackstopPct ?? govFiveHour.absoluteBackstopPct ?? 20}%
+                                          </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                                          <PixelButton
+                                            variant={profile7d.enabled !== false ? 'primary' : 'secondary'}
+                                            size="sm"
+                                            onClick={() => setProfileWindow(profile.id, 'sevenDay', { enabled: profile7d.enabled === false })}
+                                          >
+                                            7d: {profile7d.enabled !== false ? 'on' : 'off'}
+                                          </PixelButton>
+                                          <input
+                                            type="range" min={5} max={100} step={5}
+                                            value={profile7d.absoluteBackstopPct ?? govSevenDay.absoluteBackstopPct ?? 80}
+                                            onChange={(e) => setProfileWindow(profile.id, 'sevenDay', { absoluteBackstopPct: Number(e.target.value) })}
+                                            disabled={profile7d.enabled === false}
+                                            style={{ width: 140 }}
+                                          />
+                                          <span style={{ fontSize: 12, color: 'var(--cth-ink-700)', minWidth: 80 }}>
+                                            {profile7d.absoluteBackstopPct ?? govSevenDay.absoluteBackstopPct ?? 80}%
+                                          </span>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </>
