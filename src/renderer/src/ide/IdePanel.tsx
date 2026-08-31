@@ -353,7 +353,7 @@ export function IdePanel() {
 
   return (
     <div style={{
-      position: 'absolute', inset: 0, zIndex: 10,
+      position: 'fixed', inset: 0, zIndex: 290,
       background: 'var(--cth-cream-100)',
       display: 'flex', flexDirection: 'column',
       paddingTop: 36
