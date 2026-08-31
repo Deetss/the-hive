@@ -31,8 +31,6 @@ import { inferAgentProvider, providerPreset, type HarnessConfig } from '@/store/
 const SIDEBAR_WIDTH = 'clamp(232px, 14vw, 340px)';
 /** Remembers the roster collapse across fullscreen sessions and app restarts. */
 const ROSTER_COLLAPSED_KEY = 'cth.fullscreen.rosterCollapsed';
-/** Remembers which left-panel mode the user last chose: agent roster or diff/IDE. */
-const SIDE_PANEL_KEY = 'cth.fullscreen.sidePanel';
 
 /** Roster type scale, derived from the shared terminal zoom so Cmd +/- resizes
  *  the whole roster along with the terminal — one knob for the whole view
@@ -196,16 +194,8 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
       return next;
     });
   };
-  // Left-panel mode: 'ide' shows the git/file panel for the focused agent; 'roster' shows the agent list.
-  const [sidePanel, setSidePanelRaw] = useState<'roster' | 'ide'>(() => {
-    try { return localStorage.getItem(SIDE_PANEL_KEY) === 'roster' ? 'roster' : 'ide'; } catch { return 'ide'; }
-  });
-  const setSidePanel = (m: 'roster' | 'ide'): void => {
-    setSidePanelRaw(m);
-    try { localStorage.setItem(SIDE_PANEL_KEY, m); } catch { /* private mode */ }
-  };
-  // Which sub-tab within the IDE left panel.
-  const [sideIdeTab, setSideIdeTab] = useState<'git' | 'files'>('git');
+  // Which tab to show in the main content area for non-Abathur agents: terminal, git, or files.
+  const [contentTab, setContentTab] = useState<'terminal' | 'git' | 'files'>('terminal');
   const drag: RowDrag = {
     dragId,
     overId,
@@ -429,72 +419,33 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
           background: 'var(--cth-cream-200)',
           borderRight: '1px solid var(--cth-ink-300)'
         }}>
-          {/* Left-panel mode switcher: roster vs diff/IDE */}
+          {/* Roster header with add agent button */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 2,
             padding: '4px 6px', borderBottom: '1px solid var(--cth-ink-300)',
             background: 'var(--cth-cream-200)', flexShrink: 0
           }}>
-            {(['ide', 'roster'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setSidePanel(m)}
-                title={m === 'ide' ? 'Show diff/file panel for the focused agent' : 'Show the agent roster'}
-                style={{
-                  padding: '1px 7px', border: 'none', cursor: 'pointer',
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px', textTransform: 'uppercase',
-                  color: 'var(--cth-ink-700)',
-                  background: sidePanel === m ? 'var(--cth-sky-light)' : 'transparent',
-                  boxShadow: sidePanel === m ? 'inset 0 0 0 1px var(--cth-ink-300)' : 'none'
-                }}
-              >{m}</button>
-            ))}
-            {sidePanel === 'ide' && (
-              <>
-                <span style={{ flex: 1 }} />
-                {(['git', 'files'] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setSideIdeTab(t)}
-                    style={{
-                      padding: '1px 6px', border: 'none', cursor: 'pointer',
-                      fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px', textTransform: 'uppercase',
-                      color: 'var(--cth-ink-500)',
-                      background: sideIdeTab === t ? 'var(--cth-lemon-light)' : 'transparent',
-                      boxShadow: sideIdeTab === t ? 'inset 0 0 0 1px var(--cth-ink-200)' : 'none'
-                    }}
-                  >{t}</button>
-                ))}
-              </>
-            )}
-            {sidePanel === 'roster' && (
-              <>
-                <span style={{ flex: 1 }} />
-                <button
-                  onClick={() => setAddAgentOpen(true)}
-                  title="Add agent"
-                  style={{
-                    width: 24, height: 24, padding: 0, border: 'none', cursor: 'pointer',
-                    background: 'var(--cth-cream-100)',
-                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--cth-ink-900)'
-                  }}
-                >
-                  <Icon name="plus" />
-                </button>
-              </>
-            )}
+            <span style={{
+              fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px', textTransform: 'uppercase',
+              color: 'var(--cth-ink-700)'
+            }}>ROSTER</span>
+            <span style={{ flex: 1 }} />
+            <button
+              onClick={() => setAddAgentOpen(true)}
+              title="Add agent"
+              style={{
+                width: 24, height: 24, padding: 0, border: 'none', cursor: 'pointer',
+                background: 'var(--cth-cream-100)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--cth-ink-900)'
+              }}
+            >
+              <Icon name="plus" />
+            </button>
           </div>
 
-          {sidePanel === 'ide' ? (
-            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              {sideIdeTab === 'git'
-                ? <GitTab cwd={agent.worktreePath ?? agent.cwd} />
-                : <FilesTab cwd={agent.worktreePath ?? agent.cwd} />
-              }
-            </div>
-          ) : (<>
+          <>
           <div className="cth-scroll-hidden" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 0' }}>
             {/* The god agent runs the floor rather than a checkout, so it gets no
                 repository header — it sits alone at the top of the roster. */}
@@ -617,7 +568,6 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
               )}
             </div>
           )}
-          </>)}
         </aside>
         )}
 
@@ -646,24 +596,53 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                   sidebar, so going fullscreen took the operator controls away. */}
               <AgentControlStrip key={agent.id} agentId={agent.id} />
 
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-                  <PtyTerminalView
-                    key={terminalInstanceKey(agent.ptyId, agent.terminalGeneration)}
-                    ptyId={agent.ptyId}
-                    onStreamData={parser}
-                    onUserPrompt={(t) => {
-                      updateAgent(agent.id, { lastPrompt: t });
-                      if (t.trim().toLowerCase() === '/clear') {
-                        updateAgent(agent.id, { contextTokens: 0, contextLimit: undefined, progress: 0 });
-                      }
-                      void window.cth.historyAdd({ agentId: agent.id, cwd: agent.cwd, text: t });
+              {/* Tab navigation for terminal / git / files */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 2,
+                padding: '4px 6px', borderBottom: '1px solid var(--cth-ink-300)',
+                background: 'var(--cth-cream-200)', flexShrink: 0
+              }}>
+                {(['terminal', 'git', 'files'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setContentTab(t)}
+                    style={{
+                      padding: '3px 10px', border: 'none', cursor: 'pointer',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '16px', textTransform: 'uppercase',
+                      color: 'var(--cth-ink-700)',
+                      background: contentTab === t ? 'var(--cth-sky-light)' : 'transparent',
+                      boxShadow: contentTab === t ? 'inset 0 0 0 1px var(--cth-ink-300)' : 'none'
                     }}
-                    onToggleFullscreen={() => setFullscreen(null)}
-                    fullscreen
-                  />
-                </div>
-                <MessageQueueComposer agent={agent} />
+                  >{t}</button>
+                ))}
+              </div>
+
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                {contentTab === 'terminal' ? (
+                  <>
+                    <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                      <PtyTerminalView
+                        key={terminalInstanceKey(agent.ptyId, agent.terminalGeneration)}
+                        ptyId={agent.ptyId}
+                        onStreamData={parser}
+                        onUserPrompt={(t) => {
+                          updateAgent(agent.id, { lastPrompt: t });
+                          if (t.trim().toLowerCase() === '/clear') {
+                            updateAgent(agent.id, { contextTokens: 0, contextLimit: undefined, progress: 0 });
+                          }
+                          void window.cth.historyAdd({ agentId: agent.id, cwd: agent.cwd, text: t });
+                        }}
+                        onToggleFullscreen={() => setFullscreen(null)}
+                        fullscreen
+                      />
+                    </div>
+                    <MessageQueueComposer agent={agent} />
+                  </>
+                ) : contentTab === 'git' ? (
+                  <GitTab cwd={agent.worktreePath ?? agent.cwd} />
+                ) : (
+                  <FilesTab cwd={agent.worktreePath ?? agent.cwd} />
+                )}
               </div>
             </>
           )}
