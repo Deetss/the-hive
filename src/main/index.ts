@@ -7503,10 +7503,21 @@ function convertToWslPath(windowsPath: string): string {
   return windowsPath.replace(/^([A-Z]):\\/, (_, drive) => `/mnt/${drive.toLowerCase()}/`).replace(/\\/g, '/');
 }
 
+function hasShellMetachars(s: string): boolean {
+  return /[&|;<>"'`$\n<>%]/.test(s);
+}
+
 ipcMain.handle('process:spawn', (_evt, opts: unknown): { ok: boolean; processId?: string; error?: string } => {
   if (!opts || typeof opts !== 'object') return { ok: false, error: 'invalid options' };
   const { cmd, args = [], cwd, label, shell } = opts as ProcessSpawnOptions;
   if (!cmd || !cwd || !shell) return { ok: false, error: 'missing required fields' };
+
+  if (hasShellMetachars(cwd) || hasShellMetachars(cmd)) {
+    return { ok: false, error: 'path or command contains shell metacharacters' };
+  }
+  if ((args as string[]).some(hasShellMetachars)) {
+    return { ok: false, error: 'arguments contain shell metacharacters' };
+  }
 
   const processId = `proc-${++processIdSeq}`;
   const now = Date.now();
@@ -7514,23 +7525,28 @@ ipcMain.handle('process:spawn', (_evt, opts: unknown): { ok: boolean; processId?
   try {
     let spawnCmd: string;
     let spawnArgs: string[];
+    let spawnOpts: { cwd: string; shell: boolean };
 
     if (shell === 'wsl-bash') {
       const wslPath = convertToWslPath(cwd);
       spawnCmd = 'wsl.exe';
-      spawnArgs = ['-d', 'Ubuntu', '--', 'bash', '-c', `cd "${wslPath}" && exec bash`];
+      spawnArgs = ['-d', 'Ubuntu', '--cd', wslPath, '--', 'bash'];
+      spawnOpts = { cwd, shell: false };
     } else if (shell === 'powershell') {
       spawnCmd = 'powershell.exe';
-      spawnArgs = ['-NoProfile', '-Command', `cd "${cwd}"; ${cmd} ${args.join(' ')}`];
+      spawnArgs = ['-NoProfile', '-NoLogo', '-NonInteractive'];
+      spawnOpts = { cwd, shell: false };
     } else if (shell === 'cmd') {
       spawnCmd = 'cmd.exe';
-      spawnArgs = ['/c', `cd /d "${cwd}" && ${cmd} ${args.join(' ')}`];
+      spawnArgs = ['/Q'];
+      spawnOpts = { cwd, shell: false };
     } else {
       spawnCmd = cmd;
       spawnArgs = args as string[];
+      spawnOpts = { cwd, shell: false };
     }
 
-    const proc = spawn(spawnCmd, spawnArgs, { cwd, shell: false });
+    const proc = spawn(spawnCmd, spawnArgs, spawnOpts);
 
     const tracked: TrackedProcess = {
       pid: proc.pid ?? 0,
