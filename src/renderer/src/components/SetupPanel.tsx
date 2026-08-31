@@ -200,6 +200,55 @@ export function SetupPanel({ onDone }: { onDone?: () => void } = {}) {
           </div>
         );
       })}
+
+      {/* Tailscale — mesh VPN for mobile remote feature */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{
+          fontFamily: 'var(--cth-font-ui)', fontSize: 13, letterSpacing: 0.5,
+          color: 'var(--cth-ink-500)', textTransform: 'uppercase'
+        }}>Remote Access (Mobile)</div>
+        <div style={{ fontSize: 13, color: 'var(--cth-ink-500)', marginTop: -2 }}>
+          Secure network access to reach your dev machine from anywhere.
+        </div>
+        <div style={{
+          padding: 10, display: 'flex', flexDirection: 'column', gap: 6,
+          background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, flex: 1, minWidth: 0 }}>
+              TAILSCALE
+            </span>
+          </div>
+
+          <div style={{ fontSize: 12, color: 'var(--cth-ink-700)', lineHeight: 1.5 }}>
+            Mesh VPN that lets your phone reach this dev machine on any network. Required for the mobile
+            remote feature — your phone connects to the Tailscale IP shown in Settings → Connections.
+          </div>
+
+          <div style={{ fontSize: 13, color: 'var(--cth-ink-700)', lineHeight: 1.5 }}>
+            <strong>Setup:</strong>
+            <ol style={{ margin: '4px 0 0 20px', padding: 0 }}>
+              <li>Install Tailscale on this machine and your phone</li>
+              <li>Log in to the same account on both devices</li>
+              <li>Find the mobile server URL in Settings → Connections</li>
+              <li>Open that URL in your phone's browser</li>
+            </ol>
+          </div>
+
+          <div style={{ fontSize: 13, color: 'var(--cth-ink-500)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <a
+              href="https://tailscale.com/download"
+              onClick={(e) => { e.preventDefault(); void window.cth.openExternal('https://tailscale.com/download'); }}
+              style={{ color: 'var(--cth-ink-700)' }}
+            >download →</a>
+            <a
+              href="https://tailscale.com/kb/1017/install"
+              onClick={(e) => { e.preventDefault(); void window.cth.openExternal('https://tailscale.com/kb/1017/install'); }}
+              style={{ color: 'var(--cth-ink-700)' }}
+            >docs →</a>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
