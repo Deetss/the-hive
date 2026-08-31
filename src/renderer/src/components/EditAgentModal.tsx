@@ -452,13 +452,20 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
               </Row>
 
               <Row label="Goal (optional)">
-                <textarea
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                  placeholder="long-running directive injected on every prompt"
-                  rows={4}
-                  style={{ ...inputStyle, fontFamily: 'var(--cth-font-ui)', resize: 'vertical', minHeight: 200 }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <textarea
+                    value={goal}
+                    onChange={(e) => setGoal(e.target.value)}
+                    placeholder="long-running directive injected on every prompt"
+                    rows={4}
+                    style={{ ...inputStyle, fontFamily: 'var(--cth-font-ui)', resize: 'vertical', minHeight: 200 }}
+                  />
+                  <ImproveTextButton
+                    text={goal}
+                    context="agent goal"
+                    onImproved={(improved) => setGoal(improved)}
+                  />
+                </div>
               </Row>
             </Section>
               </div>
@@ -502,6 +509,129 @@ const inputStyle: CSSProperties = {
   outline: 'none',
   boxSizing: 'border-box'
 };
+
+function ImproveTextButton({
+  text,
+  context,
+  onImproved
+}: {
+  text: string;
+  context: string;
+  onImproved: (improved: string) => void;
+}) {
+  const [improving, setImproving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [originalText, setOriginalText] = useState<string | null>(null);
+  const [undoVisible, setUndoVisible] = useState(false);
+
+  const improve = async () => {
+    if (!text.trim()) return;
+    setImproving(true);
+    setError(null);
+    try {
+      const result = await window.cth.improveText?.(text, context);
+      if (result?.ok && result.result) {
+        setOriginalText(text);
+        onImproved(result.result);
+        setUndoVisible(true);
+        setTimeout(() => setUndoVisible(false), 5000);
+      } else {
+        setError(result?.error ?? 'Failed to improve text');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setImproving(false);
+    }
+  };
+
+  const undo = () => {
+    if (originalText !== null) {
+      onImproved(originalText);
+      setOriginalText(null);
+      setUndoVisible(false);
+    }
+  };
+
+  if (!window.cth.improveText) {
+    return (
+      <button
+        type="button"
+        disabled
+        title="Restart app to enable"
+        style={{
+          position: 'absolute',
+          top: 6,
+          right: 6,
+          padding: '2px 6px',
+          background: 'var(--cth-cream-100)',
+          border: 'none',
+          cursor: 'not-allowed',
+          opacity: 0.5,
+          fontSize: 14
+        }}
+      >
+        ✨
+      </button>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={improve}
+        disabled={improving || !text.trim()}
+        title="Improve with AI"
+        style={{
+          position: 'absolute',
+          top: 6,
+          right: 6,
+          padding: '2px 6px',
+          background: improving ? 'var(--cth-cream-100)' : 'var(--cth-cream-200)',
+          border: 'none',
+          cursor: improving || !text.trim() ? 'not-allowed' : 'pointer',
+          opacity: improving || !text.trim() ? 0.5 : 1,
+          fontSize: 14,
+          boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
+        }}
+      >
+        {improving ? '⏳' : '✨'}
+      </button>
+      {undoVisible && originalText && (
+        <button
+          type="button"
+          onClick={undo}
+          style={{
+            position: 'absolute',
+            top: 6,
+            right: 40,
+            padding: '2px 6px',
+            background: 'var(--cth-lemon-light)',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 12,
+            fontFamily: 'var(--cth-font-ui)',
+            color: 'var(--cth-ink-900)',
+            boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
+          }}
+        >
+          undo
+        </button>
+      )}
+      {error && (
+        <div style={{
+          marginTop: 4,
+          fontSize: 12,
+          color: 'var(--cth-coral)',
+          fontFamily: 'var(--cth-font-ui)'
+        }}>
+          {error}
+        </div>
+      )}
+    </>
+  );
+}
 
 function Section({
   label,

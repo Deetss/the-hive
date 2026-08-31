@@ -715,6 +715,11 @@ const api = {
     try { return ipcRenderer.sendSync('app:readClipboardSync') ?? ''; } catch { return ''; }
   },
 
+  // ─── AI text improvement ────────────────────────────────────────────────────
+  /** Use Claude to polish agent objective/description text. Returns improved text or error. */
+  improveText: (text: string, context: string): Promise<{ ok: boolean; result?: string; error?: string }> =>
+    ipcRenderer.invoke('ai:improveText', text, context),
+
   // ─── Config ──────────────────────────────────────────────────────────────
   getConfig: (): Promise<HarnessConfig> =>
     ipcRenderer.invoke('config:get'),
