@@ -668,7 +668,9 @@ async function handleHookRequest(req: IncomingMessage, res: ServerResponse, path
     return true;
   }
 
-  const respond = (decision: 'allow' | 'block', reason?: string): true => {
+  const startTs = Date.now();
+
+  const respond = (decision: 'allow' | 'block', reason?: string, toolName?: string, fileOrArg?: string): true => {
     const hookSpecificOutput: Record<string, unknown> = {
       hookEventName: 'PreToolUse',
       permissionDecision: decision
@@ -676,6 +678,23 @@ async function handleHookRequest(req: IncomingMessage, res: ServerResponse, path
     if (reason) hookSpecificOutput.permissionDecisionReason = reason;
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ hookSpecificOutput }));
+
+    if (toolName) {
+      const durationMs = Date.now() - startTs;
+      const logDecision: 'delegated' | 'allowed' | 'blocked' =
+        decision === 'block' ? 'delegated' : 'allowed';
+      const truncatedFileOrArg = fileOrArg ? fileOrArg.slice(0, 80) : '';
+
+      recordDelegationEntry({
+        ts: Date.now(),
+        tool: toolName,
+        fileOrArg: truncatedFileOrArg,
+        decision: logDecision,
+        durationMs,
+        resultSnippet: reason?.slice(0, 200)
+      });
+    }
+
     return true;
   };
 
@@ -699,10 +718,10 @@ async function handleHookRequest(req: IncomingMessage, res: ServerResponse, path
       const bounded = toolInput.offset != null || toolInput.limit != null;
       if (filePath && !bounded && existsSync(filePath) && statSync(filePath).isFile()) {
         if (countLinesAtLeast(filePath, 350) >= 350) {
-          return respond('block', `Redirect to edgentic: edgentic-find "your question" ${filePath}`);
+          return respond('block', `Redirect to edgentic: edgentic-find "your question" ${filePath}`, toolName, filePath);
         }
       }
-      return respond('allow');
+      return respond('allow', undefined, toolName, filePath);
     }
 
     // Bash/Grep pulling context blocks (-A/-B/-C) -> redirect to edgentic-run.
@@ -712,16 +731,16 @@ async function handleHookRequest(req: IncomingMessage, res: ServerResponse, path
         typeof toolInput.pattern === 'string' ? toolInput.pattern : ''
       ].join(' ');
       if (/(?:^|\s)-[ABC](?:$|\s|=|\d)/.test(text)) {
-        return respond('block', 'Redirect to edgentic: edgentic-run -- <cmd>');
+        return respond('block', 'Redirect to edgentic: edgentic-run -- <cmd>', toolName, text);
       }
-      return respond('allow');
+      return respond('allow', undefined, toolName, text);
     }
   } catch (err) {
     console.error('[hook] pre-tool guard error:', err);
-    return respond('allow');
+    return respond('allow', undefined, toolName);
   }
 
-  return respond('allow');
+  return respond('allow', undefined, toolName);
 }
 
 async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse, pathname: string, url: URL): Promise<boolean> {
@@ -1714,6 +1733,49 @@ interface DelegateLedgerState {
   sessionId: string;
 }
 const delegateLedgerTotals = new Map<string, DelegateLedgerState>();
+
+interface DelegationEntry {
+  ts: number;
+  tool: string;
+  fileOrArg: string;
+  decision: 'delegated' | 'allowed' | 'blocked';
+  durationMs: number;
+  resultSnippet?: string;
+}
+
+interface DelegationStats {
+  delegated: number;
+  allowed: number;
+  blocked: number;
+}
+
+const delegationLog: DelegationEntry[] = [];
+const delegationStats: DelegationStats = { delegated: 0, allowed: 0, blocked: 0 };
+const MAX_DELEGATION_LOG_ENTRIES = 200;
+
+function recordDelegationEntry(entry: DelegationEntry): void {
+  delegationLog.unshift(entry);
+  if (delegationLog.length > MAX_DELEGATION_LOG_ENTRIES) {
+    delegationLog.pop();
+  }
+
+  if (entry.decision === 'delegated') {
+    delegationStats.delegated++;
+  } else if (entry.decision === 'allowed') {
+    delegationStats.allowed++;
+  } else if (entry.decision === 'blocked') {
+    delegationStats.blocked++;
+  }
+
+  const wc = liveWebContents();
+  if (wc) {
+    try {
+      wc.send('hive:delegationEvent', entry);
+    } catch {
+      // ignore
+    }
+  }
+}
 
 function recordDelegateLedger(delegateId: string, usage: LdaUsageMetrics): void {
   const agentId = `delegate:${delegateId}`;
@@ -7193,6 +7255,19 @@ ipcMain.handle('workers:stop', (_evt, workerId: string): { ok: boolean; error?: 
   recordRecentWorker(workerId, 'stopped');
   try { ptyManager.kill(workerId); } catch (e) { return { ok: false, error: String(e) }; }
   teardownPty(workerId);
+  return { ok: true };
+});
+
+ipcMain.handle('delegations:list', () => ({
+  log: delegationLog,
+  stats: delegationStats
+}));
+
+ipcMain.handle('delegations:clear', () => {
+  delegationLog.length = 0;
+  delegationStats.delegated = 0;
+  delegationStats.allowed = 0;
+  delegationStats.blocked = 0;
   return { ok: true };
 });
 
