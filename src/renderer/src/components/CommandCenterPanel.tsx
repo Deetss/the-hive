@@ -403,6 +403,18 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
               <QrGlyph /> mobile
             </span>
           </PixelButton>
+          {agent.isOvermind && (
+            <button
+              title="Archive this session and spawn a fresh Abathur (respawn)"
+              onClick={() => respawn(agent)}
+              style={{
+                border: 'none', cursor: 'pointer', padding: '3px 6px',
+                fontFamily: 'var(--cth-font-ui)', fontSize: 13,
+                color: 'var(--cth-ink-500)', background: 'transparent',
+                display: 'inline-flex', alignItems: 'center'
+              }}
+            >↺</button>
+          )}
         </div>
       </div>
 
