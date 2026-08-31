@@ -511,18 +511,41 @@ export function App() {
               pointerEvents: 'none'
             }}>
               <div style={{ pointerEvents: 'auto', width: 360 }}>
-                <PixelPanel variant="dialog" title="EMPTY FLOOR" noPadding>
-                  <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <p style={{ margin: 0, fontSize: 13, lineHeight: '20px' }}>
-                      No agents on the floor yet. Spawn one to see real claude output stream in here.
-                    </p>
-                    <PixelButton variant="primary" size="md" onClick={() => setAddAgentOpen(true)}>
-                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                        <Icon name="plus" /> add agent
-                      </span>
-                    </PixelButton>
-                  </div>
-                </PixelPanel>
+                {godStatus === 'failed' ? (
+                  // Abathur's spawn hung or errored (watchdog in useHive). Give a
+                  // real way out instead of a dead spinner: a reload re-runs the
+                  // bootstrap, which re-attaches an already-live god PTY or respawns.
+                  <PixelPanel variant="dialog" title="ABATHUR DIDN'T CLOCK IN" noPadding>
+                    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <p style={{ margin: 0, fontSize: 13, lineHeight: '20px' }}>
+                        The Overmind failed to start (the spawn timed out or errored). Retry to re-run the boot sequence.
+                      </p>
+                      <PixelButton variant="primary" size="md" onClick={() => window.location.reload()}>
+                        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                          <Icon name="mcp" /> retry Abathur
+                        </span>
+                      </PixelButton>
+                      <PixelButton variant="secondary" size="md" onClick={() => setAddAgentOpen(true)}>
+                        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                          <Icon name="plus" /> add agent instead
+                        </span>
+                      </PixelButton>
+                    </div>
+                  </PixelPanel>
+                ) : (
+                  <PixelPanel variant="dialog" title="EMPTY FLOOR" noPadding>
+                    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <p style={{ margin: 0, fontSize: 13, lineHeight: '20px' }}>
+                        No agents on the floor yet. Spawn one to see real claude output stream in here.
+                      </p>
+                      <PixelButton variant="primary" size="md" onClick={() => setAddAgentOpen(true)}>
+                        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                          <Icon name="plus" /> add agent
+                        </span>
+                      </PixelButton>
+                    </div>
+                  </PixelPanel>
+                )}
               </div>
             </div>
           )}
