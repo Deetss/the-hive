@@ -126,27 +126,6 @@ export function SettingsHeroCard() {
           }}>{hero.notice}</div>
         )}
 
-        {/* Pro announcement. Same block the release drop carries. */}
-        <div style={{
-          padding: '12px 14px',
-          background: 'var(--cth-lilac-light)',
-          border: `2px solid ${INK}`
-        }}>
-          <span style={{
-            display: 'inline-block', fontFamily: FONT, fontSize: 13, letterSpacing: '.18em',
-            textTransform: 'uppercase', padding: '2px 7px',
-            background: INK, color: 'var(--cth-paper-100)'
-          }}>Announcement</span>
-          <div style={{
-            marginTop: 8, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: INK
-          }}>v0.5.0 launches with The Hive Pro.</div>
-          <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.5, color: 'var(--cth-ink-700)', maxWidth: '64ch' }}>
-            <b style={{ color: INK }}>Community stays free, stays open, and keeps getting updates.</b>{' '}
-            Pro ships with new features and integrations, with more posted throughout the year,
-            and it stays ahead of Community, for power users who want the full potential of
-            coding agents and agent harnesses. The Pro roadmap also includes a mobile app.
-          </div>
-        </div>
 
         {/* Sponsor — only when there is one. */}
         {SPONSOR && (

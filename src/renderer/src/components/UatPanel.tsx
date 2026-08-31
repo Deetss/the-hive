@@ -86,6 +86,8 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
   const [root, setRoot] = useState<string | null>(null);
   const [doc, setDoc] = useState<UatDocument | null>(null);
   const docRef = useRef<UatDocument | null>(null);
+  // When we're mid-write, suppress the poll so it can't overwrite our optimistic update.
+  const writingRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -118,6 +120,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
 
   const loadDoc = useCallback(async () => {
     if (!root) return;
+    if (writingRef.current) return; // don't overwrite an in-flight write
     setLoading(true);
     try {
       const res = await window.cth.readFile(root, FILENAME);
@@ -151,6 +154,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
     const next = build(prev);
     next.updatedAt = new Date().toISOString();
     setSaving(true);
+    writingRef.current = true;
     try {
       const res = await window.cth.writeFile(root, FILENAME, JSON.stringify(next, null, 2) + '\n');
       if (!res.ok) throw new Error(res.error ?? 'Could not write UAT checklist');
@@ -161,6 +165,7 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
+      writingRef.current = false;
     }
   }, [root]);
 
