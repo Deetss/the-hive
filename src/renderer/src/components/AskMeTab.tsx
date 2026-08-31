@@ -276,7 +276,7 @@ export function AskMeTab() {
                 <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{
                     fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink-900)',
-                    background: 'var(--cth-paper-50, #fff)', padding: '8px 10px',
+                    background: 'var(--cth-paper-200)', padding: '8px 10px',
                     boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
                   }}>
                     <Markdown text={item.question} />
