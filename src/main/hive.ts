@@ -18,6 +18,7 @@
  *
  * Everything here runs in the Electron main process.
  */
+import { app } from 'electron';
 import {
   existsSync, mkdirSync, readFileSync, writeFileSync, renameSync,
   readdirSync, statSync, rmSync, appendFileSync, symlinkSync, copyFileSync, chmodSync
@@ -404,7 +405,8 @@ export class HiveManager {
     if (!root) return null;
     if (process.platform === 'win32') {
       const id = createHash('sha1').update(root).digest('hex').slice(0, 12);
-      return `\\\\.\\pipe\\the-hive-${id}`;
+      const suffix = app.isPackaged ? '' : '-dev';
+      return `\\\\.\\pipe\\the-hive-${id}${suffix}`;
     }
     return join(root, 'hooks.sock');
   }
