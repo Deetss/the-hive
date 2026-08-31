@@ -120,7 +120,7 @@ import {
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 
 const BROWSER_SERVER_HOST = '0.0.0.0';
-const BROWSER_SERVER_PORT = 48003;
+const BROWSER_SERVER_PORT = app.isPackaged ? 48003 : 48103;
 const BROWSER_SERVER_ROOT = join(__dirname, '../renderer');
 const BROWSER_SERVER_MIME: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -1281,7 +1281,7 @@ function ensureBrowserServer(): Promise<string> {
 
       let url: URL;
       try {
-        url = new URL(req.url, `http://${req.headers.host || '127.0.0.1:48003'}`);
+        url = new URL(req.url, `http://${req.headers.host || `127.0.0.1:${BROWSER_SERVER_PORT}`}`);
       } catch {
         res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Bad Request');
@@ -3202,7 +3202,7 @@ async function startSlackServer(): Promise<{ ok: boolean; url?: string; error?: 
   }
   slackServer?.stop();
   slackServer = new SlackWebhookServer({
-    port: cfg.slackPort && cfg.slackPort > 0 ? cfg.slackPort : 3847,
+    port: cfg.slackPort && cfg.slackPort > 0 ? cfg.slackPort : (app.isPackaged ? 3847 : 3947),
     signingSecret: cfg.slackSigningSecret,
     channelId: cfg.slackChannelId,
     // Fires from the HTTP server's event loop (not the IPC thread); route through
