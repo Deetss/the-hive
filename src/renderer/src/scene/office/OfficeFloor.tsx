@@ -1392,12 +1392,8 @@ export function OfficeFloor() {
       // distinct brood so the floor shows variety instead of every unit alike.
       const themeCastNames = Object.keys(theme.cast.byName);
       const pickThemeCharacter = (agent: Agent): string => {
-        if (agent.isOvermind) return theme.cast.defaultCharacter;
-        const pool = themeCastNames.filter((n) => n !== theme.cast.defaultCharacter);
-        const names = pool.length ? pool : themeCastNames;
-        let h = 0;
-        for (let i = 0; i < agent.id.length; i++) h = (h * 31 + agent.id.charCodeAt(i)) | 0;
-        return names[Math.abs(h) % names.length];
+        // Use the hash-based default character for all agents without an explicit character
+        return theme.cast.defaultCharacter(agent.id);
       };
 
       const addCharacter = async (agent: Agent) => {

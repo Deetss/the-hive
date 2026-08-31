@@ -17,7 +17,7 @@ import { colors } from '@/design/tokens';
 import {
   CAST_BY_NAME,
   getCastFrames,
-  DEFAULT_CHARACTER,
+  getDefaultCharacter,
   type CastMember,
   type OfficeCharacterName,
 } from './cast';
@@ -32,7 +32,7 @@ import {
   ZERG_CAST_BY_NAME,
   getZergCastFrames,
   zergIsSlither,
-  DEFAULT_ZERG_CHARACTER,
+  getDefaultZergCharacter,
   type ZergCharacterName,
 } from './zergCast';
 
@@ -122,7 +122,7 @@ export interface PaletteConfig {
 export interface ThemeCast {
   byName: Record<string, CastMember>;
   getFrames: (name: string) => Promise<Texture[][]>;
-  defaultCharacter: string;
+  defaultCharacter: (nameOrId: string) => string;
   /** Optional: units that loop their whole frame sequence continuously (e.g. a
    *  slithering Abathur) rather than the walk/idle cycle. */
   continuous?: (name: string) => boolean;
@@ -223,7 +223,7 @@ export const OFFICE_THEME: ThemeConfig = {
   cast: {
     byName: CAST_BY_NAME as Record<string, CastMember>,
     getFrames: (name: string) => getCastFrames(name as OfficeCharacterName),
-    defaultCharacter: DEFAULT_CHARACTER,
+    defaultCharacter: getDefaultCharacter,
   },
 };
 
@@ -312,7 +312,7 @@ export const ZERG_THEME: ThemeConfig = {
   cast: {
     byName: ZERG_CAST_BY_NAME as unknown as Record<string, CastMember>,
     getFrames: (name: string) => getZergCastFrames(name as ZergCharacterName),
-    defaultCharacter: DEFAULT_ZERG_CHARACTER,
+    defaultCharacter: getDefaultZergCharacter,
     continuous: (name: string) => zergIsSlither(name),
   },
 };

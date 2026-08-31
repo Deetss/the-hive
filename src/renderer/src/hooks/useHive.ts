@@ -86,9 +86,8 @@ const INITIAL_GOD_PROMPT = [
 ].join('\n');
 
 // Per-pty submission chain. Every submitToPty for a given pty is appended here so
-// two callers (e.g. the boot sequence's /remote-control and the inbox-wake nudge)
-// can NEVER interleave their text + Enter — which jammed them onto one line and
-// produced "Unknown command: /remote-control<next prompt>".
+// two callers (e.g. the boot sequence's orientation prompt and the inbox-wake nudge)
+// can NEVER interleave their text + Enter.
 const writeChains = new Map<string, Promise<void>>();
 const readyPids = new Map<string, number>();
 
@@ -459,12 +458,8 @@ export function useHive(config: HarnessConfig | null): void {
       bootGraceUntil.current[GOD_ID] = Date.now() + BOOT_GRACE_MS;
       void (async () => {
         try {
-          const remoteCommand = remoteControlCommandForProvider(overmindProvider, 'Abathur');
-          if (remoteCommand) {
-            // settleMs pauses the chain ~1.5s after /remote-control before the
-            // orientation prompt (fresh spawns only) is submitted next.
-            await submitToPty(GOD_PTY, remoteCommand, overmindProvider, REMOTE_CONTROL_SETTLE_MS);
-          }
+          // Remote control is available for manual use but no longer auto-started.
+          // Mobile PWA handles remote access.
           if (!cancelled && !resumedGod) {
             // A type-into-tui god (Crush) can't ride its hive protocol on argv, so the
             // main process hands it back as seedPrompt — type it FIRST (identity), then
