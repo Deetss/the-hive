@@ -251,7 +251,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
     if (mobilePairing) return;
     try {
       const info = await window.cth.getMobileApiSecret();
-      setMobilePairing({ secret: info.secret, hostname: info.hostname });
+      setMobilePairing({ secret: info.secret, hostname: info.hostname, port: info.port });
     } catch (err) {
       console.error('[command-center] getMobileApiSecret error:', err);
     }
