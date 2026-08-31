@@ -383,8 +383,25 @@ export function useHive(config: HarnessConfig | null): void {
     const t = setTimeout(async () => {
       if (cancelled) return;
       const live = await window.cth.listPtys().catch(() => []);
-      if (live.some((p) => p.id === GOD_PTY)) { // already running — keep restored entry
-        if (!cancelled) useStore.getState().setGodStatus('ready');
+      if (live.some((p) => p.id === GOD_PTY)) { // already running — re-seat if missing
+        if (!cancelled) {
+          // After a full restart the store is empty but the PTY is still alive.
+          // Re-add the god agent so the floor is not blank.
+          if (!useStore.getState().agents.find((a) => a.id === GOD_ID)) {
+            const overmindProvider = config.overmindProvider ?? 'claude';
+            useStore.getState().addAgent({
+              id: GOD_ID, name: 'Abathur', character: 'michael', accent: 'lemon',
+              description: 'Overmind — runs the floor, triages requests, escalates only critical calls to you',
+              project: 'hive', tmuxTarget: '', cwd: config.harnessHome!,
+              status: 'idle', action: 'running the floor', progress: 0,
+              currentStation: 'desk', ptyId: GOD_PTY,
+              command: buildSpawnCommand(config, config.overmindModel, overmindProvider).trim(),
+              provider: overmindProvider, model: config.overmindModel,
+              isOvermind: true, recentTextTs: Date.now()
+            });
+          }
+          useStore.getState().setGodStatus('ready');
+        }
         return;
       }
       // Synchronous guard (no await between check and set) → exactly one spawn.
