@@ -89,7 +89,14 @@ export const ZERG_CAST: ZergCastMember[] =
 export const ZERG_CAST_BY_NAME: Record<ZergCharacterName, ZergCastMember> =
   Object.fromEntries(ZERG_CAST.map((c) => [c.name, c])) as Record<ZergCharacterName, ZergCastMember>;
 
-export const DEFAULT_ZERG_CHARACTER: ZergCharacterName = 'abathur';
+/** Hash a string to pick a deterministic zerg character from the brood. */
+export function getDefaultZergCharacter(nameOrId: string): ZergCharacterName {
+  let h = 0;
+  for (let i = 0; i < nameOrId.length; i++) {
+    h = (h * 31 + nameOrId.charCodeAt(i)) | 0;
+  }
+  return ZERG_CAST[Math.abs(h) % ZERG_CAST.length].name;
+}
 
 export function zergHexToNumber(hex: string): number {
   return parseInt(hex.replace('#', ''), 16);

@@ -45,7 +45,15 @@ export const OFFICE_CAST: CastMember[] = [
 export const CAST_BY_NAME: Record<OfficeCharacterName, CastMember> =
   Object.fromEntries(OFFICE_CAST.map((c) => [c.name, c])) as Record<OfficeCharacterName, CastMember>;
 
-export const DEFAULT_CHARACTER: OfficeCharacterName = 'jim';
+/** Hash a string to pick a deterministic character from the cast.
+ *  Each unique name/ID maps to a different character, so workers get variety. */
+export function getDefaultCharacter(nameOrId: string): OfficeCharacterName {
+  let h = 0;
+  for (let i = 0; i < nameOrId.length; i++) {
+    h = (h * 31 + nameOrId.charCodeAt(i)) | 0;
+  }
+  return OFFICE_CAST[Math.abs(h) % OFFICE_CAST.length].name;
+}
 
 export function hexToNumber(hex: string): number {
   return parseInt(hex.replace('#', ''), 16);
