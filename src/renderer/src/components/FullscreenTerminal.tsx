@@ -160,6 +160,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
   // Owned HERE, not in Header, purely so the Esc handler below can see it:
   // Esc closing the dialog must not also throw you out of focus mode.
   const [editAgentOpen, setEditAgentOpen] = useState(false);
+  const [contentTab, setContentTab] = useState<'terminal' | 'git' | 'files'>('terminal');
   const setAgentNote = useStore(s => s.setAgentNote);
   const updateAgent = useStore(s => s.updateAgent);
   // The floor strip (and with it the restore button) is hidden behind the
@@ -572,29 +573,70 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
 
         <div style={{
           flex: 1, minWidth: 0, minHeight: 0,
-          display: 'flex', flexDirection: 'column',
-          padding: 12, gap: 10
+          display: 'flex', flexDirection: 'column'
         }}>
-          <>
-            {!agent.isOvermind && (
-              <>
+          {agent.isOvermind ? (
+            // Abathur: full command center with all floor tabs
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <CommandCenterPanel agent={agent} fullscreen />
+            </div>
+          ) : (
+            // Workers: header + controls + simple terminal / git / files tabs
+            <>
+              <div style={{ padding: '12px 12px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <Header agent={agent} onEdit={() => setEditAgentOpen(true)} />
                 {editAgentOpen && (
                   <EditAgentModal agent={agent} onClose={() => setEditAgentOpen(false)} />
                 )}
-
-                {/* #7C — pause / halt / steer. These only existed in the docked
-                    sidebar, so going fullscreen took the operator controls away. */}
                 <AgentControlStrip key={agent.id} agentId={agent.id} />
-              </>
-            )}
+              </div>
 
-            {/* CommandCenterPanel for all agents in fullscreen — provides tabs including
-                terminal, git, files for workers, plus floor/tasks/ask for Abathur. */}
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <CommandCenterPanel agent={agent} fullscreen />
-            </div>
-          </>
+              {/* Tab bar */}
+              <div style={{
+                display: 'flex', gap: 2, padding: '4px 8px', flexShrink: 0,
+                borderBottom: '1px solid var(--cth-ink-300)',
+                background: 'var(--cth-cream-200)'
+              }}>
+                {(['terminal', 'git', 'files'] as const).map((t) => (
+                  <button key={t} onClick={() => setContentTab(t)} style={{
+                    padding: '3px 10px', border: 'none', cursor: 'pointer',
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 13, textTransform: 'uppercase',
+                    color: 'var(--cth-ink-700)',
+                    background: contentTab === t ? 'var(--cth-sky-light)' : 'transparent',
+                    boxShadow: contentTab === t ? 'inset 0 0 0 1px var(--cth-ink-300)' : 'none'
+                  }}>{t}</button>
+                ))}
+              </div>
+
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: contentTab === 'terminal' ? 0 : 12 }}>
+                {contentTab === 'terminal' ? (
+                  <>
+                    <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                      <PtyTerminalView
+                        key={terminalInstanceKey(agent.ptyId, agent.terminalGeneration)}
+                        ptyId={agent.ptyId}
+                        onStreamData={parser}
+                        onUserPrompt={(t) => {
+                          updateAgent(agent.id, { lastPrompt: t });
+                          if (t.trim().toLowerCase() === '/clear') {
+                            updateAgent(agent.id, { contextTokens: 0, contextLimit: undefined, progress: 0 });
+                          }
+                          void window.cth.historyAdd({ agentId: agent.id, cwd: agent.cwd, text: t });
+                        }}
+                        onToggleFullscreen={() => setFullscreen(null)}
+                        fullscreen
+                      />
+                    </div>
+                    <MessageQueueComposer agent={agent} />
+                  </>
+                ) : contentTab === 'git' ? (
+                  <GitTab cwd={agent.worktreePath ?? agent.cwd} />
+                ) : (
+                  <FilesTab cwd={agent.worktreePath ?? agent.cwd} />
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
       <StatusBar />
