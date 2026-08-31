@@ -226,15 +226,12 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
   // Seeded from the god's own control state (the floor is kept in sync by
   // this single control, so any agent's state reflects the floor's).
   const [floorDeliveryPaused, setFloorDeliveryPaused] = useState(false);
-  // Mobile-remote pairing QR. The phone always connects to the PACKAGED app's
-  // mobile server on 48003, so the URL hardcodes that port even though
-  // getMobileApiSecret reports the live port (48103 under dev).
   const [qrOpen, setQrOpen] = useState(false);
-  const [mobilePairing, setMobilePairing] = useState<{ secret: string; hostname: string } | null>(null);
+  const [mobilePairing, setMobilePairing] = useState<{ secret: string; hostname: string; port: number } | null>(null);
   const [qrCopyNote, setQrCopyNote] = useState('');
   const qrRef = useRef<HTMLDivElement | null>(null);
   const mobileUrl = mobilePairing
-    ? `http://${mobilePairing.hostname || window.location.hostname}:48003/mobile?token=${mobilePairing.secret}`
+    ? `http://${mobilePairing.hostname || window.location.hostname}:${mobilePairing.port}/mobile?token=${mobilePairing.secret}`
     : '';
   useEffect(() => {
     let alive = true;
