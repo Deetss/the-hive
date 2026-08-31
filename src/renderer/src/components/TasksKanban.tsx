@@ -330,7 +330,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
     padding: '3px 8px',
     border: '1px solid var(--cth-ink-200)',
     background: 'var(--cth-paper-100)',
-    color: 'var(--cth-ink-800)',
+    color: 'var(--cth-ink-700)',
     cursor: 'pointer',
     borderRadius: 4,
     lineHeight: '14px',
@@ -514,7 +514,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
                         fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1
                       }}>{task.title}</span>
-                      <span style={{ flexShrink: 0, fontSize: 13, color: 'var(--cth-ink-400)', fontFamily: 'var(--cth-font-ui)' }}>
+                      <span style={{ flexShrink: 0, fontSize: 13, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
                         {fmtAge(qa.askedAt)}
                       </span>
                     </div>
@@ -636,7 +636,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
         <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
           {tasks.length} task{tasks.length === 1 ? '' : 's'}
         </span>
-        <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--cth-ink-300)' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--cth-ink-700)' }}>
           new work? dispatch it to Abathur (monitor tab)
         </span>
       </div>
@@ -677,7 +677,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
                 display: 'flex', flexDirection: 'column', gap: 6
               }}>
                 {cards.length === 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--cth-ink-300)', textAlign: 'center', padding: '8px 0' }}>—</div>
+                  <div style={{ fontSize: 12, color: 'var(--cth-ink-500)', textAlign: 'center', padding: '8px 0' }}>—</div>
                 )}
                 {cards.map((t) => (
                   <TaskCard
@@ -731,7 +731,7 @@ const TaskCard = memo(function TaskCard({ task, accent, assigneeName, onOpen, on
           display: 'flex', alignItems: 'stretch', gap: 0, padding: 0,
           border: 'none', cursor: readOnly || !onOpen ? 'default' : 'pointer', textAlign: 'left',
           background: 'var(--cth-paper-100)',
-          boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
+          boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)'
         }}
       >
         <span style={{ width: 4, flexShrink: 0, background: accent, boxShadow: 'inset -1px 0 0 var(--cth-ink-700)' }} />
@@ -743,7 +743,7 @@ const TaskCard = memo(function TaskCard({ task, accent, assigneeName, onOpen, on
           }}>{task.title}</span>
           {typeof task.progress === 'number' && <ProgressBar value={task.progress} />}
           {assigneeName && (
-            <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
+            <span style={{ fontSize: 13, color: 'var(--cth-ink-700)', fontFamily: 'var(--cth-font-ui)' }}>
               {assigneeName.toUpperCase()}
             </span>
           )}
@@ -916,7 +916,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
                   }}
                 >
                   <span style={{ fontWeight: 600 }}>{task.title}</span>
-                  <span style={{ fontSize: 13, color: 'var(--cth-ink-400)' }}>✎</span>
+                  <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>✎</span>
                 </div>
               )}
             </div>
