@@ -981,7 +981,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
             <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)', flexShrink: 0 }}>OWNER</span>
             <Select value={dispatchTo} onChange={setDispatchTo}>
               <option value="">BeeYoncé decides</option>
-              {agents.filter((a) => !a.isOvermind).map((a) => (
+              {agents.filter((a) => !a.isOvermind && a.id !== 'god').map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </Select>

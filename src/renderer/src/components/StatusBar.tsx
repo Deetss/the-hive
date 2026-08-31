@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '@/store/store';
 import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTelemetry';
 import { useRateLimits, ratePaceColor, fmtReset } from '@/hooks/useRateLimits';
-import { inferAgentProvider, providerPreset, type RuntimeProfile } from '@/store/config';
+import { inferAgentProvider, providerPreset, type AgentProvider, type RuntimeProfile } from '@/store/config';
 
 /**
  * Persistent bottom status line: live hive+fleet state at a glance.
@@ -117,6 +117,16 @@ export function StatusBar() {
     [agents, selectedId]
   );
 
+  const focusProvider = useMemo<AgentProvider>(() => {
+    if (focusAgent?.profileId) {
+      const profile = runtimeProfiles.find((p) => p.id === focusAgent.profileId);
+      if (profile?.provider) return profile.provider;
+    }
+    return focusAgent ? inferAgentProvider(focusAgent.command, focusAgent.provider) : 'claude';
+  }, [focusAgent?.command, focusAgent?.profileId, focusAgent?.provider, runtimeProfiles]);
+
+  const showRateLimitMeters = focusProvider === 'claude';
+
   // Engine and model clarity: primary information for the active/focused agent.
   const engineInfo = useMemo(() => {
     if (!focusAgent) return null;
@@ -135,8 +145,7 @@ export function StatusBar() {
   // falls back to the app-wide CLAUDE_CONFIG_DIR badge otherwise (Claude only).
   const displayBadge = useMemo<'WORK' | 'PERSONAL' | null>(() => {
     if (!accountBadge) return null;
-    const provider = focusAgent ? inferAgentProvider(focusAgent.command, focusAgent.provider) : 'claude';
-    if (provider !== 'claude') return null;
+    if (focusProvider !== 'claude') return null;
     if (focusAgent?.profileId) {
       const profile = runtimeProfiles.find((p) => p.id === focusAgent.profileId);
       if (profile?.claudeConfigDir) {
@@ -145,7 +154,7 @@ export function StatusBar() {
       }
     }
     return accountBadge;
-  }, [focusAgent?.id, focusAgent?.command, focusAgent?.provider, focusAgent?.profileId, runtimeProfiles, accountBadge]);
+  }, [focusAgent?.id, focusAgent?.profileId, runtimeProfiles, accountBadge, focusProvider]);
 
   // Async git branch for the focused agent's cwd.
   const [branch, setBranch] = useState<string | null>(null);
@@ -322,7 +331,7 @@ export function StatusBar() {
         )}
       </Chip>
 
-      {worstFiveHour && (
+      {showRateLimitMeters && worstFiveHour && (
         <>
           <Sep />
           <Chip title={`5h rate limit: ${worstFiveHour.pct}% used · resets ${fmtReset(worstFiveHour.resetsAt)}`}>
@@ -349,7 +358,7 @@ export function StatusBar() {
         </>
       )}
 
-      {worstSevenDay && (
+      {showRateLimitMeters && worstSevenDay && (
         <>
           <Sep />
           <Chip title={`7d rate limit: ${worstSevenDay.pct}% used · resets ${fmtReset(worstSevenDay.resetsAt)}`}>

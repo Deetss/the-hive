@@ -230,6 +230,8 @@ export interface GovernorGlobalPolicy {
 
 export interface GovernorProfilePolicy {
   enabled?: boolean;
+  governorMode?: 'windows' | 'costCap';
+  costCapUsd?: number;
   windows?: GovernorWindowPolicy;
   spawnGate?: GovernorSpawnGatePolicy;
   allocation?: GovernorProfileAllocationPolicy;
@@ -262,6 +264,8 @@ export interface ResolvedGovernorSpawnGateSettings {
 
 export interface ResolvedGovernorProfileSettings {
   enabled: boolean;
+  mode: 'windows' | 'costCap';
+  costCapUsd: number | null;
   windows: { fiveHour: ResolvedGovernorWindowSettings; sevenDay: ResolvedGovernorWindowSettings };
   spawnGate: ResolvedGovernorSpawnGateSettings;
   autoOffloadMerged?: AutoOffloadConfig;
@@ -977,8 +981,14 @@ export function resolveGovernorPolicy(policy: GovernorPolicy | undefined, profil
   const autoOffloadBase = mergeAutoOffloadConfigs(policy?.global?.autoOffload, defaultProfile?.autoOffload ?? null);
   const autoOffloadOverride = profilePolicy?.autoOffload ?? undefined;
   const autoOffloadMerged = mergeAutoOffloadConfigs(autoOffloadBase, autoOffloadOverride);
+  const modeValue = profilePolicy?.governorMode ?? defaultProfile?.governorMode ?? 'windows';
+  const mode: 'windows' | 'costCap' = modeValue === 'costCap' ? 'costCap' : 'windows';
+  const capSource = firstDefined(profilePolicy?.costCapUsd, defaultProfile?.costCapUsd);
+  const costCapUsd = typeof capSource === 'number' && Number.isFinite(capSource) && capSource > 0 ? capSource : null;
   return {
     enabled,
+    mode,
+    costCapUsd,
     windows,
     spawnGate: {
       governClaude: spawnGateGovernClaude,
