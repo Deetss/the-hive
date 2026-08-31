@@ -1374,6 +1374,13 @@ function renderFleet() {
     }
   });
 
+  agentMessageFormState.clear();
+  document.querySelectorAll('.agent-message-form:not([hidden])').forEach(formEl => {
+    const agentId = formEl.dataset.agentId;
+    const draft = formEl.querySelector('textarea')?.value || '';
+    if (agentId) agentMessageFormState.set(agentId, { draft });
+  });
+
   el.innerHTML = agents.map(a => agentCard(a)).join('');
 
   agentTerminalState.forEach((state, agentId) => {
@@ -1407,6 +1414,15 @@ function renderFleet() {
           }, 500);
         });
       }
+    }
+  });
+
+  agentMessageFormState.forEach((state, agentId) => {
+    const formEl = document.querySelector(`.agent-message-form[data-agent-id="${CSS.escape(agentId)}"]`);
+    if (formEl) {
+      formEl.hidden = false;
+      const textarea = formEl.querySelector('textarea');
+      if (textarea && state.draft) textarea.value = state.draft;
     }
   });
 }
@@ -1479,6 +1495,8 @@ document.getElementById('fleet-refresh').addEventListener('click', loadFleet);
 
 // Agent terminal expansion state
 const agentTerminalState = new Map();
+// Agent message form state (survives DOM refresh)
+const agentMessageFormState = new Map();
 
 // Event delegation for agent terminal toggle
 document.getElementById('fleet-list').addEventListener('click', (e) => {
@@ -1602,6 +1620,7 @@ document.getElementById('fleet-list').addEventListener('click', async (e) => {
     if (res.ok) {
       textarea.value = '';
       formEl.hidden = true;
+      agentMessageFormState.delete(agentId);
       btn.textContent = 'Send Message';
     } else {
       btn.textContent = 'Failed';
