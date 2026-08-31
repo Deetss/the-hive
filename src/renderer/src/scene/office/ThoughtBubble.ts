@@ -264,14 +264,16 @@ export class ThoughtBubble {
     this.bg.fill({ color: FILL_COLOR });
     this.bg.stroke({ color: OUTLINE_COLOR, width: 1 });
 
-    // Thought-cloud tail: two shrinking puffs trailing down from the bubble's
-    // lower-left toward the head below — the cue that says "thinking", not "speech".
+    // Thought-cloud tail: two shrinking puffs trailing straight down from the
+    // bubble's center toward the head below — the box is centered over the
+    // sprite (setPosition), so the tail must root at center to point at the head
+    // rather than dangling off to one side.
     this.tail.clear();
-    const baseX = this.bgW * 0.32;
+    const baseX = this.bgW * 0.5;
     const puff = (cx: number, cy: number, r: number) => {
       this.tail.circle(cx, cy, r).fill({ color: FILL_COLOR }).stroke({ color: OUTLINE_COLOR, width: 1 });
     };
     puff(baseX, this.bgH + 4, 3);
-    puff(baseX - 5, this.bgH + 9, 2);
+    puff(baseX - 4, this.bgH + 9, 2);
   }
 }
