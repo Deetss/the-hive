@@ -77,7 +77,7 @@ function withStandingGoal(agent: Agent, text: string): string {
 // The first thing Abathur (god) is told on a fresh spawn — orient him and put
 // him to work running the floor. Kept terse and action-oriented.
 const INITIAL_GOD_PROMPT = [
-  "You're online as Beyoncé, the Queen of the hive. Get oriented, then start running the hive:",
+  "You're online as BeeYoncé, the Queen of the hive. Get oriented, then start running the hive:",
   '1. Read your memory.md and drain every message in your inbox.',
   '2. Review board.md + tasks.json and the current roster of agents (active vs archived).',
   '3. Check fleet health: read fleet.json in the hive root for every agent\'s live tokens, cost, status, breaker level, and inbox backlog (`claude agents` will NOT show your hive\'s agents). Flag anyone stalled, over-budget, or breaker-armed.',
@@ -390,7 +390,7 @@ export function useHive(config: HarnessConfig | null): void {
           if (!useStore.getState().agents.find((a) => a.id === GOD_ID)) {
             const overmindProvider = config.overmindProvider ?? 'claude';
             useStore.getState().addAgent({
-              id: GOD_ID, name: 'Beyoncé', character: 'michael', accent: 'lemon',
+              id: GOD_ID, name: 'BeeYoncé', character: 'michael', accent: 'lemon',
               description: 'Queen — runs the hive, triages requests, escalates only critical calls to you',
               project: 'hive', tmuxTarget: '', cwd: config.harnessHome!,
               status: 'idle', action: 'running the floor', progress: 0,
@@ -432,7 +432,7 @@ export function useHive(config: HarnessConfig | null): void {
             // Resume Abathur's prior conversation in production. Skipped in dev
             // to avoid loading the production session's massive transcript.
             resume: import.meta.env.PROD,
-            hive: { id: GOD_ID, name: 'Beyoncé', provider: overmindProvider, cwd: config.harnessHome!, isOvermind: true, role: 'Queen' }
+            hive: { id: GOD_ID, name: 'BeeYoncé', provider: overmindProvider, cwd: config.harnessHome!, isOvermind: true, role: 'Queen' }
           }),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Abathur spawn timed out')), GOD_SPAWN_TIMEOUT_MS))
@@ -447,7 +447,7 @@ export function useHive(config: HarnessConfig | null): void {
       if (!res.ok) { godSpawning.current = false; useStore.getState().setGodStatus('failed'); return; }
       const god: Agent = {
         id: GOD_ID,
-        name: 'Beyoncé',
+        name: 'BeeYoncé',
         character: 'michael',
         accent: 'lemon',
         description: 'Queen — runs the hive, triages requests, escalates only critical calls to you',
