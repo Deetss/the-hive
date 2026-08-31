@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- Default office theme is now **The Hive**, and TV-show themes ship enabled so new installs open straight into BeeYoncé's honeycomb floor.
+- Hive theme now renders bespoke honeycomb flooring, hive pods for desks, and honey-themed task boards (burst pipes, honey vats, and hex-note visuals).
+
 ## [0.4.5] — 2026-08-22
 
 **The release that fixes the things you trusted and were quietly wrong.** Cost reporting was off

@@ -90,6 +90,41 @@ const ERRAND_THOUGHTS: Record<ErrandKind, readonly string[]> = {
   smoke:     ['the floor runs itself 🚬', 'boss break.', 'thinking big thoughts 🚬', 'I DECLARE… a break']
 };
 
+interface HexOptions {
+  alpha?: number;
+  stroke?: number;
+  strokeAlpha?: number;
+  strokeWidth?: number;
+}
+
+function drawHex(
+  g: Graphics,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  fill: number,
+  opts: HexOptions = {}
+): Graphics {
+  const alpha = opts.alpha ?? 1;
+  g.moveTo(cx, cy - ry)
+    .lineTo(cx + rx, cy - ry / 2)
+    .lineTo(cx + rx, cy + ry / 2)
+    .lineTo(cx, cy + ry)
+    .lineTo(cx - rx, cy + ry / 2)
+    .lineTo(cx - rx, cy - ry / 2)
+    .closePath()
+    .fill({ color: fill, alpha });
+  if (opts.stroke) {
+    g.stroke({
+      color: opts.stroke,
+      alpha: opts.strokeAlpha ?? alpha,
+      width: opts.strokeWidth ?? 1
+    });
+  }
+  return g;
+}
+
 /** What workers blurt out when the boss walks by — performative excellence.
  *  `{done}` is replaced with that worker's REAL done-task count. */
 const SUCK_UP_LINES = [
@@ -299,6 +334,89 @@ export function OfficeFloor() {
       const tileCount = mapRenderer.getContainer().children.reduce(
         (n, c) => n + ((c as Container).children?.length ?? 0), 0);
       console.log(`[OfficeFloor] map ${mapRenderer.width}x${mapRenderer.height}, ${tileCount} tile sprites rendered`);
+
+      const isHiveTheme = theme.id === 'hive';
+
+      const drawHiveFloorTexture = (target: Graphics): void => {
+        const tile = mapRenderer.tileSize;
+        const widthPx = mapRenderer.width * tile;
+        const heightPx = mapRenderer.height * tile;
+        target.clear();
+        target.rect(0, 0, widthPx, heightPx).fill({ color: colors.cream[50], alpha: 0.55 });
+        const rx = tile * 0.9;
+        const ry = tile * 0.65;
+        const horizontalStep = rx * 1.55;
+        const verticalStep = ry * 1.45;
+        let row = 0;
+        for (let y = -ry * 1.5; y <= heightPx + ry * 1.5; y += verticalStep, row++) {
+          const offset = row % 2 === 0 ? 0 : horizontalStep / 2;
+          for (let x = -rx * 2; x <= widthPx + rx * 2; x += horizontalStep) {
+            const cx = x + offset;
+            drawHex(target, cx, y, rx, ry, colors.accent.lemonLight, {
+              alpha: 0.25,
+              stroke: colors.accent.lemon,
+              strokeAlpha: 0.25,
+              strokeWidth: 1
+            });
+            drawHex(target, cx, y - ry * 0.35, rx * 0.55, ry * 0.45, colors.accent.lemon, { alpha: 0.18 });
+          }
+        }
+      };
+
+      const drawHiveDeskCell = (target: Graphics): void => {
+        const tile = mapRenderer.tileSize;
+        const rx = tile * 0.55;
+        const ry = tile * 0.42;
+        drawHex(target, 0, 0, rx, ry, colors.accent.lemonLight, {
+          alpha: 0.95,
+          stroke: colors.accent.lemon,
+          strokeAlpha: 0.75,
+          strokeWidth: 1.5
+        });
+        drawHex(target, 0, -ry * 0.1, rx * 0.6, ry * 0.5, colors.accent.lemon, { alpha: 0.9 });
+        drawHex(target, 0, -ry * 0.45, rx * 0.35, ry * 0.25, colors.cream[50], { alpha: 0.35 });
+        target.ellipse(0, ry * 0.8, rx * 0.85, ry * 0.45).fill({ color: 0x2b1a0c, alpha: 0.35 });
+      };
+
+      const applyHiveSceneDecor = (): void => {
+        const mapContainer = mapRenderer.getContainer();
+        mapContainer.sortableChildren = true;
+        const initialCharIndex = mapContainer.getChildIndex(charLayer);
+        for (const child of mapContainer.children) {
+          const label = (child as Container & { label?: string }).label;
+          if (label === 'floor') {
+            child.visible = false;
+          } else if (label === 'furniture-below' || label === 'furniture-above') {
+            child.alpha = 0.9;
+          }
+        }
+        const honeyFloor = new Graphics();
+        honeyFloor.eventMode = 'none';
+        drawHiveFloorTexture(honeyFloor);
+        const insertIndex = initialCharIndex >= 0 ? initialCharIndex : mapContainer.children.length;
+        mapContainer.addChildAt(honeyFloor, insertIndex);
+
+        const hiveDeskLayer = new Container();
+        hiveDeskLayer.sortableChildren = true;
+        const charInsertIndex = mapContainer.getChildIndex(charLayer);
+        mapContainer.addChildAt(hiveDeskLayer, charInsertIndex >= 0 ? charInsertIndex : mapContainer.children.length);
+
+        const spawnEntries = Array.from(mapRenderer.getAllSpawnPoints());
+        spawnEntries
+          .filter(([name]) => name.startsWith('desk-') || name.startsWith('pc-'))
+          .sort((a, b) => a[1].y - b[1].y || a[1].x - b[1].x)
+          .forEach(([, point]) => {
+            const deskCell = new Graphics();
+            deskCell.eventMode = 'none';
+            drawHiveDeskCell(deskCell);
+            deskCell.position.set((point.x + 0.5) * mapRenderer.tileSize, (point.y + 0.25) * mapRenderer.tileSize);
+            deskCell.zIndex = (point.y + 0.2) * mapRenderer.tileSize;
+            hiveDeskLayer.addChild(deskCell);
+          });
+        hiveDeskLayer.sortChildren();
+      };
+
+      if (isHiveTheme) applyHiveSceneDecor();
 
       const camera = new Camera(world);
       camera.setMapSize(mapRenderer.width * mapRenderer.tileSize, mapRenderer.height * mapRenderer.tileSize);
@@ -1076,50 +1194,186 @@ export function OfficeFloor() {
         }
       };
 
+      const drawHiveBlockedPipe = (count: number): void => {
+        const pipeX = 4;
+        const pipeWidth = 12;
+        const pipeHeight = 26;
+        boardG.roundRect(pipeX - 2, -10, pipeWidth + 4, pipeHeight, 6).fill(0x382615);
+        boardG.roundRect(pipeX, -8, pipeWidth, pipeHeight - 6, 4).fill(0x24170c);
+        const honeyColor = NOTE_COLORS.blocked ?? colors.accent.peach;
+        const flow = Math.min(count, 6);
+        if (flow > 0) {
+          const streamHeight = (pipeHeight - 10) * (flow / 6);
+          const top = -6;
+          boardG.roundRect(pipeX + 2, top, pipeWidth - 4, streamHeight + 6, 3)
+            .fill({ color: honeyColor, alpha: 0.92 });
+          boardG.ellipse(pipeX + pipeWidth / 2, top, (pipeWidth - 4) / 2, 2)
+            .fill({ color: 0xffe599, alpha: 0.9 });
+        }
+        const drips = Math.min(count, 4);
+        for (let i = 0; i < drips; i++) {
+          const offset = i % 2 === 0 ? -2 : 2;
+          const y = 12 + i * 3;
+          boardG.moveTo(pipeX + pipeWidth / 2 + offset, y)
+            .lineTo(pipeX + pipeWidth / 2 + offset + 1.8, y + 4.5)
+            .lineTo(pipeX + pipeWidth / 2 + offset - 1.8, y + 4.5)
+            .closePath()
+            .fill({ color: honeyColor, alpha: 0.85 });
+        }
+        boardG.ellipse(pipeX + pipeWidth / 2, 22, pipeWidth + 6, 4).fill({ color: 0x2f1b0c, alpha: 0.85 });
+        boardG.ellipse(pipeX + pipeWidth / 2, 21.5, pipeWidth + 2, 3).fill({ color: honeyColor, alpha: flow > 0 ? 0.65 : 0.25 });
+        if (count > 6) {
+          boardG.moveTo(pipeX + pipeWidth + 6, 10)
+            .lineTo(pipeX + pipeWidth + 11, 8)
+            .lineTo(pipeX + pipeWidth + 9, 16)
+            .closePath()
+            .fill({ color: honeyColor, alpha: 0.8 });
+        }
+      };
+
+      const drawHiveTodoComb = (notes: string[]): void => {
+        const originX = 36;
+        drawHex(boardG, originX + 16, 2, 18, 12, colors.accent.lemonLight, {
+          alpha: 0.2,
+          stroke: colors.accent.lemon,
+          strokeAlpha: 0.35,
+          strokeWidth: 1.5
+        });
+        drawHex(boardG, originX + 16, 2, 15, 10, colors.accent.lilacLight, {
+          alpha: 0.35,
+          stroke: colors.accent.lilac,
+          strokeAlpha: 0.55,
+          strokeWidth: 1
+        });
+
+        const cols = 3;
+        const cellRx = 4.2;
+        const cellRy = 3.2;
+        const spacingX = cellRx * 2.1;
+        const spacingY = cellRy * 1.9;
+        const maxCells = cols * 3;
+        const count = Math.min(notes.length, maxCells);
+
+        for (let i = 0; i < count; i++) {
+          const row = Math.floor(i / cols);
+          const col = i % cols;
+          const offset = row % 2 === 0 ? 0 : cellRx;
+          const cx = originX + 6 + col * spacingX + offset;
+          const cy = -2 + row * spacingY;
+          const status = notes[i];
+          const fillColor = NOTE_COLORS[status] ?? colors.accent.lemonLight;
+          drawHex(boardG, cx + 10, cy + 2, cellRx, cellRy, fillColor, {
+            alpha: 0.95,
+            stroke: colors.ink[700],
+            strokeAlpha: 0.4,
+            strokeWidth: 0.7
+          });
+          drawHex(boardG, cx + 10, cy + 1, cellRx * 0.55, cellRy * 0.45, colors.accent.lemon, { alpha: 0.85 });
+        }
+
+        if (notes.length > maxCells) {
+          const bubbleX = originX + 26;
+          boardG.moveTo(bubbleX, 12)
+            .lineTo(bubbleX + 7, 9)
+            .lineTo(bubbleX + 5, 18)
+            .closePath()
+            .fill({ color: colors.accent.lemon, alpha: 0.85 });
+        }
+      };
+
+      const drawHiveHoneyVat = (doneCount: number): void => {
+        const vatX = 68;
+        const vatWidth = 18;
+        const vatHeight = 14;
+        const honeyColor = NOTE_COLORS.done ?? colors.accent.mint;
+        boardG.roundRect(vatX - 2, 3, vatWidth + 4, vatHeight + 4, 6).fill(0x3a2715);
+        boardG.roundRect(vatX, 5, vatWidth, vatHeight, 6).fill(0x5a3b1f);
+        const ratio = Math.min(doneCount, 6) / 6;
+        if (ratio > 0) {
+          const fillHeight = (vatHeight - 4) * ratio;
+          const top = 5 + (vatHeight - 4 - fillHeight);
+          boardG.roundRect(vatX + 2, top, vatWidth - 4, fillHeight + 2, 4)
+            .fill({ color: honeyColor, alpha: 0.95 });
+          boardG.ellipse(vatX + vatWidth / 2, top, (vatWidth - 4) / 2, 2)
+            .fill({ color: 0xffe28f, alpha: 0.9 });
+        } else {
+          boardG.ellipse(vatX + vatWidth / 2, 5, (vatWidth - 4) / 2, 2).fill({ color: 0x4a321b, alpha: 0.8 });
+        }
+        boardG.ellipse(vatX + vatWidth / 2, 5, vatWidth / 2, 3)
+          .stroke({ color: 0x2d1b0b, width: 1.2, alpha: 0.9 });
+        if (doneCount > 6) {
+          boardG.moveTo(vatX + vatWidth + 6, 9)
+            .lineTo(vatX + vatWidth + 11, 7)
+            .lineTo(vatX + vatWidth + 9, 15)
+            .closePath()
+            .fill({ color: honeyColor, alpha: 0.8 });
+        }
+      };
+
       const drawTaskBoard = (tasks: BoardTask[]): void => {
         boardG.clear();
         clearDeskNotes();
-        const blocked = tasks.filter((t) => t.status === 'blocked').map(() => 'blocked');
+        const blockedNotes = tasks.filter((t) => t.status === 'blocked').map(() => 'blocked');
         const todoNotes: string[] = tasks.filter((t) => t.status === 'todo').map(() => 'todo');
         let done = 0;
-        // doing → taken off the wall: pin it to the assignee's desk. Without a
-        // resolvable desk (no assignee / not on the floor) it falls back onto
-        // the TODO board as a blue note, so nothing ever silently disappears.
         for (const t of tasks) {
           if (t.status === 'done') { done++; continue; }
           if (t.status !== 'doing') continue;
           const rt = t.assignee ? runtimes.get(t.assignee) : undefined;
-          if (!rt) { todoNotes.push('doing'); continue; }
+          if (!rt) {
+            todoNotes.push('doing');
+            continue;
+          }
           const desk = rt.character.getDeskTile();
           let g = deskNoteG.get(t.assignee!);
           if (!g) {
             g = new Graphics();
             g.eventMode = 'none';
-            g.position.set((desk.x - 1) * tsB + 3, (desk.y - 1) * tsB + 8);
+            if (isHiveTheme) {
+              g.position.set((desk.x - 1) * tsB + 6, (desk.y - 1) * tsB + 10);
+            } else {
+              g.position.set((desk.x - 1) * tsB + 3, (desk.y - 1) * tsB + 8);
+            }
             g.zIndex = desk.y * tsB - 1;
             charLayer.addChild(g);
             deskNoteG.set(t.assignee!, g);
           }
-          // stack multiple taken notes side by side on the same desk
           const idx = (g as any).__count ?? 0;
           (g as any).__count = idx + 1;
-          g.rect(idx * 7, -(idx % 2), 5, 4).fill(NOTE_COLORS.doing);
-          g.rect(idx * 7 + 2, -(idx % 2), 1, 1).fill(0x4a3b52);
+          if (isHiveTheme) {
+            const cellX = idx * 9 + 4.5;
+            const cellY = idx % 2 === 0 ? 0 : -3.5;
+            drawHex(g, cellX, cellY, 4, 3, NOTE_COLORS.doing, {
+              stroke: colors.ink[700],
+              strokeAlpha: 0.55,
+              strokeWidth: 0.8
+            });
+            drawHex(g, cellX, cellY - 1, 2.6, 2, colors.accent.lemonLight, { alpha: 0.85 });
+          } else {
+            g.rect(idx * 7, -(idx % 2), 5, 4).fill(NOTE_COLORS.doing);
+            g.rect(idx * 7 + 2, -(idx % 2), 1, 1).fill(0x4a3b52);
+          }
         }
-        drawCork(0, NOTE_COLORS.blocked, blocked);   // left: what's burning
-        drawCork(34, NOTE_COLORS.todo, todoNotes);   // right: what's queued
-        // The archive table: every finished task adds a green sheet to the
-        // pile (visible stack capped at 6 — beyond that it just sits proud).
-        boardG.rect(68, 6, 14, 4).fill(0xb08d5e);    // table top
-        boardG.rect(68, 10, 14, 4).fill(0x8a6f4d);   // table front
-        boardG.rect(69, 14, 2, 2).fill(0x6e5639);    // legs
-        boardG.rect(79, 14, 2, 2).fill(0x6e5639);
-        const stack = Math.min(done, 6);
-        for (let i = 0; i < stack; i++) {
-          boardG.rect(71 + (i % 2), 4 - i * 2, 8, 2)
-            .fill({ color: NOTE_COLORS.done, alpha: 1 })
-            .stroke({ color: 0x6e8f6e, width: 0.5 });
+
+        if (!isHiveTheme) {
+          drawCork(0, NOTE_COLORS.blocked, blockedNotes);
+          drawCork(34, NOTE_COLORS.todo, todoNotes);
+          boardG.rect(68, 6, 14, 4).fill(0xb08d5e);
+          boardG.rect(68, 10, 14, 4).fill(0x8a6f4d);
+          boardG.rect(69, 14, 2, 2).fill(0x6e5639);
+          boardG.rect(79, 14, 2, 2).fill(0x6e5639);
+          const stack = Math.min(done, 6);
+          for (let i = 0; i < stack; i++) {
+            boardG.rect(71 + (i % 2), 4 - i * 2, 8, 2)
+              .fill({ color: NOTE_COLORS.done, alpha: 1 })
+              .stroke({ color: 0x6e8f6e, width: 0.5 });
+          }
+          return;
         }
+
+        drawHiveBlockedPipe(blockedNotes.length);
+        drawHiveTodoComb(todoNotes);
+        drawHiveHoneyVat(done);
       };
       drawTaskBoard([]);
 
@@ -1163,26 +1417,74 @@ export function OfficeFloor() {
       let askPulse = 0;
       const drawAskBoard = (pulse: number): void => {
         askG.clear();
-        // lilac-framed board with a big "?" identity
-        askG.rect(0, -8, 30, 22).fill(0x5b4a6b);
-        askG.rect(1, -7, 28, 3).fill(0xcdb4e8);
-        askG.rect(1, -4, 28, 17).fill(0xc9b083);
-        if (askCount === 0) {
-          // quiet: a faint "?" watermark
-          askG.rect(13, -1, 4, 2).fill({ color: 0x8a755f, alpha: 0.8 });
-          askG.rect(15, 1, 2, 4).fill({ color: 0x8a755f, alpha: 0.8 });
-          askG.rect(15, 7, 2, 2).fill({ color: 0x8a755f, alpha: 0.8 });
-        } else {
-          const n = Math.min(askCount, 8);
-          for (let i = 0; i < n; i++) {
-            const x = 3 + (i % 4) * 7;
-            const y = -2 + Math.floor(i / 4) * 6;
-            askG.rect(x, y, 5, 4).fill(0xcdb4e8);
-            askG.rect(x + 2, y, 1, 1).fill(0x4a3b52);
+        if (!isHiveTheme) {
+          askG.rect(0, -8, 30, 22).fill(0x5b4a6b);
+          askG.rect(1, -7, 28, 3).fill(0xcdb4e8);
+          askG.rect(1, -4, 28, 17).fill(0xc9b083);
+          if (askCount === 0) {
+            askG.rect(13, -1, 4, 2).fill({ color: 0x8a755f, alpha: 0.8 });
+            askG.rect(15, 1, 2, 4).fill({ color: 0x8a755f, alpha: 0.8 });
+            askG.rect(15, 7, 2, 2).fill({ color: 0x8a755f, alpha: 0.8 });
+          } else {
+            const n = Math.min(askCount, 8);
+            for (let i = 0; i < n; i++) {
+              const x = 3 + (i % 4) * 7;
+              const y = -2 + Math.floor(i / 4) * 6;
+              askG.rect(x, y, 5, 4).fill(0xcdb4e8);
+              askG.rect(x + 2, y, 1, 1).fill(0x4a3b52);
+            }
+            const a = 0.35 + 0.3 * Math.sin(pulse * 4);
+            askG.rect(-2, -10, 34, 26).stroke({ color: 0xcdb4e8, width: 2, alpha: a });
           }
-          // attention pulse around the frame while questions wait
-          const a = 0.35 + 0.3 * Math.sin(pulse * 4);
-          askG.rect(-2, -10, 34, 26).stroke({ color: 0xcdb4e8, width: 2, alpha: a });
+          return;
+        }
+
+        const pulseAlpha = 0.35 + 0.25 * Math.sin(pulse * 4);
+        drawHex(askG, 15, 2, 16, 12, colors.accent.lemonLight, {
+          alpha: 0.22,
+          stroke: colors.accent.lemon,
+          strokeAlpha: pulseAlpha,
+          strokeWidth: 1.5
+        });
+        drawHex(askG, 15, 2, 12, 9, colors.accent.lilacLight, {
+          alpha: 0.4,
+          stroke: colors.accent.lilac,
+          strokeAlpha: 0.65,
+          strokeWidth: 1
+        });
+
+        if (askCount === 0) {
+          drawHex(askG, 15, 2, 6, 5, colors.accent.lilac, { alpha: 0.9 });
+          askG.rect(14, -1, 2, 3).fill(colors.cream[50]);
+          askG.rect(16, 1, 2, 3).fill(colors.cream[50]);
+          askG.rect(15, 5, 2, 2).fill(colors.cream[50]);
+        } else {
+          const cells = Math.min(askCount, 6);
+          const cellRx = 3.2;
+          const cellRy = 2.6;
+          const spacingX = cellRx * 2.1;
+          const spacingY = cellRy * 1.9;
+          for (let i = 0; i < cells; i++) {
+            const row = Math.floor(i / 3);
+            const col = i % 3;
+            const offset = row % 2 === 0 ? 0 : cellRx;
+            const cx = 6 + col * spacingX + offset;
+            const cy = -1 + row * spacingY;
+            drawHex(askG, cx + 9, cy + 1, cellRx, cellRy, colors.accent.lilac, {
+              alpha: 0.95,
+              stroke: colors.ink[700],
+              strokeAlpha: 0.45,
+              strokeWidth: 0.7
+            });
+            drawHex(askG, cx + 9, cy, cellRx * 0.55, cellRy * 0.4, colors.accent.lemonLight, { alpha: 0.85 });
+          }
+          if (askCount > 6) {
+            askG.moveTo(24, 10)
+              .lineTo(30, 8)
+              .lineTo(28, 16)
+              .closePath()
+              .fill({ color: colors.accent.lemon, alpha: 0.8 });
+          }
         }
       };
       drawAskBoard(0);
@@ -1236,8 +1538,17 @@ export function OfficeFloor() {
         if (carriedNotes.has(actorId)) return;
         const g = new Graphics();
         g.eventMode = 'none';
-        g.rect(0, 0, 5, 4).fill(color);
-        g.rect(2, 0, 1, 1).fill(0x4a3b52);
+        if (isHiveTheme) {
+          drawHex(g, 3.2, 2, 3.2, 2.6, color, {
+            stroke: colors.ink[700],
+            strokeAlpha: 0.6,
+            strokeWidth: 0.7
+          });
+          drawHex(g, 3.2, 0.8, 2.2, 1.6, colors.accent.lemonLight, { alpha: 0.85 });
+        } else {
+          g.rect(0, 0, 5, 4).fill(color);
+          g.rect(2, 0, 1, 1).fill(0x4a3b52);
+        }
         charLayer.addChild(g);
         carriedNotes.set(actorId, g);
       };
@@ -1281,7 +1592,11 @@ export function OfficeFloor() {
           const rt = runtimes.get(id);
           if (!rt) continue;
           const p = rt.character.getPixelPosition();
-          g.position.set(p.x + 5, p.y - 10);
+          if (isHiveTheme) {
+            g.position.set(p.x + 4, p.y - 12);
+          } else {
+            g.position.set(p.x + 5, p.y - 10);
+          }
           g.zIndex = p.y + 1;
         }
         // start queued moves whose actor is free
