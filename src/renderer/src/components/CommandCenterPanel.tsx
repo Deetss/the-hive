@@ -339,7 +339,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
             <span style={{
               fontSize: 12, color: 'var(--cth-ink-500)',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-            }}>Abathur runs the hive</span>
+            }}>Beyoncé runs the hive</span>
           </div>
         </div>
         {/* v0.3.4: floor-wide auto-delivery lives HERE (one switch for every
