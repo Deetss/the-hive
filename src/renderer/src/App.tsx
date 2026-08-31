@@ -576,11 +576,13 @@ export function App() {
           flexShrink: 0,
           minHeight: isMobile ? 'auto' : 0,
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          position: 'relative'
         }}>
-          {agent ? (
+          {ideOpen && <IdePanel />}
+          {!ideOpen && agent ? (
             <AgentDetailPanel agent={agent} isMobile={isMobile} />
-          ) : godStatus === 'booting' ? (
+          ) : !ideOpen && godStatus === 'booting' ? (
             <PixelPanel variant="default" noPadding style={{
               padding: 16, height: '100%',
               display: 'flex', flexDirection: 'column',
@@ -595,7 +597,7 @@ export function App() {
                 The terminal will land here once she's seated.
               </p>
             </PixelPanel>
-          ) : (
+          ) : !ideOpen ? (
             <PixelPanel variant="default" noPadding style={{
               padding: 16, height: '100%',
               display: 'flex', flexDirection: 'column',
@@ -615,7 +617,7 @@ export function App() {
                 </span>
               </PixelButton>
             </PixelPanel>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -658,7 +660,6 @@ export function App() {
       )}
 
       {fullscreenAgentId && <FullscreenTerminal config={config} />}
-      {ideOpen && <IdePanel />}
       <TaskDetailOverlay />
       {profileWalkthroughOpen && (
         <ProfileWalkthrough
