@@ -3759,7 +3759,16 @@ if (process.defaultApp) {
 // the 'open-url' event instead.) The lock also rules out two harnesses fighting
 // over the same hive, which was previously possible but never useful.
 if (!app.isPackaged) {
-  app.setPath('userData', app.getPath('userData') + '-dev');
+  const prodUserData = app.getPath('userData');
+  const devUserData = prodUserData + '-dev';
+  app.setPath('userData', devUserData);
+  // Bootstrap dev config from packaged app's config on first dev launch
+  const devConfig = join(devUserData, 'config.json');
+  const prodConfig = join(prodUserData, 'config.json');
+  if (!existsSync(devConfig) && existsSync(prodConfig)) {
+    mkdirSync(devUserData, { recursive: true });
+    copyFileSync(prodConfig, devConfig);
+  }
 }
 const gotInstanceLock = app.requestSingleInstanceLock();
 if (!gotInstanceLock) {
