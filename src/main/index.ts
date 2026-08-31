@@ -5271,18 +5271,29 @@ ipcMain.handle('dialog:chooseFolder', async (evt) => {
   return { ok: true as const, path: res.filePaths[0] };
 });
 
-// ─── IPC: Terminal.app at a folder ──────────────────────────────────────────
+// ─── IPC: Open system terminal at a folder ───────────────────────────────────
 ipcMain.handle('terminal:openAtFolder', async (_evt, cwd: unknown) => {
   if (typeof cwd !== 'string' || cwd.length === 0) return { ok: false, error: 'invalid cwd' };
   return new Promise<{ ok: boolean; error?: string }>((resolve) => {
-    const p = spawn('open', ['-a', 'Terminal', cwd]);
-    let err = '';
-    p.stderr.on('data', (d) => { err += d.toString(); });
+    let cmd: string, args: string[], opts: Record<string, unknown>;
+    if (process.platform === 'win32') {
+      // Try Windows Terminal first, fall back to PowerShell
+      cmd = 'cmd.exe';
+      args = ['/c', 'start', 'pwsh.exe', '-NoExit', '-Command', `cd '${cwd}'`];
+      opts = { shell: false };
+    } else if (process.platform === 'darwin') {
+      cmd = 'open';
+      args = ['-a', 'Terminal', cwd];
+      opts = {};
+    } else {
+      cmd = 'xterm';
+      args = ['-e', `cd '${cwd}' && bash`];
+      opts = {};
+    }
+    const p = spawn(cmd, args, { ...opts, detached: true, stdio: 'ignore' });
+    p.unref();
     p.on('error', (e) => resolve({ ok: false, error: e.message }));
-    p.on('close', (code) => {
-      if (code === 0) resolve({ ok: true });
-      else resolve({ ok: false, error: err.trim() || `open exited ${code}` });
-    });
+    resolve({ ok: true });
   });
 });
 
