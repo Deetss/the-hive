@@ -879,10 +879,10 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
     const suggested = dispatchTo ? agents.find((a) => a.id === dispatchTo) : undefined;
     const priorityDirective =
       dispatchPriority === 'urgent'
-        ? '\n\n[PRIORITY: URGENT — delegate to a worker right now; spawn one if needed. You orchestrate, never implement.]'
+        ? '\n\n[PRIORITY: URGENT] Step 1: Write a task card to tasks.json (id, title, status:"doing", assignee). Step 2: Delegate to the right worker NOW — spawn one if needed. Step 3: Do nothing else. You orchestrate; never implement.'
         : dispatchPriority === 'backlog'
-        ? '\n\n[PRIORITY: BACKLOG — add a card to tasks.json (status: todo) and stop. No dispatch, no reply, no further action.]'
-        : '\n\n[PRIORITY: NORMAL — delegate to an existing worker or spawn one. You orchestrate, never implement.]';
+        ? '\n\n[PRIORITY: BACKLOG] Write a task card to tasks.json (id, title, status:"todo") and stop. No delegation, no dispatch, no reply.'
+        : '\n\n[PRIORITY: NORMAL] Step 1: Write a task card to tasks.json (id, title, status:"doing", assignee). Step 2: Delegate to an available worker. Step 3: Do nothing else. You orchestrate; never implement.';
     const full = suggested
       ? `${body}${priorityDirective}\n\n(The human suggests ${suggested.name} (${suggested.id}) for this — your call as orchestrator.)`
       : `${body}${priorityDirective}`;
