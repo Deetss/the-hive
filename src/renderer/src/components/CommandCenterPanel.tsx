@@ -14,6 +14,8 @@ import { WorkersTab } from './WorkersTab';
 import { DelegationsTab } from './DelegationsTab';
 import { SkillsTab } from './SkillsTab';
 import { ReviewPanel } from './ReviewPanel';
+import { GitTab } from './GitTab';
+import { FilesTab } from './FilesTab';
 import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool';
 import { terminalInstanceKey } from './terminalRecovery';
 import { Icon } from './Icon';
@@ -48,7 +50,7 @@ import { canReceiveInbox } from '@shared/agentProvider';
 // the old Schedules tab: schedules are now one of four trigger types, and the
 // whole surface lives in ./triggers (see src/shared/triggers.ts for the contract).
 type CCTab = 'terminal' | 'floor' | 'tasks' | 'ask' | 'human' | 'triggers' | 'trigger-history'
-  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations' | 'review';
+  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations' | 'review' | 'git' | 'files';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
  *  is configured — so the bar reads as a budget estimate (filled + remaining)
@@ -80,7 +82,9 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
   { key: 'skills', label: 'skills', icon: 'sparkle' },
   { key: 'workers', label: 'workers', icon: 'gear' },
   { key: 'delegations', label: 'delegations', icon: 'gear' },
-  { key: 'review', label: 'review', icon: 'ledger' }
+  { key: 'review', label: 'review', icon: 'ledger' },
+  { key: 'git', label: 'git', icon: 'code' },
+  { key: 'files', label: 'files', icon: 'folder' }
 ];
 
 type TabDef = { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] };
@@ -554,6 +558,8 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         {tab === 'workers' && <WorkersTab />}
         {tab === 'delegations' && <DelegationsTab />}
         {tab === 'review' && <ReviewPanel onClose={() => setTab('floor')} />}
+        {tab === 'git' && <GitTab cwd={agent.worktreePath ?? agent.cwd} />}
+        {tab === 'files' && <FilesTab cwd={agent.worktreePath ?? agent.cwd} />}
       </div>
     </PixelPanel>
   );
