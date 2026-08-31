@@ -383,23 +383,6 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
               {floorDeliveryPaused ? 'paused' : 'auto'}
             </span>
           </PixelButton>
-          {/* Floor-level surface with no agent of its own: the honest target is
-              whoever is selected, stated explicitly rather than left to the
-              IDE's fallback so the intent is visible at the call site. */}
-          <PixelButton variant={tab === 'ide' ? 'primary' : 'secondary'} size="sm" onClick={() => {
-            const s = useStore.getState();
-            s.setIdeOpen(true, s.selectedId);
-            setTab(tab === 'ide' ? 'terminal' : 'ide');
-          }}>
-            <span
-              className="cth-tip cth-tip-wrap"
-              data-tip="Open the IDE: browse and edit files in the selected agent's workspace, and see uncommitted changes as a diff."
-              aria-label="Open the IDE"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-            >
-              <Icon name="code" /> IDE
-            </span>
-          </PixelButton>
           <PixelButton
             variant="secondary"
             size="sm"
