@@ -80,6 +80,7 @@ export default defineConfig({
     define: defineMain,
     build: {
       rollupOptions: {
+        external: ['bufferutil', 'utf-8-validate'],
         input: { index: resolve(__dirname, 'src/main/index.ts') }
       }
     }
