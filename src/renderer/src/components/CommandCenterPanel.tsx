@@ -553,7 +553,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         {tab === 'skills' && <SkillsTab agentCwd={agent.cwd} />}
         {tab === 'workers' && <WorkersTab />}
         {tab === 'delegations' && <DelegationsTab />}
-        {tab === 'review' && <ReviewPanel />}
+        {tab === 'review' && <ReviewPanel onClose={() => setTab('floor')} />}
       </div>
     </PixelPanel>
   );
@@ -1018,6 +1018,11 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                 onChange={(e) => { setDispatchText(e.target.value); setSuggestIdx(-1); }}
                 onPaste={handleDispatchPaste}
                 onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    dispatch();
+                    return;
+                  }
                   if (suggestions.length === 0) return;
                   if (e.key === 'ArrowDown') {
                     e.preventDefault();

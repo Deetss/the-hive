@@ -136,7 +136,7 @@ function Muted({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function ReviewPanel() {
+export function ReviewPanel({ onClose }: { onClose?: () => void }) {
   const setReviewOpen = useStore((s) => s.setReviewOpen);
   const pending = useStore((s) => s.pendingArtifacts);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -212,7 +212,7 @@ export function ReviewPanel() {
         </span>
         <button
           className="cth-titlebar-nodrag"
-          onClick={() => setReviewOpen(false)}
+          onClick={() => { setReviewOpen(false); onClose?.(); }}
           title="Close Review (Esc)"
           aria-label="Close Review"
           style={{
