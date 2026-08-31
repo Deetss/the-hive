@@ -576,7 +576,10 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
   // reading "default" was the CLI's, which is a different thing entirely.
   const [defaultModel, setDefaultModel] = useState<string | undefined>(undefined);
   const [dispatchTo, setDispatchTo] = useState<string>(''); // '' = Abathur decides
+  const [dispatchAct, setDispatchAct] = useState<'request' | 'query' | 'inform'>('request');
+  const [dispatchSubject, setDispatchSubject] = useState('');
   const [dispatchText, setDispatchText] = useState('');
+  const [dispatchPriority, setDispatchPriority] = useState<'urgent' | 'normal' | 'backlog'>('normal');
   const [dispatchMsg, setDispatchMsg] = useState<string | null>(null);
   const [localSkills, setLocalSkills] = useState<Array<{ name: string; description: string }>>([]);
   const [suggestIdx, setSuggestIdx] = useState(-1);
@@ -794,17 +797,25 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
   // picked in the dropdown is forwarded as a SUGGESTION the god may follow.
   const dispatch = async () => {
     const body = dispatchText.trim();
-    if (!body) return;
+    const subject = dispatchSubject.trim();
+    if (!body || !subject) return;
     const suggested = dispatchTo ? agents.find((a) => a.id === dispatchTo) : undefined;
     const full = suggested
       ? `${body}\n\n(The human suggests ${suggested.name} (${suggested.id}) for this — your call as orchestrator.)`
       : body;
     const res = await window.cth.hiveSend(
-      { to: 'god', act: 'request', subject: 'Task from the human', body: full },
+      {
+        to: 'god',
+        act: dispatchAct,
+        subject,
+        body: full,
+        priority: dispatchPriority
+      },
       'human'
     );
     if (res.ok) {
       setDispatchText('');
+      setDispatchSubject('');
     }
     setDispatchMsg(res.ok
       ? `sent to Abathur${suggested ? ` (suggesting ${suggested.name})` : ''}`
@@ -890,6 +901,67 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
             ))}
           </Select>
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
+            ACT
+          </span>
+          <Select value={dispatchAct} onChange={(v) => setDispatchAct(v as 'request' | 'query' | 'inform')}>
+            <option value="request">Request</option>
+            <option value="query">Query</option>
+            <option value="inform">Inform</option>
+          </Select>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
+            SUBJECT
+          </span>
+          <input
+            type="text"
+            className="cth-input"
+            value={dispatchSubject}
+            onChange={(e) => setDispatchSubject(e.target.value)}
+            placeholder="Brief subject line"
+            style={{
+              width: '100%',
+              padding: '6px 8px',
+              fontFamily: 'var(--cth-font-ui)',
+              fontSize: 13,
+              background: 'var(--cth-paper-100)',
+              color: 'var(--cth-ink-900)',
+              border: 'none',
+              outline: 'none',
+              boxSizing: 'border-box'
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
+            PRIORITY
+          </span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {(['urgent', 'normal', 'backlog'] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setDispatchPriority(p)}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  fontFamily: 'var(--cth-font-ui)',
+                  fontSize: 12,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: dispatchPriority === p ? 'var(--cth-ink-900)' : 'var(--cth-paper-100)',
+                  color: dispatchPriority === p ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                  transition: 'background 0.1s, color 0.1s'
+                }}
+              >{p}</button>
+            ))}
+          </div>
+        </div>
         {(() => {
           const slashQ = dispatchText.startsWith('/') ? dispatchText.slice(1).toLowerCase() : null;
           const suggestions = slashQ !== null ? [
@@ -961,7 +1033,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
           );
         })()}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-          <PixelButton variant="primary" size="sm" onClick={dispatch} disabled={!dispatchText.trim()}>
+          <PixelButton variant="primary" size="sm" onClick={dispatch} disabled={!dispatchText.trim() || !dispatchSubject.trim()}>
             dispatch
           </PixelButton>
           {dispatchMsg && <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{dispatchMsg}</span>}

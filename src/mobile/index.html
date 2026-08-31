@@ -891,6 +891,21 @@
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
 
   .spinner { text-align: center; padding: 24px; color: var(--cth-ink-500); font-family: var(--cth-font-mono); font-size: 16px; }
+
+  .worker-terminal {
+    margin-top: 8px;
+    padding: 8px;
+    background: var(--cth-ink-900);
+    color: var(--cth-paper-100);
+    font-family: var(--cth-font-mono);
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--cth-ink-700);
+  }
 </style>
 </head>
 <body>
@@ -1418,10 +1433,79 @@ function workerCard(w) {
     <span>${esc(w.workerId)}</span>
     ${w.lastTool ? `<span style="color:var(--cth-ink-300)">·</span><span class="agent-tool-val">⌨ ${esc(w.lastTool)}</span>` : ''}
   </div>
+  <button class="btn btn-secondary" style="margin-top:8px;width:100%;" onclick="toggleWorkerTerminal('${esc(w.workerId)}')">
+    <span id="terminal-toggle-${esc(w.workerId)}">Show Terminal</span>
+  </button>
+  <div id="terminal-${esc(w.workerId)}" class="worker-terminal" hidden>
+    <div class="spinner" style="padding:12px;text-align:center;">⟳ loading…</div>
+  </div>
 </div>`;
 }
 
 document.getElementById('workers-refresh').addEventListener('click', loadWorkers);
+
+// Worker terminal expansion state and polling
+const workerTerminalState = new Map(); // workerId -> { expanded: boolean, interval: number | null }
+
+async function toggleWorkerTerminal(workerId) {
+  const terminalEl = document.getElementById(`terminal-${workerId}`);
+  const toggleEl = document.getElementById(`terminal-toggle-${workerId}`);
+  if (!terminalEl || !toggleEl) return;
+
+  const state = workerTerminalState.get(workerId) || { expanded: false, interval: null };
+
+  if (state.expanded) {
+    // Collapse
+    terminalEl.hidden = true;
+    toggleEl.textContent = 'Show Terminal';
+    if (state.interval) {
+      clearInterval(state.interval);
+      state.interval = null;
+    }
+    state.expanded = false;
+  } else {
+    // Expand
+    terminalEl.hidden = false;
+    toggleEl.textContent = 'Hide Terminal';
+    state.expanded = true;
+
+    // Load immediately
+    await loadWorkerTerminal(workerId);
+
+    // Poll every 3s while expanded
+    state.interval = setInterval(() => {
+      if (workerTerminalState.get(workerId)?.expanded) {
+        loadWorkerTerminal(workerId);
+      }
+    }, 3000);
+  }
+
+  workerTerminalState.set(workerId, state);
+}
+
+async function loadWorkerTerminal(workerId) {
+  const terminalEl = document.getElementById(`terminal-${workerId}`);
+  if (!terminalEl) return;
+
+  try {
+    const res = await apiFetch(`/api/workers/${encodeURIComponent(workerId)}/tail`);
+    if (!res.ok) {
+      terminalEl.textContent = 'Failed to load terminal output';
+      return;
+    }
+    const data = await res.json();
+    if (data.ok && data.tail) {
+      const lines = data.tail;
+      terminalEl.textContent = lines.join('\n') || '(no output)';
+      // Auto-scroll to bottom
+      terminalEl.scrollTop = terminalEl.scrollHeight;
+    } else {
+      terminalEl.textContent = '(no output)';
+    }
+  } catch (e) {
+    terminalEl.textContent = 'Error loading terminal';
+  }
+}
 
 // ── Ask Me ───────────────────────────────────────────────────────
 async function loadAskMe() {
