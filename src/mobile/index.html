@@ -896,7 +896,7 @@
 <body>
 
 <!-- ── Setup (first run) ── -->
-<div id="setup-screen">
+<div id="setup-screen" hidden>
   <div class="setup-logo">🐝</div>
   <div class="setup-title">TheHive Remote</div>
   <div class="setup-sub">Connect to a TheHive desktop instance running on your Tailscale network.</div>
@@ -1127,26 +1127,32 @@ async function apiFetch(path, opts = {}) {
 // enough to register the machine and skip the setup form entirely.
 async function tryAutoPairFromQuery() {
   const token = new URLSearchParams(location.search).get('token');
-  if (!token) return false;
+  if (!token) return { paired: false };
   const baseUrl = location.origin;
   history.replaceState({}, '', location.pathname);
   const existing = machines.find(m => m.baseUrl === baseUrl && m.secret === token);
-  if (existing) { activeMachineId = existing.id; return true; }
+  if (existing) { activeMachineId = existing.id; return { paired: true }; }
   const id = 'machine-' + Date.now();
   const m = { id, label: location.hostname, baseUrl, secret: token, status: 'checking', lastConnectedAt: null };
   machines.push(m);
   const ok = await pingMachine(m);
-  if (!ok) { machines.pop(); saveMachines(); return false; }
+  // Ping failed (server unreachable/rejected): surface the scanned values in the
+  // setup form so the user can retry without re-typing, rather than a blank form.
+  if (!ok) { machines.pop(); saveMachines(); return { paired: false, prefill: { baseUrl, token } }; }
   activeMachineId = id;
   try { localStorage.setItem('hive_active', id); } catch {}
-  return true;
+  return { paired: true };
 }
 
 // ── Boot ─────────────────────────────────────────────────────────
 loadMachines();
-tryAutoPairFromQuery().then((paired) => {
+tryAutoPairFromQuery().then(({ paired, prefill }) => {
   if (paired) { bootApp(); return; }
-  if (machines.length === 0) {
+  if (prefill) {
+    document.getElementById('setup-url').value = prefill.baseUrl;
+    document.getElementById('setup-secret').value = prefill.token;
+  }
+  if (machines.length === 0 || prefill) {
     document.getElementById('setup-screen').hidden = false;
   } else {
     activeMachineId = machines[0].id;
@@ -1200,6 +1206,8 @@ document.getElementById('reauth-switch-btn').addEventListener('click', () => {
 
 // ── App boot ─────────────────────────────────────────────────────
 function bootApp() {
+  document.getElementById('setup-screen').hidden = true;
+  document.getElementById('reauth-screen').hidden = true;
   document.getElementById('app').hidden = false;
   updateMachineHeader();
   connectSSE();
