@@ -208,6 +208,15 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
     try { await window.cth.updateConfig({ audience: next ? 'non-technical' : 'technical' } as Partial<HarnessConfig>); }
     catch { setSimpleMode(!next); }
   };
+  const [showPickerOnLaunch, setShowPickerOnLaunch] = useState<boolean>(
+    config.skipHarnessPickerOnLaunch !== true
+  );
+  const toggleShowPickerOnLaunch = async () => {
+    const next = !showPickerOnLaunch;
+    setShowPickerOnLaunch(next);
+    try { await window.cth.updateConfig({ skipHarnessPickerOnLaunch: !next } as Partial<HarnessConfig>); }
+    catch { setShowPickerOnLaunch(!next); }
+  };
   const [autoModeOn, setAutoModeOn] = useState<boolean>(cfgX.autoMode !== false);
   const toggleAutoMode = async () => {
     const next = !autoModeOn;
@@ -538,6 +547,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
       setFreeflowModel(cc.freeflowModel ?? 'whisper-large-v3-turbo');
       setIdleDisconnectMs((c as HarnessConfig).realtimeIdleDisconnectMs ?? 180_000);
       setGovPolicy((c as HarnessConfig & { governorPolicy?: GovernorPolicyView }).governorPolicy ?? {});
+      setShowPickerOnLaunch((c as HarnessConfig).skipHarnessPickerOnLaunch !== true);
     }).catch(() => { /* keep prop-seeded values */ });
     window.cth.getMobileApiSecret().then((info) => {
       if (alive) setMobilePairing(info);
@@ -1091,6 +1101,17 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                             </div>
                             <PixelButton variant={simpleMode ? 'primary' : 'secondary'} size="sm" onClick={toggleSimpleMode}>
                               {simpleMode ? 'on' : 'off'}
+                            </PixelButton>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>Show harness picker on launch</span>
+                              <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                                Show the workspace and profile selector on startup instead of going straight to the last-used harness.
+                              </span>
+                            </div>
+                            <PixelButton variant={showPickerOnLaunch ? 'primary' : 'secondary'} size="sm" onClick={toggleShowPickerOnLaunch}>
+                              {showPickerOnLaunch ? 'on' : 'off'}
                             </PixelButton>
                           </div>
                         </div>

@@ -63,6 +63,8 @@ export interface HarnessConfig {
    *  Mirrors src/main/config.ts. */
   recentHives?: string[];
   registeredRepos: string[];
+  /** Skip the launch-time harness config picker and open the last-used home directly. */
+  skipHarnessPickerOnLaunch?: boolean;
   autoMode: boolean;
   /** May the orchestrator ("Abathur") spin up agents on its own? Default FALSE,
    *  so an absent value reads as off. Mirrors src/main/config.ts. */

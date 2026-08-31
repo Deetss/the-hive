@@ -358,9 +358,9 @@ export function App() {
   }
 
   // Launch-time hive picker: on reopen, let the user open their current hive,
-  // switch to a recent one, or open/create another. Skipped right after onboarding
-  // and right after a switch-relaunch (see hiveOpened init).
-  if (!hiveOpened) {
+  // switch to a recent one, or open/create another. Skipped right after onboarding,
+  // right after a switch-relaunch (see hiveOpened init), or when skipHarnessPickerOnLaunch is set.
+  if (!hiveOpened && !config.skipHarnessPickerOnLaunch) {
     return <HivePicker config={config} onOpenCurrent={() => setHiveOpened(true)} />;
   }
 

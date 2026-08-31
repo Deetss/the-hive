@@ -349,6 +349,8 @@ export interface HarnessConfig {
   recentHives?: string[];
   /** Folders the user registered during onboarding (used as quick-picks). */
   registeredRepos: string[];
+  /** Skip the launch-time harness config picker and open the last-used home directly. */
+  skipHarnessPickerOnLaunch?: boolean;
   /** When true, new agents are spawned with --permission-mode bypassPermissions. */
   autoMode: boolean;
   /** May the orchestrator ("Abathur") spin up agents on its own?
@@ -638,6 +640,7 @@ const DEFAULTS: HarnessConfig = {
   telemetryEnabled: true,
   multiWindow: true,
   tvShowOffices: false,
+  skipHarnessPickerOnLaunch: false,
   officeTheme: 'office',
   slackEnabled: false,
   slackSigningSecret: undefined,

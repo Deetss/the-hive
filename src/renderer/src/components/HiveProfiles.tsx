@@ -207,7 +207,7 @@ export function HiveProfiles() {
                       </PixelButton>
                       <PixelButton variant="ghost" size="sm" onClick={() => setConfirmDelete(p.id)} disabled={!!busy}
                         title="Forget this profile (its files are left on disk)">
-                        <Icon name="minimize" />
+                        <Icon name="x" />
                       </PixelButton>
                     </div>
                   )}

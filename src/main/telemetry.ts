@@ -52,6 +52,8 @@ export interface AgentUsageSample {
   /** Provider/runtime that incurred the spend (`claude`, `codex`, …). */
   provider: string;
   usd: number;
+  /** Context window telemetry when available. */
+  contextWindow?: { total?: number; used?: number; percentage?: number };
 }
 
 /** Breaker state, emitted by Lane A's policy on `control:breakerState` and

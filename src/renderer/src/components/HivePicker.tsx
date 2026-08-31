@@ -33,6 +33,18 @@ export function HivePicker({ config, onOpenCurrent }: HivePickerProps) {
   const recents = (config.recentHives ?? []).filter((h) => h && h !== current);
   const [busy, setBusy] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
+  const [skipOnLaunch, setSkipOnLaunch] = useState<boolean>(!!config.skipHarnessPickerOnLaunch);
+
+  const toggleSkipOnLaunch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.checked;
+    setSkipOnLaunch(next);
+    try {
+      await window.cth.updateConfig({ skipHarnessPickerOnLaunch: next });
+    } catch (err) {
+      console.error('Failed to save skipHarnessPickerOnLaunch:', err);
+      setSkipOnLaunch(!next);
+    }
+  };
 
   // Open a hive. Same folder as the current one → just enter it (no relaunch).
   // A different folder → changeHome('fresh') re-points + relaunches the process.
@@ -169,14 +181,40 @@ export function HivePicker({ config, onOpenCurrent }: HivePickerProps) {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <PixelButton variant="secondary" size="md" onClick={browse} disabled={!!busy}>
                 <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                  <Icon name="folder" /> open existing config…
+                   <Icon name="folder" /> open existing config…
                 </span>
               </PixelButton>
               <PixelButton variant="secondary" size="md" onClick={browse} disabled={!!busy}>
                 <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                  <Icon name="plus" /> create new config…
+                   <Icon name="plus" /> create new config…
                 </span>
               </PixelButton>
+            </div>
+
+            {/* Skip on launch toggle */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              paddingTop: 8, borderTop: '1px solid var(--cth-ink-100)'
+            }}>
+              <input
+                id="skip-picker-on-launch"
+                type="checkbox"
+                checked={skipOnLaunch}
+                onChange={toggleSkipOnLaunch}
+                style={{ accentColor: 'var(--cth-mint)', cursor: 'pointer' }}
+              />
+              <label
+                htmlFor="skip-picker-on-launch"
+                style={{
+                  fontFamily: 'var(--cth-font-ui)',
+                  fontSize: 12,
+                  color: 'var(--cth-ink-700)',
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+              >
+                Skip this screen on launch
+              </label>
             </div>
           </div>
         </PixelPanel>

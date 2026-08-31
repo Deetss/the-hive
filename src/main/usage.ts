@@ -52,6 +52,8 @@ export interface AgentUsageSample {
   /** Claude-precomputed cost (live path) / transcript-fallback estimate (interim).
    *  Never recomputed by a consumer. */
   usd: number;
+  /** Context window telemetry when available from PTY/transcript. */
+  contextWindow?: { total?: number; used?: number; percentage?: number };
 }
 
 /** The seam both backends implement. */

@@ -286,6 +286,8 @@ export interface HarnessConfig {
   /** Recently-opened hive home folders (most-recent first). Mirrors src/main/config.ts. */
   recentHives?: string[];
   registeredRepos: string[];
+  /** Skip the launch-time harness config picker and open the last-used home directly. */
+  skipHarnessPickerOnLaunch?: boolean;
   autoMode: boolean;
   defaultCommand: string;
   defaultModel?: string;
