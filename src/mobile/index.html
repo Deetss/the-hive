@@ -189,6 +189,31 @@
   .screen { display: none; padding: 10px; padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 12px); }
   .screen.active { display: block; }
 
+  /* ── Pull-to-refresh ── */
+  #ptr-indicator {
+    position: fixed;
+    top: calc(var(--safe-top) + 4px);
+    left: 50%;
+    z-index: 40;
+    width: 32px;
+    height: 32px;
+    margin-left: -16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--cth-ink-700);
+    background: var(--cth-paper-100);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-40px);
+  }
+  #ptr-indicator .ptr-glyph { display: block; line-height: 1; }
+  #ptr-indicator.spinning .ptr-glyph { animation: ptr-spin 0.7s linear infinite; }
+  @keyframes ptr-spin { to { transform: rotate(360deg); } }
+
   /* ── Bottom Navigation ── */
   nav {
     position: fixed;
@@ -989,6 +1014,8 @@
   <div id="error-bar" class="error-bar" hidden>
     <span>⚠</span><span id="error-msg"></span>
   </div>
+
+  <div id="ptr-indicator"><span class="ptr-glyph">↻</span></div>
 
   <div id="content">
     <!-- Fleet Screen -->
@@ -2355,6 +2382,69 @@ function fmtNum(n) {
   if (n >= 1000) return (n/1000).toFixed(0) + 'k';
   return String(n);
 }
+
+// ── Pull-to-refresh ──────────────────────────────────────────────
+function refreshAll() {
+  const active = document.querySelector('.screen.active');
+  const screen = active ? active.id.replace('screen-', '') : 'fleet';
+  loadFleet(); loadAskMe(); loadTasks();
+  if (screen === 'workers') { loadWorkers(); loadProcesses(); }
+}
+
+(function initPullToRefresh() {
+  const content = document.getElementById('content');
+  const indicator = document.getElementById('ptr-indicator');
+  if (!content || !indicator) return;
+
+  const THRESHOLD = 60;
+  const MAX_PULL = 90;
+  let startY = 0;
+  let pulling = false;
+  let refreshing = false;
+
+  content.addEventListener('touchstart', e => {
+    if (refreshing || content.scrollTop > 0) { pulling = false; return; }
+    startY = e.touches[0].clientY;
+    pulling = true;
+  }, { passive: true });
+
+  content.addEventListener('touchmove', e => {
+    if (!pulling || refreshing) return;
+    const delta = e.touches[0].clientY - startY;
+    if (delta <= 0 || content.scrollTop > 0) {
+      pulling = false;
+      indicator.style.opacity = '';
+      indicator.style.transform = '';
+      return;
+    }
+    const pull = Math.min(delta, MAX_PULL);
+    indicator.style.opacity = String(Math.min(pull / THRESHOLD, 1));
+    indicator.style.transform = 'translateY(' + (pull - 40) + 'px)' +
+      (pull >= THRESHOLD ? ' scale(1.1)' : '');
+  }, { passive: true });
+
+  content.addEventListener('touchend', e => {
+    if (!pulling || refreshing) return;
+    pulling = false;
+    const delta = e.changedTouches[0].clientY - startY;
+    if (delta > THRESHOLD && content.scrollTop === 0) {
+      refreshing = true;
+      indicator.style.opacity = '1';
+      indicator.style.transform = 'translateY(12px)';
+      indicator.classList.add('spinning');
+      refreshAll();
+      setTimeout(() => {
+        indicator.classList.remove('spinning');
+        indicator.style.opacity = '';
+        indicator.style.transform = '';
+        refreshing = false;
+      }, 700);
+    } else {
+      indicator.style.opacity = '';
+      indicator.style.transform = '';
+    }
+  }, { passive: true });
+})();
 
 // ── Service Worker ────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
