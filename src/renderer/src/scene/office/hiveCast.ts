@@ -79,6 +79,15 @@ export function getDefaultHiveCharacter(nameOrId: string): HiveCharacterName {
   return workers[Math.abs(h) % workers.length].name;
 }
 
+/** Resolve any agent key (its id or an office character name) to a bee. The god
+ *  is always the queen; a key that is already a bee name passes through; anything
+ *  else hashes to a stable worker — the same mapping the scene floor uses, so a
+ *  card avatar and the walking sprite agree. */
+export function hiveCharacterFor(key: string, isGod = false): HiveCharacterName {
+  if (isGod) return 'queen';
+  return HIVE_CAST_BY_NAME[key as HiveCharacterName] ? (key as HiveCharacterName) : getDefaultHiveCharacter(key);
+}
+
 const frameCache = new Map<HiveCharacterName, Texture[][]>();
 
 export async function getHiveCastFrames(name: HiveCharacterName): Promise<Texture[][]> {

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { paintCastPortrait, type OfficeCharacterName } from '@/scene/office/cast';
+import { paintHiveCastPortrait, hiveCharacterFor } from '@/scene/office/hiveCast';
 import { PORTRAIT_W, PORTRAIT_H } from '@/scene/office/portraitArt';
+import { useStore } from '@/store/store';
 
 const FRAME_W = PORTRAIT_W;
 const FRAME_H = PORTRAIT_H;
@@ -12,31 +14,44 @@ export interface SpritePortraitProps {
    *  smoothing off, so nothing here is ever interpolated. */
   scale?: number;
   background?: string;
+  /** The agent's id — the stable key the scene floor hashes to a bee, so the
+   *  hive-theme avatar matches the walking sprite. Falls back to `character`. */
+  agentId?: string;
+  /** True for the Overmind seat, which is always BeeYoncé the queen under the
+   *  hive theme (her stored office character is 'michael'). */
+  isGod?: boolean;
 }
 
-/** Static standing portrait of an Office cast member (recolored LimeZu sprite). */
+/** Static standing portrait of a cast member. Office themes paint the recolored
+ *  LimeZu human; the Hive theme paints the agent's bee. */
 export function SpritePortrait({
   character,
   scale = 2,
-  background = 'transparent'
+  background = 'transparent',
+  agentId,
+  isGod = false,
 }: SpritePortraitProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const officeTheme = useStore((s) => s.officeTheme);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    let cancelled = false;
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (background !== 'transparent') {
       ctx.fillStyle = background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
-    paintCastPortrait(ctx, character, scale).catch(() => { /* asset load race */ });
-    return () => { cancelled = true; void cancelled; };
-  }, [character, scale, background]);
+    if (officeTheme === 'hive') {
+      const bee = hiveCharacterFor(agentId ?? character, isGod);
+      paintHiveCastPortrait(ctx, bee, scale).catch(() => { /* asset load race */ });
+    } else {
+      paintCastPortrait(ctx, character, scale).catch(() => { /* asset load race */ });
+    }
+  }, [character, scale, background, officeTheme, agentId, isGod]);
 
   // A fractional scale can land on a fractional pixel count; the canvas
   // attributes are integers either way, so round once and use the same number

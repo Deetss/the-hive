@@ -13,6 +13,9 @@ import { inferAgentProvider, providerPreset, type AgentProvider } from '@/store/
 
 export interface AgentCardProps {
   name: string;
+  /** Agent id — the stable key the hive-theme avatar hashes to a bee so the
+   *  card matches the walking sprite on the floor. */
+  agentId?: string;
   character: OfficeCharacterName;
   accent: AccentColorName;
   status: StatusKind;
@@ -97,7 +100,7 @@ function shortenPath(path: string | undefined, keepSegments = 2): { display: str
  * and a slim gauge pinned to the bottom edge. Nothing overlaps anything.
  */
 export function AgentCard({
-  name, character, accent, status, ptyId, project, action, progress = 0,
+  name, agentId, character, accent, status, ptyId, project, action, progress = 0,
   contextTokens, contextLimit, selected, isOvermind, onClick, onRename,
   doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold,
   lastTool, lastActivityTs, cwd, worktreePath, command, provider, model, profileId
@@ -248,7 +251,7 @@ export function AgentCard({
             display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflow: 'hidden',
             flexShrink: 0
           }}>
-            <SpritePortrait character={character} scale={2} />
+            <SpritePortrait character={character} agentId={agentId} isGod={isOvermind} scale={2} />
           </div>
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>

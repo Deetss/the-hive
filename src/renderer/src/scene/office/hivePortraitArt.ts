@@ -7,6 +7,7 @@
 // roster and the asset URLs; this module is the reusable draw layer.
 
 import { Texture } from 'pixi.js';
+import { PORTRAIT_W, PORTRAIT_H } from './portraitArt';
 
 /**
  * Build the frame grid CharacterSprite expects — 3 rows (down, up, right) × 7
@@ -37,7 +38,10 @@ export async function loadHiveFrames(url: string): Promise<Texture[][]> {
 }
 
 /** Paint a bee's authored still as a static portrait for cards / the picker.
- *  Nearest-neighbour so the pixel art stays crisp at whole and half scales. */
+ *  The square bee is scaled to COVER the portrait footprint (PORTRAIT_W ×
+ *  PORTRAIT_H) by height, centered — the wing tips crop at the sides so the body,
+ *  stripes, and head fill the avatar the way the office portraits do. Nearest-
+ *  neighbour keeps the pixel art crisp at whole and half scales. */
 export async function paintHivePortrait(
   ctx: CanvasRenderingContext2D,
   url: string,
@@ -47,5 +51,8 @@ export async function paintHivePortrait(
   img.src = url;
   await img.decode();
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(img, 0, 0, img.width * scale, img.height * scale);
+  const boxW = PORTRAIT_W * scale, boxH = PORTRAIT_H * scale;
+  const size = boxH; // square bee, fill the box height
+  const dx = Math.round((boxW - size) / 2); // center (negative → wing tips crop)
+  ctx.drawImage(img, dx, 0, size, size);
 }
