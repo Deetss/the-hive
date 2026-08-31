@@ -579,6 +579,12 @@
     box-shadow: inset 0 0 0 1px var(--cth-ink-900), 0 1px 0 var(--cth-ink-900);
   }
   .btn-dark:active { background: var(--cth-lemon); color: var(--cth-ink-900); }
+  .btn-danger {
+    background: var(--cth-coral);
+    color: var(--cth-ink-900);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-900), 0 1px 0 var(--cth-ink-900);
+  }
+  .btn-danger:active { opacity: 0.8; }
 
   .btn-sm {
     padding: 5px 10px;
@@ -906,6 +912,25 @@
     overflow-y: auto;
     border: 1px solid var(--cth-ink-700);
   }
+  .agent-terminal {
+    margin-top: 8px;
+    padding: 8px;
+    background: var(--cth-ink-900);
+    color: var(--cth-paper-100);
+    font-family: var(--cth-font-mono);
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--cth-ink-700);
+  }
+  .agent-message-form {
+    background: var(--cth-paper-200);
+    padding: 8px;
+    border: 1px solid var(--cth-ink-300);
+  }
 </style>
 </head>
 <body>
@@ -1040,6 +1065,23 @@
         <button class="fleet-refresh-btn" id="workers-refresh">↻</button>
       </div>
       <div id="workers-list"><div class="spinner">⟳ loading…</div></div>
+
+      <div class="fleet-header" style="margin-top:16px;">
+        <span class="fleet-header-title">Tracked Processes</span>
+        <button class="fleet-refresh-btn" id="processes-refresh">↻</button>
+      </div>
+      <div id="processes-list"><div class="spinner">⟳ loading…</div></div>
+
+      <div style="margin-top:16px;padding:10px;background:var(--cth-paper-100);box-shadow:inset 0 0 0 1px var(--cth-ink-300);">
+        <div style="font-family:var(--cth-font-display);font-size:9px;color:var(--cth-lemon);margin-bottom:8px;">NEW TERMINAL</div>
+        <select id="new-terminal-shell" style="width:100%;margin-bottom:6px;padding:4px;background:var(--cth-paper-200);border:1px solid var(--cth-ink-300);color:var(--cth-ink-900);font-family:var(--cth-font-mono);font-size:11px;">
+          <option value="wsl-bash">WSL Bash</option>
+          <option value="powershell">PowerShell</option>
+          <option value="cmd">CMD</option>
+        </select>
+        <input type="text" id="new-terminal-cwd" placeholder="Working directory" style="width:100%;margin-bottom:6px;padding:4px;background:var(--cth-paper-200);border:1px solid var(--cth-ink-300);color:var(--cth-ink-900);font-family:var(--cth-font-mono);font-size:11px;">
+        <button id="new-terminal-launch" class="btn btn-primary" style="width:100%;font-size:11px;">Launch Terminal</button>
+      </div>
     </section>
   </div>
 
@@ -1271,7 +1313,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (screen === 'askme') loadAskMe();
     if (screen === 'tasks') loadTasks();
     if (screen === 'fleet') loadFleet();
-    if (screen === 'workers') loadWorkers();
+    if (screen === 'workers') { loadWorkers(); loadProcesses(); }
     if (screen === 'dispatch') populateDispatchRecipients();
   });
 });
@@ -1365,10 +1407,168 @@ function agentCard(a) {
   <div class="context-gauge" title="Context usage">
     <div class="context-gauge-fill" style="width: ${Math.min(100, Math.max(5, (a.tokens || 0) % 100))}%"></div>
   </div>
+  <div style="display:flex;gap:4px;margin-top:8px;">
+    <button class="btn btn-secondary agent-terminal-toggle" style="flex:1;font-size:10px;padding:4px 6px;" data-agent-id="${esc(a.id)}">
+      <span class="terminal-toggle-text">Terminal</span>
+    </button>
+    <button class="btn btn-secondary agent-message-btn" style="flex:1;font-size:10px;padding:4px 6px;" data-agent-id="${esc(a.id)}">
+      Message
+    </button>
+    <button class="btn btn-danger agent-stop-btn" style="font-size:10px;padding:4px 8px;" data-agent-id="${esc(a.id)}">
+      Stop
+    </button>
+  </div>
+  <div class="agent-terminal" data-agent-id="${esc(a.id)}" hidden>
+    <div class="spinner" style="padding:12px;text-align:center;">⟳ loading…</div>
+  </div>
+  <div class="agent-message-form" data-agent-id="${esc(a.id)}" hidden style="margin-top:8px;">
+    <textarea class="ask-input" placeholder="Type message…" style="width:100%;margin-bottom:4px;"></textarea>
+    <button class="btn btn-primary agent-message-send" data-agent-id="${esc(a.id)}" style="width:100%;font-size:10px;">Send Message</button>
+  </div>
 </div>`;
 }
 
 document.getElementById('fleet-refresh').addEventListener('click', loadFleet);
+
+// Agent terminal expansion state
+const agentTerminalState = new Map();
+
+// Event delegation for agent terminal toggle
+document.getElementById('fleet-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('.agent-terminal-toggle');
+  if (!btn) return;
+  const agentId = btn.dataset.agentId;
+  if (agentId) toggleAgentTerminal(agentId);
+});
+
+async function toggleAgentTerminal(agentId) {
+  const terminalEl = document.querySelector(`.agent-terminal[data-agent-id="${CSS.escape(agentId)}"]`);
+  const toggleBtn = document.querySelector(`.agent-terminal-toggle[data-agent-id="${CSS.escape(agentId)}"]`);
+  const toggleText = toggleBtn?.querySelector('.terminal-toggle-text');
+  if (!terminalEl || !toggleText) return;
+
+  const state = agentTerminalState.get(agentId) || { expanded: false, interval: null };
+
+  if (state.expanded) {
+    terminalEl.hidden = true;
+    toggleText.textContent = 'Terminal';
+    if (state.interval) {
+      clearInterval(state.interval);
+      state.interval = null;
+    }
+    state.expanded = false;
+  } else {
+    terminalEl.hidden = false;
+    toggleText.textContent = 'Hide';
+    state.expanded = true;
+    await loadAgentTerminal(agentId, terminalEl);
+    state.interval = setInterval(() => {
+      if (agentTerminalState.get(agentId)?.expanded) {
+        loadAgentTerminal(agentId, terminalEl);
+      }
+    }, 3000);
+  }
+
+  agentTerminalState.set(agentId, state);
+}
+
+async function loadAgentTerminal(agentId, terminalEl) {
+  if (!terminalEl) return;
+  try {
+    const res = await apiFetch(`/api/workers/${encodeURIComponent(agentId)}/tail`);
+    if (!res.ok) {
+      terminalEl.textContent = 'Failed to load terminal output';
+      return;
+    }
+    const data = await res.json();
+    if (data.ok && data.tail) {
+      terminalEl.textContent = data.tail.join('\n') || '(no output)';
+      terminalEl.scrollTop = terminalEl.scrollHeight;
+    } else {
+      terminalEl.textContent = '(no output)';
+    }
+  } catch (e) {
+    terminalEl.textContent = 'Error loading terminal';
+  }
+}
+
+// Event delegation for agent message button
+document.getElementById('fleet-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('.agent-message-btn');
+  if (!btn) return;
+  const agentId = btn.dataset.agentId;
+  if (agentId) toggleAgentMessageForm(agentId);
+});
+
+function toggleAgentMessageForm(agentId) {
+  const formEl = document.querySelector(`.agent-message-form[data-agent-id="${CSS.escape(agentId)}"]`);
+  if (!formEl) return;
+  formEl.hidden = !formEl.hidden;
+}
+
+// Event delegation for agent message send
+document.getElementById('fleet-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.agent-message-send');
+  if (!btn) return;
+  const agentId = btn.dataset.agentId;
+  const formEl = document.querySelector(`.agent-message-form[data-agent-id="${CSS.escape(agentId)}"]`);
+  const textarea = formEl?.querySelector('textarea');
+  const text = textarea?.value.trim();
+  if (!text || !agentId) return;
+
+  btn.disabled = true;
+  btn.textContent = 'SENDING…';
+  try {
+    const res = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}/message`, {
+      method: 'POST',
+      body: JSON.stringify({ text })
+    });
+    if (res.ok) {
+      textarea.value = '';
+      formEl.hidden = true;
+      btn.textContent = 'Send Message';
+    } else {
+      btn.textContent = 'Failed';
+      setTimeout(() => { btn.textContent = 'Send Message'; }, 2000);
+    }
+  } catch (e) {
+    btn.textContent = 'Error';
+    setTimeout(() => { btn.textContent = 'Send Message'; }, 2000);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Event delegation for agent stop button
+document.getElementById('fleet-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.agent-stop-btn');
+  if (!btn) return;
+  const agentId = btn.dataset.agentId;
+  if (!agentId) return;
+
+  if (!confirm(`Stop agent ${agentId}?`)) return;
+
+  btn.disabled = true;
+  btn.textContent = 'STOPPING…';
+  try {
+    const res = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}/stop`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'Stopped from mobile' })
+    });
+    if (res.ok) {
+      btn.textContent = 'STOPPED';
+      setTimeout(loadFleet, 1000);
+    } else {
+      btn.textContent = 'Failed';
+      setTimeout(() => { btn.textContent = 'Stop'; }, 2000);
+    }
+  } catch (e) {
+    btn.textContent = 'Error';
+    setTimeout(() => { btn.textContent = 'Stop'; }, 2000);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ── Workers (ephemeral Slack-triggered workers) ───────────────────
 function relAgeMs(ms) {
@@ -1515,6 +1715,136 @@ async function loadWorkerTerminal(workerId, terminalEl) {
   }
 }
 
+// ── Processes ────────────────────────────────────────────────────
+async function loadProcesses() {
+  try {
+    const res = await apiFetch('/api/processes');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderProcesses(data);
+  } catch (e) { if (e.message !== '401') showError('Processes load failed'); }
+}
+
+function renderProcesses(data) {
+  const processes = (data && data.processes) || [];
+  const el = document.getElementById('processes-list');
+  if (processes.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">💤</div><div class="empty-msg">No tracked processes</div></div>';
+    return;
+  }
+  el.innerHTML = processes.map(p => processCard(p)).join('');
+}
+
+function processCard(p) {
+  const badgeColorClass = p.status === 'running' ? 'badge-green' : 'badge-gray';
+  const statusLabel = p.status === 'running' ? 'running' : 'exited';
+  return `
+<div class="card">
+  <div class="card-header">
+    <div class="avatar-box">⚙</div>
+    <span class="agent-name">${esc(p.label)}</span>
+    <span class="pixel-badge ${badgeColorClass}">
+      <span class="pixel-badge-dot"></span>
+      ${esc(statusLabel)}
+    </span>
+  </div>
+  <div class="agent-role">${esc(p.shell)} · pid ${p.pid}</div>
+  <div style="font-family:var(--cth-font-mono);font-size:10px;color:var(--cth-ink-500);margin-top:4px;">
+    ${esc(p.cwd)}
+  </div>
+  <div class="agent-metrics" style="grid-template-columns:1fr 1fr;">
+    <div class="metric">
+      <div class="metric-val">${relAgeMs(p.uptimeMs)}</div>
+      <div class="metric-label">Uptime</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">${p.exitCode != null ? p.exitCode : '—'}</div>
+      <div class="metric-label">Exit Code</div>
+    </div>
+  </div>
+  ${p.status === 'running' ? `
+  <button class="btn btn-danger process-kill-btn" style="margin-top:8px;width:100%;font-size:10px;" data-process-id="${esc(p.processId)}">
+    Kill Process
+  </button>` : ''}
+</div>`;
+}
+
+document.getElementById('processes-refresh').addEventListener('click', loadProcesses);
+
+// Event delegation for process kill button
+document.getElementById('processes-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.process-kill-btn');
+  if (!btn) return;
+  const processId = btn.dataset.processId;
+  if (!processId) return;
+
+  if (!confirm('Kill this process?')) return;
+
+  btn.disabled = true;
+  btn.textContent = 'KILLING…';
+  try {
+    const res = await apiFetch(`/api/processes/${encodeURIComponent(processId)}`, {
+      method: 'DELETE'
+    });
+    if (res.ok) {
+      btn.textContent = 'KILLED';
+      setTimeout(loadProcesses, 1000);
+    } else {
+      btn.textContent = 'Failed';
+      setTimeout(() => { btn.textContent = 'Kill Process'; }, 2000);
+    }
+  } catch (e) {
+    btn.textContent = 'Error';
+    setTimeout(() => { btn.textContent = 'Kill Process'; }, 2000);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// New terminal launch
+document.getElementById('new-terminal-launch').addEventListener('click', async () => {
+  const shell = document.getElementById('new-terminal-shell').value;
+  const cwd = document.getElementById('new-terminal-cwd').value.trim();
+  const btn = document.getElementById('new-terminal-launch');
+
+  if (!cwd) {
+    alert('Please enter a working directory');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'LAUNCHING…';
+  try {
+    const res = await apiFetch('/api/processes', {
+      method: 'POST',
+      body: JSON.stringify({
+        cmd: shell === 'wsl-bash' ? 'bash' : (shell === 'powershell' ? 'powershell.exe' : 'cmd.exe'),
+        args: [],
+        cwd,
+        shell,
+        label: `${shell} (${cwd.split(/[/\\]/).pop() || cwd})`
+      })
+    });
+    if (res.ok) {
+      btn.textContent = '✓ LAUNCHED';
+      document.getElementById('new-terminal-cwd').value = '';
+      setTimeout(() => {
+        btn.textContent = 'Launch Terminal';
+        loadProcesses();
+      }, 1000);
+    } else {
+      const data = await res.json();
+      alert('Launch failed: ' + (data.error || 'unknown error'));
+      btn.textContent = 'Launch Terminal';
+    }
+  } catch (e) {
+    alert('Launch error: ' + e.message);
+    btn.textContent = 'Launch Terminal';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ── Ask Me ───────────────────────────────────────────────────────
 async function loadAskMe() {
   try {
@@ -1658,6 +1988,13 @@ function renderTasks() {
       if (field === 'result') patchTask(id, { result: text });
     });
   });
+  el.querySelectorAll('.task-assignee-input').forEach(input => {
+    input.addEventListener('blur', (e) => {
+      const id = input.dataset.id;
+      const assignee = input.value.trim();
+      if (id) patchTask(id, { assignee });
+    });
+  });
 }
 
 function taskCard(t) {
@@ -1676,7 +2013,10 @@ function taskCard(t) {
         <option value="done" ${t.status === 'done' ? 'selected' : ''}>DONE</option>
       </select>
     </div>
-    ${t.assignee ? `<div class="task-assignee">${esc(t.assignee).toUpperCase()}</div>` : ''}
+    <div style="display:flex;gap:8px;align-items:center;margin:4px 0;">
+      <span style="font-family:var(--cth-font-display);font-size:8px;color:var(--cth-ink-500)">ASSIGNEE:</span>
+      <input type="text" class="task-assignee-input" data-id="${t.id}" value="${esc(t.assignee || '')}" placeholder="none" style="flex:1;font-family:var(--cth-font-mono);font-size:10px;padding:2px 4px;background:var(--cth-paper-200);border:1px solid var(--cth-ink-300);color:var(--cth-ink-900);">
+    </div>
     <div class="task-notes" contenteditable="true" data-id="${t.id}" data-field="notes" title="Click to edit notes" style="outline:none">${esc(notesText)}</div>
     ${notesText ? `<button class="task-expand">Show more</button>` : ''}
     ${t.status === 'done' || t.result ? `

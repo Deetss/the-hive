@@ -1276,6 +1276,253 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     return true;
   }
 
+  // GET /api/processes
+  if (pathname === '/api/processes' || pathname === '/api/processes/') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    const now = Date.now();
+    const processes = [...trackedProcesses.entries()].map(([id, p]) => ({
+      processId: id,
+      pid: p.pid,
+      label: p.label,
+      cwd: p.cwd,
+      shell: p.shell,
+      status: p.status,
+      exitCode: p.exitCode,
+      startedAt: p.startedAt,
+      uptimeMs: p.status === 'running' ? Math.max(0, now - p.startedAt) : 0
+    }));
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, processes }));
+    return true;
+  }
+
+  // POST /api/processes
+  if (pathname === '/api/processes' || pathname === '/api/processes/') {
+    if (method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    let body: ProcessSpawnOptions;
+    try {
+      body = await readJsonBody<ProcessSpawnOptions>(req);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      return true;
+    }
+
+    const { cmd, args = [], cwd, label, shell } = body;
+    if (!cmd || !cwd || !shell) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Missing required fields: cmd, cwd, shell' }));
+      return true;
+    }
+
+    if (hasShellMetachars(cwd) || hasShellMetachars(cmd)) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Path or command contains shell metacharacters' }));
+      return true;
+    }
+    if (args.some(hasShellMetachars)) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Arguments contain shell metacharacters' }));
+      return true;
+    }
+
+    const processId = `proc-${++processIdSeq}`;
+    const now = Date.now();
+
+    try {
+      let spawnCmd: string;
+      let spawnArgs: string[];
+      let spawnOpts: { cwd: string; shell: boolean };
+
+      if (shell === 'wsl-bash') {
+        const wslPath = convertToWslPath(cwd);
+        spawnCmd = 'wsl.exe';
+        spawnArgs = ['-d', 'Ubuntu', '--cd', wslPath, '--', 'bash'];
+        spawnOpts = { cwd, shell: false };
+      } else if (shell === 'powershell') {
+        spawnCmd = 'powershell.exe';
+        spawnArgs = ['-NoProfile', '-NoLogo', '-NonInteractive'];
+        spawnOpts = { cwd, shell: false };
+      } else if (shell === 'cmd') {
+        spawnCmd = 'cmd.exe';
+        spawnArgs = ['/Q'];
+        spawnOpts = { cwd, shell: false };
+      } else {
+        spawnCmd = cmd;
+        spawnArgs = args;
+        spawnOpts = { cwd, shell: false };
+      }
+
+      const proc = spawn(spawnCmd, spawnArgs, spawnOpts);
+
+      const tracked: TrackedProcess = {
+        pid: proc.pid ?? 0,
+        label: label || cmd,
+        cmd,
+        args,
+        cwd,
+        shell,
+        startedAt: now,
+        status: 'running'
+      };
+
+      trackedProcesses.set(processId, tracked);
+
+      proc.on('exit', (code) => {
+        const p = trackedProcesses.get(processId);
+        if (p) {
+          p.status = 'exited';
+          p.exitCode = code ?? undefined;
+        }
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, processId, pid: proc.pid }));
+      return true;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: String(e) }));
+      return true;
+    }
+  }
+
+  // DELETE /api/processes/:id
+  const processKillMatch = /^\/api\/processes\/([^/]+)\/?$/.exec(pathname);
+  if (processKillMatch && method === 'DELETE') {
+    const processId = decodeURIComponent(processKillMatch[1]);
+    const proc = trackedProcesses.get(processId);
+    if (!proc) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Process not found' }));
+      return true;
+    }
+
+    try {
+      if (proc.status === 'running' && proc.pid) {
+        process.kill(proc.pid);
+        proc.status = 'exited';
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true }));
+      return true;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: String(e) }));
+      return true;
+    }
+  }
+
+  // POST /api/agents/:id/message
+  const agentMessageMatch = /^\/api\/agents\/([^/]+)\/message\/?$/.exec(pathname);
+  if (agentMessageMatch && method === 'POST') {
+    const agentId = decodeURIComponent(agentMessageMatch[1]);
+    let body: { text?: string };
+    try {
+      body = await readJsonBody<{ text?: string }>(req);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      return true;
+    }
+
+    const text = typeof body?.text === 'string' ? body.text.trim() : '';
+    if (!text) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Message text is required' }));
+      return true;
+    }
+
+    if (!hiveRoot) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Hive root not resolved' }));
+      return true;
+    }
+
+    const nowIso = new Date().toISOString();
+    const safeTimestamp = nowIso.replace(/[:.]/g, '-');
+    const msgId = `${safeTimestamp}-mobile-msg`;
+    const inboxDir = join(hiveRoot, 'agents', agentId, 'inbox');
+
+    const msgPayload = {
+      id: msgId,
+      from: 'human',
+      to: agentId,
+      act: 'message',
+      subject: 'Message from mobile',
+      body: text,
+      hops: 0,
+      requires_reply: false,
+      needs_human: false,
+      created_at: nowIso
+    };
+
+    try {
+      atomicWriteJson(join(inboxDir, `${msgId}.json`), msgPayload);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Failed to write message to inbox' }));
+      return true;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, messageId: msgId }));
+    return true;
+  }
+
+  // GET /api/agents/:id/pty-stream (SSE)
+  const agentPtyStreamMatch = /^\/api\/agents\/([^/]+)\/pty-stream\/?$/.exec(pathname);
+  if (agentPtyStreamMatch && method === 'GET') {
+    const agentId = decodeURIComponent(agentPtyStreamMatch[1]);
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+
+    const tail = getWorkerPtyTail(agentId);
+    tail.forEach(line => {
+      res.write(`data: ${JSON.stringify({ line })}\n\n`);
+    });
+
+    const keepaliveTimer = setInterval(() => {
+      try {
+        res.write(':\n\n');
+      } catch {
+        clearInterval(keepaliveTimer);
+      }
+    }, 15_000);
+
+    const updateTimer = setInterval(() => {
+      try {
+        const currentTail = getWorkerPtyTail(agentId);
+        if (currentTail.length > 0) {
+          const lastLine = currentTail[currentTail.length - 1];
+          res.write(`data: ${JSON.stringify({ line: lastLine })}\n\n`);
+        }
+      } catch {
+        clearInterval(updateTimer);
+        clearInterval(keepaliveTimer);
+      }
+    }, 2000);
+
+    res.on('close', () => {
+      clearInterval(keepaliveTimer);
+      clearInterval(updateTimer);
+    });
+
+    return true;
+  }
+
   res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify({ error: 'Not Found' }));
   return true;
