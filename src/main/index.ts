@@ -3202,7 +3202,7 @@ async function startSlackServer(): Promise<{ ok: boolean; url?: string; error?: 
   }
   slackServer?.stop();
   slackServer = new SlackWebhookServer({
-    port: cfg.slackPort && cfg.slackPort > 0 ? cfg.slackPort : (app.isPackaged ? 3847 : 3947),
+    port: app.isPackaged ? (cfg.slackPort && cfg.slackPort > 0 ? cfg.slackPort : 3847) : 3947,
     signingSecret: cfg.slackSigningSecret,
     channelId: cfg.slackChannelId,
     // Fires from the HTTP server's event loop (not the IPC thread); route through
@@ -3758,6 +3758,9 @@ if (process.defaultApp) {
 // single-instance lock and forward them to the running instance. (macOS gets
 // the 'open-url' event instead.) The lock also rules out two harnesses fighting
 // over the same hive, which was previously possible but never useful.
+if (!app.isPackaged) {
+  app.setPath('userData', app.getPath('userData') + '-dev');
+}
 const gotInstanceLock = app.requestSingleInstanceLock();
 if (!gotInstanceLock) {
   allowQuit = true;
