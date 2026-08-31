@@ -1626,6 +1626,10 @@ const lastAgentPtyTokens = new Map<string, number>();
 const lastAgentPtyCost = new Map<string, number>();
 /** Context window percentage parsed from PTY stdout for non-Claude agents. */
 const lastAgentPtyCtx = new Map<string, number>();
+/** Quota-limited status per agent. */
+const lastAgentQuotaLimited = new Map<string, boolean>();
+/** Epoch ms when agent quota resets. */
+const lastAgentQuotaResetsAt = new Map<string, number>();
 
 const AGY_TOOL_RE = /(?:(?:\[?\b(?:Tool|Calling tool|Running tool|Executing|Tool call|Tool Call|Action)\b\]?)\s*[:\s]\s*([A-Za-z0-9_.:-]+)|●\s+([A-Za-z][A-Za-z0-9_]*))/i;
 /** Parse token counts from PTY stdout. Matches: "tokens: 1234", "Used 1234 tokens", "1234 tokens", etc. */
@@ -1634,6 +1638,10 @@ const PTY_TOKENS_RE = /(?:tokens?|tok)(?:\s*used)?[:\s]+(\d+)|(?:used|consuming)
 const PTY_COST_RE = /(?:cost|usage|spent)[:\s]+\$?([\d.]+)|\$([\d.]+)/i;
 /** Parse context window percentage from PTY stdout. Matches: "ctx 45%", "context: 67%", "45% of context", etc. */
 const PTY_CTX_RE = /(?:ctx|context)[:\s]+(\d+)%|(\d+)%\s+(?:of\s+)?(?:ctx|context)/i;
+/** Detect quota exhaustion. Matches: "Individual quota reached", "Rate limit reached", "quota exceeded". */
+const PTY_QUOTA_RE = /Individual quota reached|Rate limit reached|quota exceeded/i;
+/** Parse quota reset duration. Matches: "Resets in 1h12m", "Resets in 45m", etc. */
+const PTY_QUOTA_RESET_RE = /Resets in (\d+h)?(\d+m)?/i;
 
 function stripAnsiText(str: string): string {
   return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
@@ -1697,6 +1705,47 @@ function notifyAgentPtyActivity(ptyId: string, chunk?: string): void {
       if (ctx > 0 && ctx <= 100) {
         // Context % is a snapshot, not cumulative — keep the latest
         lastAgentPtyCtx.set(agentId, ctx);
+      }
+    }
+
+    // Detect quota exhaustion
+    const quotaMatch = PTY_QUOTA_RE.exec(plain);
+    if (quotaMatch) {
+      lastAgentQuotaLimited.set(agentId, true);
+      lastAgentTool.set(agentId, 'quota');
+
+      // Parse reset duration
+      const resetMatch = PTY_QUOTA_RESET_RE.exec(plain);
+      if (resetMatch) {
+        const hours = resetMatch[1] ? parseInt(resetMatch[1], 10) : 0;
+        const mins = resetMatch[2] ? parseInt(resetMatch[2], 10) : 0;
+        const resetMs = Date.now() + (hours * 3600000) + (mins * 60000);
+        lastAgentQuotaResetsAt.set(agentId, resetMs);
+
+        // Write warning to god's inbox
+        const resetTime = new Date(resetMs).toLocaleString();
+        const warnMsg = {
+          id: `quota-warn-${agentId}-${Date.now()}`,
+          conversation: 'god',
+          in_reply_to: null,
+          from: 'system',
+          to: 'god',
+          act: 'warn',
+          subject: `Agent quota — ${agentId}`,
+          body: `Hit quota. Resets ${resetTime}. Suggest: Stop agent or Respawn on different profile.`,
+          priority: 'normal',
+          hops: 0,
+          requires_reply: false,
+          needs_human: false,
+          created_at: new Date().toISOString()
+        };
+
+        const godInboxPath = join(HIVE_ROOT, 'agents', 'god', 'inbox', `${warnMsg.id}.json`);
+        try {
+          writeFileSync(godInboxPath, JSON.stringify(warnMsg, null, 2), 'utf8');
+        } catch (e) {
+          console.error('[quota-warn] Failed to write to god inbox:', e);
+        }
       }
     }
 
@@ -2952,6 +3001,8 @@ function writeFleetSnapshot(): void {
         const agentStatus = isWorking ? 'working' : (lastAgentStatus.get(id) ?? (a.status || 'idle'));
         const agentLastTool = lastAgentTool.get(id) ?? (spans.length ? spans[spans.length - 1].tool : null);
         const ptyCtx = lastAgentPtyCtx.get(id);
+        const quotaLimited = lastAgentQuotaLimited.get(id) ?? false;
+        const quotaResetsAt = lastAgentQuotaResetsAt.get(id) ?? null;
         return {
           id,
           name: a.name,
@@ -2968,7 +3019,9 @@ function writeFleetSnapshot(): void {
           inboxBacklog: hive.inboxBacklog(id),
           onHold: !!a.onHold,
           profileId: a.profileId ?? null,
-          ctxPct: ptyCtx ?? (u?.contextWindow?.percentage ? Math.round(u.contextWindow.percentage * 100) : null)
+          ctxPct: ptyCtx ?? (u?.contextWindow?.percentage ? Math.round(u.contextWindow.percentage * 100) : null),
+          quotaLimited,
+          quotaResetsAt
         };
       });
     hive.writeFleetSnapshot({ ts: now, agents });
