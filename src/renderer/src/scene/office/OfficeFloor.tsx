@@ -8,7 +8,7 @@ import { Camera } from './Camera';
 import { Character, paintCup } from './Character';
 import { DeskScreen } from './DeskScreen';
 import { MessageEnvelope, type MessageAct } from './MessageEnvelope';
-import { hexToNumber, DEFAULT_CHARACTER } from './cast';
+import { hexToNumber, getDefaultCharacter } from './cast';
 import { pickSoloLine, pickExchange, type BreakSpot } from './cafeteriaLines';
 import { colors } from '@/design/tokens';
 import { loadTheme, resolveThemeMap, themeTilesetUrls } from './themeLoader';
@@ -618,7 +618,7 @@ export function OfficeFloor() {
 
       const emitQuip = (id: string, rt: Runtime, spotIdx: number): void => {
         const spot = cafeSpots[spotIdx];
-        const character = agentById(id)?.character ?? DEFAULT_CHARACTER;
+        const character = agentById(id)?.character ?? getDefaultCharacter(id);
         const seed = Math.floor(Math.random() * 1e6);
         // Out of the boss's earshot, café talk turns to… the boss. In his
         // presence it's the usual harmless quips (the sucking up happens via
@@ -643,7 +643,7 @@ export function OfficeFloor() {
         const prt = runtimes.get(partnerId);
         if (!prt?.brk || prt.brk.phase !== 'lingering') return false;
         if (rt.brk.chat || rt.brk.chattingWith || prt.brk.chat || prt.brk.chattingWith) return false;
-        const character = agentById(id)?.character ?? DEFAULT_CHARACTER;
+        const character = agentById(id)?.character ?? getDefaultCharacter(id);
         const lines = pickExchange(character, Math.floor(Math.random() * 1e6));
         rt.brk.chat = { lines, partnerId, idx: 0, beat: 0 };
         prt.brk.chattingWith = id;

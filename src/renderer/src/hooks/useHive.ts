@@ -21,7 +21,7 @@ import { isDurableRole, preferredAgentRole, roleForHiveSpawn } from '../../../sh
 import { inboxNudgeText } from '../../../shared/hiveNudge';
 import { acquireTerminal, resetTerminal, isTerminalAutomationSafe } from '@/components/terminalPool';
 import { canDeliverToAgent, deliverWithAcknowledgement, checkPrecondition } from './queueDelivery';
-import { OFFICE_CAST, DEFAULT_CHARACTER } from '@/scene/office/cast';
+import { OFFICE_CAST, getDefaultCharacter } from '@/scene/office/cast';
 
 const GOD_ID = 'god';
 /** Accent palette for MAIN-spawned (voice-hired) agents — picked deterministically
@@ -1025,7 +1025,7 @@ export function useHive(config: HarnessConfig | null): void {
       const character =
         castMember(rec.character?.trim().toLowerCase()) ??
         castMember((rec.name || rec.id).toLowerCase()) ??
-        DEFAULT_CHARACTER;
+        getDefaultCharacter(rec.name || rec.id || '');
       // Accent is otherwise hashed from the worker id, which is stable but not
       // choosable. An unrecognised accent keeps the hash.
       const askedAccent = SPAWN_ACCENTS.find((a) => a === rec.accent?.trim().toLowerCase());

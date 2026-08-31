@@ -5,7 +5,7 @@ import { SpritePortrait } from './SpritePortrait';
 import { Icon } from './Icon';
 import { ProviderLogo } from './ProviderLogo';
 import { useStore, type Agent } from '@/store/store';
-import { OFFICE_CAST, DEFAULT_CHARACTER, type OfficeCharacterName } from '@/scene/office/cast';
+import { OFFICE_CAST, getDefaultCharacter, type OfficeCharacterName } from '@/scene/office/cast';
 import { type AccentColorName } from '@/design/tokens';
 import type { HireManifest } from '@shared/hire';
 import { hireQueueProgress } from '@shared/hireQueue';
@@ -149,7 +149,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   const reviewProgress = hireQueueProgress(hireQueue);
 
   const knownCharacter = (c?: string): OfficeCharacterName =>
-    (OFFICE_CAST.some(m => m.name === c) ? (c as OfficeCharacterName) : DEFAULT_CHARACTER);
+    (OFFICE_CAST.some(m => m.name === c) ? (c as OfficeCharacterName) : getDefaultCharacter(c || ''));
   const knownAccent = (a?: string): AccentColorName =>
     (ACCENTS.includes(a as AccentColorName) ? (a as AccentColorName) : 'sky');
   /** The cast member a typed name refers to, if any.
