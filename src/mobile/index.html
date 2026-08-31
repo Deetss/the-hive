@@ -1357,6 +1357,8 @@ function renderFleet() {
   document.getElementById('spend-badge').textContent = total.totalUsd != null ? '$' + Number(total.totalUsd).toFixed(2) : '';
   const agents = fleetData.agents || [];
   const el = document.getElementById('fleet-list');
+  const activeEl = document.activeElement;
+  if (el.contains(activeEl) && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT')) return;
   if (agents.length === 0) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">🕳</div><div class="empty-msg">No agents on floor</div></div>';
     return;
@@ -1688,6 +1690,8 @@ async function loadWorkers() {
 function renderWorkers(data) {
   const live = (data && data.live) || [];
   const el = document.getElementById('workers-list');
+  const activeElW = document.activeElement;
+  if (el.contains(activeElW) && (activeElW.tagName === 'TEXTAREA' || activeElW.tagName === 'INPUT')) return;
   if (live.length === 0) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">🕳</div><div class="empty-msg">No workers running</div></div>';
     return;
