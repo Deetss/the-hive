@@ -266,7 +266,10 @@ export class HookServer {
       this.toolCallCounts.set(agentId, count);
 
       const cfg = this.getConfig();
-      const limit = cfg.circuitBreaker?.repeatedToolLimit ?? 8;
+      // Use a high default — the repeatedToolLimit config field is for *consecutive*
+      // identical calls (handled by breaker.ts), not total session calls. Workers
+      // need hundreds of calls to do real work; 8 tripped every session.
+      const limit = cfg.circuitBreaker?.repeatedToolLimit ?? 2000;
 
       if (cfg.circuitBreaker?.enabled !== false && count >= limit) {
         const lastWarn = this.lastWarningAt.get(agentId) ?? 0;
