@@ -942,33 +942,29 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
             }}
           />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
-            PRIORITY
-          </span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {(['urgent', 'normal', 'backlog'] as const).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setDispatchPriority(p)}
-                style={{
-                  flex: 1,
-                  padding: '6px 12px',
-                  fontFamily: 'var(--cth-font-ui)',
-                  fontSize: 12,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: dispatchPriority === p ? 'var(--cth-ink-900)' : 'var(--cth-paper-100)',
-                  color: dispatchPriority === p ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)',
-                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                  transition: 'background 0.1s, color 0.1s'
-                }}
-              >{p}</button>
-            ))}
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)', flexShrink: 0 }}>priority</span>
+          {(['urgent', 'normal', 'backlog'] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setDispatchPriority(p)}
+              style={{
+                padding: '2px 8px',
+                fontFamily: 'var(--cth-font-ui)',
+                fontSize: 11,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+                border: 'none',
+                borderRadius: 2,
+                cursor: 'pointer',
+                background: dispatchPriority === p ? 'var(--cth-ink-900)' : 'transparent',
+                color: dispatchPriority === p ? 'var(--cth-paper-100)' : 'var(--cth-ink-500)',
+                boxShadow: dispatchPriority === p ? 'none' : 'inset 0 0 0 1px var(--cth-ink-300)',
+                transition: 'background 0.1s, color 0.1s'
+              }}
+            >{p}</button>
+          ))}
         </div>
         {(() => {
           const slashQ = dispatchText.startsWith('/') ? dispatchText.slice(1).toLowerCase() : null;
