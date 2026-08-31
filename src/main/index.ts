@@ -4845,47 +4845,35 @@ ipcMain.on('app:readClipboardSync', (evt) => {
 // Claude sessions outside the app.
 
 // ─── IPC: AI text improvement ───────────────────────────────────────────────
+// Routes through `claude --print` so no separate API key is needed — uses the
+// same authentication as the running agent sessions.
 ipcMain.handle('ai:improveText', async (_evt, text: unknown, context: unknown) => {
   if (typeof text !== 'string' || typeof context !== 'string') {
     return { ok: false, error: 'text and context must be strings' };
   }
-  const apiKey = integrations.getSecret('apikey:anthropic');
-  if (!apiKey) {
-    return { ok: false, error: 'No Anthropic API key configured' };
-  }
   const prompt = `Improve this ${context} for an AI agent. Make it specific, clear, and actionable. Return ONLY the improved text, no preamble, no quotes.\n\n${text}`;
-  const body = JSON.stringify({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 512,
-    messages: [{ role: 'user', content: prompt }]
-  });
   return new Promise<{ ok: boolean; result?: string; error?: string }>((resolve) => {
-    const req = httpsRequest('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      }
-    }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk.toString(); });
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.content?.[0]?.text) {
-            resolve({ ok: true, result: parsed.content[0].text });
-          } else {
-            resolve({ ok: false, error: parsed.error?.message ?? 'Invalid response format' });
-          }
-        } catch (e) {
-          resolve({ ok: false, error: e instanceof Error ? e.message : String(e) });
-        }
-      });
+    const child = spawn('claude', ['--print', prompt], {
+      shell: true,
+      env: process.env
     });
-    req.on('error', (e) => resolve({ ok: false, error: e.message }));
-    req.write(body);
-    req.end();
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    child.on('close', (code) => {
+      const result = stdout.trim();
+      if (code === 0 && result) {
+        resolve({ ok: true, result });
+      } else {
+        resolve({ ok: false, error: stderr.trim() || `claude exited with code ${code}` });
+      }
+    });
+    child.on('error', (e: Error) => resolve({ ok: false, error: e.message }));
+    setTimeout(() => {
+      child.kill();
+      resolve({ ok: false, error: 'timed out after 30s' });
+    }, 30000);
   });
 });
 
