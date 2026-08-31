@@ -92,8 +92,9 @@ function pickIdeTarget(): IdeTarget {
   return { agent: null, root: null, inferred: false };
 }
 
-export function IdePanel() {
+export function IdePanel({ embedded, onClose }: { embedded?: boolean; onClose?: () => void } = {}) {
   const setIdeOpen = useStore((s) => s.setIdeOpen);
+  const handleClose = () => { onClose ? onClose() : setIdeOpen(false); };
   const [target] = useState<IdeTarget>(pickIdeTarget);
   const root = target.root;
 
@@ -320,7 +321,7 @@ export function IdePanel() {
         if (t && t.mode === 'edit') { e.preventDefault(); void save(t.rel); }
         return;
       }
-      if (e.key === 'Escape' && !anyDirtyRef.current) { setIdeOpen(false); }
+      if (e.key === 'Escape' && !anyDirtyRef.current) { handleClose(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -352,7 +353,12 @@ export function IdePanel() {
     : undefined;
 
   return (
-    <div style={{
+    <div style={embedded ? {
+      flex: 1, minHeight: 0,
+      background: 'var(--cth-cream-100)',
+      display: 'flex', flexDirection: 'column',
+      overflow: 'hidden'
+    } : {
       position: 'fixed', inset: 0, zIndex: 290,
       background: 'var(--cth-cream-100)',
       display: 'flex', flexDirection: 'column',
@@ -360,13 +366,14 @@ export function IdePanel() {
     }}>
       {/* Title bar */}
       <div
-        className="cth-titlebar-drag"
+        className={embedded ? undefined : 'cth-titlebar-drag'}
         style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 36,
+          ...(embedded ? {} : { position: 'absolute', top: 0, left: 0, right: 0 }),
+          height: 36, flexShrink: 0,
           background: 'linear-gradient(180deg, var(--cth-cream-100) 0%, var(--cth-cream-200) 100%)',
           borderBottom: '1px solid var(--cth-ink-300)',
           display: 'flex', alignItems: 'center',
-          paddingLeft: 96, paddingRight: 8, gap: 10,
+          paddingLeft: embedded ? 8 : 96, paddingRight: 8, gap: 10,
           userSelect: 'none'
         }}
       >
@@ -420,7 +427,7 @@ export function IdePanel() {
         </span>
         <button
           className="cth-titlebar-nodrag"
-          onClick={() => setIdeOpen(false)}
+          onClick={handleClose}
           title="Close IDE (Esc)"
           aria-label="Close IDE"
           style={{

@@ -16,6 +16,7 @@ import { SkillsTab } from './SkillsTab';
 import { ReviewPanel } from './ReviewPanel';
 import { GitTab } from './GitTab';
 import { FilesTab } from './FilesTab';
+import { IdePanel } from '@/ide/IdePanel';
 import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool';
 import { terminalInstanceKey } from './terminalRecovery';
 import { Icon } from './Icon';
@@ -51,7 +52,7 @@ import { submitToPty, INITIAL_GOD_PROMPT } from '@/hooks/useHive';
 // the old Schedules tab: schedules are now one of four trigger types, and the
 // whole surface lives in ./triggers (see src/shared/triggers.ts for the contract).
 type CCTab = 'terminal' | 'floor' | 'tasks' | 'ask' | 'human' | 'triggers' | 'trigger-history'
-  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations' | 'review' | 'git' | 'files';
+  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations' | 'review' | 'git' | 'files' | 'ide';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
  *  is configured — so the bar reads as a budget estimate (filled + remaining)
@@ -85,7 +86,8 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
   { key: 'delegations', label: 'delegations', icon: 'gear' },
   { key: 'review', label: 'review', icon: 'ledger' },
   { key: 'git', label: 'git', icon: 'code' },
-  { key: 'files', label: 'files', icon: 'folder' }
+  { key: 'files', label: 'files', icon: 'folder' },
+  { key: 'ide', label: 'ide', icon: 'code' }
 ];
 
 type TabDef = { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] };
@@ -195,7 +197,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
   useEffect(() => {
     if (!showHistory && tab === 'trigger-history') setTab('terminal');
   }, [showHistory, tab]);
-  const workerTabs = new Set<CCTab>(['terminal', 'git', 'files', 'review', 'activity', 'delegations']);
+  const workerTabs = new Set<CCTab>(['terminal', 'git', 'files', 'ide', 'review', 'activity', 'delegations']);
   const visibleTabs = TABS.filter((t) => {
     if (t.key === 'trigger-history' && !showHistory) return false;
     if (!agent.isOvermind && !workerTabs.has(t.key)) return false;
@@ -377,9 +379,10 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
           {/* Floor-level surface with no agent of its own: the honest target is
               whoever is selected, stated explicitly rather than left to the
               IDE's fallback so the intent is visible at the call site. */}
-          <PixelButton variant="secondary" size="sm" onClick={() => {
+          <PixelButton variant={tab === 'ide' ? 'primary' : 'secondary'} size="sm" onClick={() => {
             const s = useStore.getState();
             s.setIdeOpen(true, s.selectedId);
+            setTab(tab === 'ide' ? 'terminal' : 'ide');
           }}>
             <span
               className="cth-tip cth-tip-wrap"
@@ -578,6 +581,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         {tab === 'review' && <ReviewPanel onClose={() => setTab('floor')} />}
         {tab === 'git' && <GitTab cwd={agent.worktreePath ?? agent.cwd} />}
         {tab === 'files' && <FilesTab cwd={agent.worktreePath ?? agent.cwd} />}
+        {tab === 'ide' && <IdePanel embedded onClose={() => setTab('terminal')} />}
       </div>
     </PixelPanel>
   );
