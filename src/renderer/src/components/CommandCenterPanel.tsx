@@ -194,7 +194,12 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
   useEffect(() => {
     if (!showHistory && tab === 'trigger-history') setTab('terminal');
   }, [showHistory, tab]);
-  const visibleTabs = TABS.filter((t) => t.key !== 'trigger-history' || showHistory);
+  const workerTabs = new Set<CCTab>(['terminal', 'git', 'files', 'review', 'activity', 'delegations']);
+  const visibleTabs = TABS.filter((t) => {
+    if (t.key === 'trigger-history' && !showHistory) return false;
+    if (!agent.isOvermind && !workerTabs.has(t.key)) return false;
+    return true;
+  });
 
   // External tab requests (the office task board → 'tasks', the boss-room
   // calendar → 'triggers'). seq-keyed so clicking again re-opens the tab even
