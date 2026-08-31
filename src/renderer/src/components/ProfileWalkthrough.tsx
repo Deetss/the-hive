@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { AgentProvider, HarnessConfig, RuntimeProfile } from '@/store/config';
+import { AGENT_PROVIDER_PRESETS, isClaudeProvider } from '@/store/config';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { ProviderLogo } from './ProviderLogo';
@@ -11,8 +12,9 @@ export interface ProfileWalkthroughProps {
   onCancel: () => void;
 }
 
-interface ProfileDraft {
+export interface ProfileDraftItem {
   id: string;
+  enabled: boolean;
   provider: AgentProvider;
   name: string;
   claudeConfigDir?: string;
@@ -24,10 +26,6 @@ interface ProfileDraft {
   allowPrivate?: boolean;
   createdAt?: number;
 }
-
-const CLAUDE_WORK_DEFAULT = 'Claude · work account';
-const CLAUDE_PERSONAL_DEFAULT = 'Claude · personal account';
-const CODEX_DEFAULT = 'Codex · default agent';
 
 const overlayStyle: CSSProperties = {
   position: 'fixed',
@@ -41,7 +39,7 @@ const overlayStyle: CSSProperties = {
 };
 
 const panelStyle: CSSProperties = {
-  width: 'min(760px, calc(100vw - 48px))',
+  width: 'min(780px, calc(100vw - 48px))',
   maxHeight: 'calc(100vh - 72px)',
   overflowY: 'auto',
   padding: 24,
@@ -59,7 +57,8 @@ const inputStyle: CSSProperties = {
   fontFamily: 'var(--cth-font-ui)',
   fontSize: 13,
   color: 'var(--cth-ink-900)',
-  outline: 'none'
+  outline: 'none',
+  boxSizing: 'border-box'
 };
 
 const blurbStyle: CSSProperties = {
@@ -71,9 +70,10 @@ const blurbStyle: CSSProperties = {
 const sectionHeaderStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
+  justifyContent: 'space-between',
   gap: 8,
   fontFamily: 'var(--cth-font-ui)',
-  fontSize: 12,
+  fontSize: 13,
   color: 'var(--cth-ink-900)'
 };
 
@@ -83,55 +83,75 @@ const sectionShellStyle: CSSProperties = {
   gap: 10,
   padding: 14,
   background: 'var(--cth-paper-100)',
-  boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
+  boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
+  transition: 'opacity 0.15s ease'
 };
 
 export function ProfileWalkthrough({ config, mandatory, onComplete, onCancel }: ProfileWalkthroughProps) {
-  const profiles = useMemo(() => config.runtimeProfiles ?? [], [config.runtimeProfiles]);
-  const assignments = useMemo(() => pickClaudeAssignments(profiles), [profiles]);
-  const codexExisting = useMemo(
-    () => profiles.find((p) => p.provider === 'codex'),
-    [profiles]
-  );
+  const existingProfiles = useMemo(() => config.runtimeProfiles ?? [], [config.runtimeProfiles]);
 
-  const seededWork = useMemo(
-    () => draftFromProfile(assignments.work, 'claude', CLAUDE_WORK_DEFAULT),
-    [assignments.work]
-  );
-  const seededPersonal = useMemo(
-    () => draftFromProfile(assignments.personal, 'claude', CLAUDE_PERSONAL_DEFAULT),
-    [assignments.personal]
-  );
-  const seededCodex = useMemo(
-    () => draftFromProfile(codexExisting, 'codex', CODEX_DEFAULT),
-    [codexExisting]
-  );
+  const initialDrafts = useMemo<ProfileDraftItem[]>(() => {
+    if (existingProfiles.length > 0) {
+      return existingProfiles.map((p) => ({
+        id: p.id,
+        enabled: true,
+        provider: p.provider,
+        name: p.name,
+        claudeConfigDir: p.claudeConfigDir,
+        model: p.model,
+        command: p.command,
+        extraArgs: p.extraArgs ? [...p.extraArgs] : undefined,
+        baseUrl: p.baseUrl,
+        apiKeyRef: p.apiKeyRef,
+        allowPrivate: p.allowPrivate,
+        createdAt: p.createdAt
+      }));
+    }
+    // Default starting suggestions (optional & customizable)
+    return [
+      {
+        id: 'profile-work-claude',
+        enabled: true,
+        provider: 'claude',
+        name: 'Claude · work account',
+        claudeConfigDir: ''
+      },
+      {
+        id: 'profile-personal-claude',
+        enabled: false,
+        provider: 'claude',
+        name: 'Claude · personal account',
+        claudeConfigDir: ''
+      },
+      {
+        id: 'profile-codex',
+        enabled: false,
+        provider: 'codex',
+        name: 'Codex · default agent'
+      }
+    ];
+  }, [existingProfiles]);
 
-  const initialDefaultId = useMemo(() => {
-    const ids = [seededWork.id, seededPersonal.id, seededCodex.id];
+  const [drafts, setDrafts] = useState<ProfileDraftItem[]>(initialDrafts);
+  const [defaultChoice, setDefaultChoice] = useState<string>(() => {
     const fromConfig = config.defaultSpawnProfileId;
-    if (fromConfig && ids.includes(fromConfig)) return fromConfig;
-    return ids[0] ?? '';
-  }, [config.defaultSpawnProfileId, seededCodex.id, seededPersonal.id, seededWork.id]);
-
-  const [work, setWork] = useState<ProfileDraft>(seededWork);
-  const [personal, setPersonal] = useState<ProfileDraft>(seededPersonal);
-  const [codex, setCodex] = useState<ProfileDraft>(seededCodex);
-  const [defaultChoice, setDefaultChoice] = useState<string>(initialDefaultId);
+    if (fromConfig && initialDrafts.some((d) => d.id === fromConfig)) return fromConfig;
+    return initialDrafts.find((d) => d.enabled)?.id ?? initialDrafts[0]?.id ?? '';
+  });
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setWork(seededWork);
-    setPersonal(seededPersonal);
-    setCodex(seededCodex);
-    setDefaultChoice((prev) => {
-      const ids = [seededWork.id, seededPersonal.id, seededCodex.id];
-      if (ids.includes(prev)) return prev;
-      return initialDefaultId;
-    });
-    setError(undefined);
-  }, [initialDefaultId, seededCodex, seededPersonal, seededWork]);
+    setDrafts(initialDrafts);
+  }, [initialDrafts]);
+
+  // Keep defaultChoice pointing to a valid enabled profile
+  useEffect(() => {
+    const enabled = drafts.filter((d) => d.enabled);
+    if (enabled.length > 0 && !enabled.some((d) => d.id === defaultChoice)) {
+      setDefaultChoice(enabled[0].id);
+    }
+  }, [drafts, defaultChoice]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -144,7 +164,36 @@ export function ProfileWalkthrough({ config, mandatory, onComplete, onCancel }: 
     return () => window.removeEventListener('keydown', onKey, true);
   }, [mandatory, onCancel]);
 
-  const chooseDir = useCallback(async (slot: 'work' | 'personal') => {
+  const toggleEnabled = useCallback((id: string) => {
+    setError(undefined);
+    setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, enabled: !d.enabled } : d)));
+  }, []);
+
+  const updateDraft = useCallback((id: string, patch: Partial<ProfileDraftItem>) => {
+    setError(undefined);
+    setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  }, []);
+
+  const removeDraft = useCallback((id: string) => {
+    setError(undefined);
+    setDrafts((prev) => prev.filter((d) => d.id !== id));
+  }, []);
+
+  const addDraft = useCallback(() => {
+    setError(undefined);
+    const newId = `profile-${crypto.randomUUID().slice(0, 8)}`;
+    setDrafts((prev) => [
+      ...prev,
+      {
+        id: newId,
+        enabled: true,
+        provider: 'claude',
+        name: `Profile ${prev.length + 1}`
+      }
+    ]);
+  }, []);
+
+  const pickFolder = useCallback(async (id: string) => {
     setError(undefined);
     try {
       const res = await window.cth.chooseFolder();
@@ -152,58 +201,79 @@ export function ProfileWalkthrough({ config, mandatory, onComplete, onCancel }: 
         if (res.error && res.error !== 'cancelled') setError(res.error);
         return;
       }
-      if (slot === 'work') setWork((prev) => ({ ...prev, claudeConfigDir: res.path }));
-      else setPersonal((prev) => ({ ...prev, claudeConfigDir: res.path }));
+      if (res.path) {
+        updateDraft(id, { claudeConfigDir: res.path });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, []);
+  }, [updateDraft]);
 
-  const workReady = work.name.trim().length > 0 && (work.claudeConfigDir?.trim().length ?? 0) > 0;
-  const personalReady = personal.name.trim().length > 0 && (personal.claudeConfigDir?.trim().length ?? 0) > 0;
-  const codexReady = codex.name.trim().length > 0;
-  const canSubmit = workReady && personalReady && codexReady && defaultChoice.length > 0 && !busy;
+  const enabledDrafts = useMemo(() => drafts.filter((d) => d.enabled), [drafts]);
+
+  const canSubmit = useMemo(() => {
+    if (enabledDrafts.length === 0) return false;
+    for (const d of enabledDrafts) {
+      if (!d.name.trim()) return false;
+    }
+    return !busy;
+  }, [enabledDrafts, busy]);
 
   const save = useCallback(async () => {
     if (busy) return;
     if (!canSubmit) {
-      setError('Fill in each profile before continuing.');
+      setError('Please include and name at least one profile.');
       return;
     }
     setBusy(true);
     setError(undefined);
-    const nextWork = draftToRuntimeProfile(work);
-    const nextPersonal = draftToRuntimeProfile(personal);
-    const nextCodex = draftToRuntimeProfile(codex);
-    const selectedId = [nextWork.id, nextPersonal.id, nextCodex.id].includes(defaultChoice)
+
+    const runtimeProfiles: RuntimeProfile[] = enabledDrafts.map((d) => {
+      const p: RuntimeProfile = {
+        id: d.id,
+        name: d.name.trim(),
+        provider: d.provider,
+        createdAt: d.createdAt ?? Date.now()
+      };
+      if (d.model?.trim()) p.model = d.model.trim();
+      if (d.command?.trim()) p.command = d.command.trim();
+      if (d.extraArgs && d.extraArgs.length > 0) p.extraArgs = [...d.extraArgs];
+      if (isClaudeProvider(d.provider) && d.claudeConfigDir?.trim()) {
+        p.claudeConfigDir = d.claudeConfigDir.trim();
+      }
+      if (d.baseUrl?.trim()) p.baseUrl = d.baseUrl.trim();
+      if (d.apiKeyRef?.trim()) p.apiKeyRef = d.apiKeyRef.trim();
+      if (d.allowPrivate) p.allowPrivate = true;
+      return p;
+    });
+
+    const activeDefaultId = runtimeProfiles.some((p) => p.id === defaultChoice)
       ? defaultChoice
-      : nextWork.id;
-    const replaceIds = new Set([nextWork.id, nextPersonal.id, nextCodex.id]);
-    const preserved = profiles.filter((p) => !replaceIds.has(p.id));
-    const runtimeProfiles = [...preserved, nextWork, nextPersonal, nextCodex];
+      : runtimeProfiles[0].id;
+
     try {
       const updated = await window.cth.updateConfig({
         runtimeProfiles,
-        defaultSpawnProfileId: selectedId,
+        defaultSpawnProfileId: activeDefaultId,
         onboardingComplete: true
       });
       onComplete(updated);
     } catch (err) {
       setBusy(false);
-      setError(err instanceof Error ? err.message : 'Could not save your runtime profiles.');
+      setError(err instanceof Error ? err.message : 'Could not save runtime profiles.');
     }
-  }, [busy, canSubmit, codex, defaultChoice, onComplete, personal, profiles, work]);
+  }, [busy, canSubmit, defaultChoice, enabledDrafts, onComplete]);
 
   return (
     <div style={overlayStyle}>
       <PixelPanel variant="dialog" style={panelStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 14, color: 'var(--cth-ink-900)' }}>
-              Finish setting up your accounts
+            <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 15, fontWeight: 700, color: 'var(--cth-ink-900)' }}>
+              Configure Runtime Profiles
             </div>
             <div style={blurbStyle}>
-              The hive needs a separate Claude login for work and personal use, plus a Codex profile. These live outside the synced hive repo.
+              Profiles pair an engine with an optional login directory or model. Toggle the ones you want, customize details, or add new ones.
             </div>
           </div>
 
@@ -215,105 +285,167 @@ export function ProfileWalkthrough({ config, mandatory, onComplete, onCancel }: 
               boxShadow: 'inset 0 0 0 1px var(--cth-lemon)',
               padding: 10
             }}>
-              Complete this walkthrough to finish first-run onboarding.
+              Configure your profiles to complete first-run onboarding. You can edit them in Settings at any time.
             </div>
           )}
 
-          <div style={sectionShellStyle}>
-            <div style={sectionHeaderStyle}>
-              <ProviderLogo provider="claude" size={14} /> Work Claude profile
-            </div>
-            <div style={blurbStyle}>Point to the CLAUDE_CONFIG_DIR for your work account. The folder should live outside your hive repo.</div>
-            <input
-              value={work.name}
-              onChange={(e) => { setWork((prev) => ({ ...prev, name: e.target.value })); setError(undefined); }}
-              placeholder="Profile name"
-              style={inputStyle}
-            />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                value={work.claudeConfigDir ?? ''}
-                onChange={(e) => { setWork((prev) => ({ ...prev, claudeConfigDir: e.target.value })); setError(undefined); }}
-                placeholder="Claude config directory"
-                style={{ ...inputStyle, flex: 1 }}
-              />
-              <PixelButton variant="secondary" size="sm" onClick={() => { void chooseDir('work'); }}>
-                Pick folder
-              </PixelButton>
-            </div>
+          {/* Profile Cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {drafts.map((d, index) => (
+              <div
+                key={d.id}
+                style={{
+                  ...sectionShellStyle,
+                  opacity: d.enabled ? 1 : 0.65,
+                  boxShadow: d.enabled
+                    ? 'inset 0 0 0 1px var(--cth-ink-300)'
+                    : 'inset 0 0 0 1px var(--cth-ink-100)'
+                }}
+              >
+                {/* Header row: Checkbox toggle, engine picker, delete */}
+                <div style={sectionHeaderStyle}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={d.enabled}
+                      onChange={() => toggleEnabled(d.id)}
+                    />
+                    <ProviderLogo provider={d.provider} size={15} />
+                    <span>{d.name.trim() || `Profile ${index + 1}`}</span>
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 500,
+                      padding: '1px 5px',
+                      background: d.enabled ? 'var(--cth-mint-light)' : 'var(--cth-cream-200)',
+                      color: d.enabled ? 'var(--cth-ink-900)' : 'var(--cth-ink-500)',
+                      boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
+                    }}>
+                      {d.enabled ? 'Active' : 'Skipped'}
+                    </span>
+                  </label>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <select
+                      value={d.provider}
+                      onChange={(e) => updateDraft(d.id, { provider: e.target.value as AgentProvider })}
+                      style={{
+                        padding: '3px 6px',
+                        background: 'var(--cth-cream-100)',
+                        boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)',
+                        border: 'none',
+                        fontFamily: 'var(--cth-font-ui)',
+                        fontSize: 12,
+                        color: 'var(--cth-ink-900)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {AGENT_PROVIDER_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={() => removeDraft(d.id)}
+                      title="Delete this profile card"
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--cth-ink-400)',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        padding: '0 4px',
+                        lineHeight: 1
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+
+                {/* Body inputs */}
+                {d.enabled && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                    <div>
+                      <input
+                        value={d.name}
+                        onChange={(e) => updateDraft(d.id, { name: e.target.value })}
+                        placeholder="Profile label (e.g. Work Claude, Personal, Fast Reviewer)"
+                        style={inputStyle}
+                      />
+                    </div>
+
+                    {isClaudeProvider(d.provider) && (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          value={d.claudeConfigDir ?? ''}
+                          onChange={(e) => updateDraft(d.id, { claudeConfigDir: e.target.value })}
+                          placeholder="CLAUDE_CONFIG_DIR path (leave empty for default ~/.claude)"
+                          style={{ ...inputStyle, flex: 1 }}
+                        />
+                        <PixelButton variant="secondary" size="sm" onClick={() => void pickFolder(d.id)}>
+                          Pick folder
+                        </PixelButton>
+                      </div>
+                    )}
+
+                    {d.provider === 'custom' && (
+                      <div>
+                        <input
+                          value={d.command ?? ''}
+                          onChange={(e) => updateDraft(d.id, { command: e.target.value })}
+                          placeholder="Custom CLI command (e.g. edgentic, ollama run llama3)"
+                          style={inputStyle}
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <input
+                        value={d.model ?? ''}
+                        onChange={(e) => updateDraft(d.id, { model: e.target.value })}
+                        placeholder="Model override (optional — e.g. claude-3-7-sonnet, gpt-4o, gemini-2.0-flash)"
+                        style={{ ...inputStyle, fontSize: 12 }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
-          <div style={sectionShellStyle}>
-            <div style={sectionHeaderStyle}>
-              <ProviderLogo provider="claude" size={14} /> Personal Claude profile
-            </div>
-            <div style={blurbStyle}>Create a separate CLAUDE_CONFIG_DIR for personal work so agents can swap accounts safely.</div>
-            <input
-              value={personal.name}
-              onChange={(e) => { setPersonal((prev) => ({ ...prev, name: e.target.value })); setError(undefined); }}
-              placeholder="Profile name"
-              style={inputStyle}
-            />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                value={personal.claudeConfigDir ?? ''}
-                onChange={(e) => { setPersonal((prev) => ({ ...prev, claudeConfigDir: e.target.value })); setError(undefined); }}
-                placeholder="Claude config directory"
-                style={{ ...inputStyle, flex: 1 }}
-              />
-              <PixelButton variant="secondary" size="sm" onClick={() => { void chooseDir('personal'); }}>
-                Pick folder
-              </PixelButton>
-            </div>
+          {/* Add Profile Button */}
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <PixelButton variant="secondary" size="sm" onClick={addDraft}>
+              + Add profile
+            </PixelButton>
           </div>
 
-          <div style={sectionShellStyle}>
-            <div style={sectionHeaderStyle}>
-              <ProviderLogo provider="codex" size={14} /> Codex profile
+          {/* Default profile picker (filtered to enabled) */}
+          {enabledDrafts.length > 0 && (
+            <div style={sectionShellStyle}>
+              <div style={{ ...sectionHeaderStyle, fontWeight: 600 }}>Default profile for new agents</div>
+              <div style={blurbStyle}>
+                Pick which profile agents use by default when none is specified.
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                {enabledDrafts.map((d) => (
+                  <label key={d.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="default-profile-choice"
+                      value={d.id}
+                      checked={defaultChoice === d.id}
+                      onChange={() => setDefaultChoice(d.id)}
+                    />
+                    <ProviderLogo provider={d.provider} size={14} />
+                    <span>{d.name.trim() || d.id}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-            <div style={blurbStyle}>Codex uses your OpenAI CLI login. Name the profile so it’s easy to recognize when spawning agents.</div>
-            <input
-              value={codex.name}
-              onChange={(e) => { setCodex((prev) => ({ ...prev, name: e.target.value })); setError(undefined); }}
-              placeholder="Profile name"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={sectionShellStyle}>
-            <div style={sectionHeaderStyle}>Default profile for new agents</div>
-            <div style={blurbStyle}>Pick which runtime profile new agents should use. You can override it per agent later.</div>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
-              <input
-                type="radio"
-                name="default-profile"
-                value={work.id}
-                checked={defaultChoice === work.id}
-                onChange={() => { setDefaultChoice(work.id); setError(undefined); }}
-              />
-              {work.name}
-            </label>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
-              <input
-                type="radio"
-                name="default-profile"
-                value={personal.id}
-                checked={defaultChoice === personal.id}
-                onChange={() => { setDefaultChoice(personal.id); setError(undefined); }}
-              />
-              {personal.name}
-            </label>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
-              <input
-                type="radio"
-                name="default-profile"
-                value={codex.id}
-                checked={defaultChoice === codex.id}
-                onChange={() => { setDefaultChoice(codex.id); setError(undefined); }}
-              />
-              {codex.name}
-            </label>
-          </div>
+          )}
 
           {error && (
             <div style={{
@@ -327,7 +459,7 @@ export function ProfileWalkthrough({ config, mandatory, onComplete, onCancel }: 
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
             {!mandatory && (
               <PixelButton variant="secondary" size="md" onClick={() => { setError(undefined); onCancel(); }}>
                 Cancel
@@ -348,57 +480,3 @@ export function ProfileWalkthrough({ config, mandatory, onComplete, onCancel }: 
   );
 }
 
-function pickClaudeAssignments(list: RuntimeProfile[]): { work?: RuntimeProfile; personal?: RuntimeProfile } {
-  const claudeProfiles = list.filter((p) => p.provider === 'claude');
-  if (claudeProfiles.length === 0) return {};
-  const pool = [...claudeProfiles];
-  const take = (predicate: (p: RuntimeProfile) => boolean) => {
-    const index = pool.findIndex(predicate);
-    if (index === -1) return undefined;
-    return pool.splice(index, 1)[0];
-  };
-  const work = take((p) => includesKeyword(p.name, 'work')) ?? pool.shift();
-  const personal = take((p) => includesKeyword(p.name, 'personal')) ?? pool.shift();
-  return { work: work ?? undefined, personal: personal ?? undefined };
-}
-
-function draftFromProfile(existing: RuntimeProfile | undefined, provider: AgentProvider, fallbackName: string): ProfileDraft {
-  return {
-    id: existing?.id ?? crypto.randomUUID(),
-    provider: existing?.provider ?? provider,
-    name: existing?.name ?? fallbackName,
-    claudeConfigDir: provider === 'claude' ? existing?.claudeConfigDir : undefined,
-    model: existing?.model,
-    command: existing?.command,
-    extraArgs: existing?.extraArgs ? [...existing.extraArgs] : undefined,
-    baseUrl: existing?.baseUrl,
-    apiKeyRef: existing?.apiKeyRef,
-    allowPrivate: existing?.allowPrivate,
-    createdAt: existing?.createdAt
-  };
-}
-
-function draftToRuntimeProfile(draft: ProfileDraft): RuntimeProfile {
-  const out: RuntimeProfile = {
-    id: draft.id,
-    name: draft.name.trim(),
-    provider: draft.provider,
-    createdAt: draft.createdAt ?? Date.now()
-  };
-  if (draft.model?.trim()) out.model = draft.model.trim();
-  if (draft.command?.trim()) out.command = draft.command.trim();
-  if (draft.extraArgs && draft.extraArgs.length > 0) out.extraArgs = [...draft.extraArgs];
-  if (draft.provider === 'claude') {
-    const dir = draft.claudeConfigDir?.trim();
-    if (dir) out.claudeConfigDir = dir;
-  }
-  if (draft.baseUrl?.trim()) out.baseUrl = draft.baseUrl.trim();
-  if (draft.apiKeyRef?.trim()) out.apiKeyRef = draft.apiKeyRef.trim();
-  if (draft.allowPrivate) out.allowPrivate = true;
-  return out;
-}
-
-function includesKeyword(name: string | undefined, keyword: string): boolean {
-  if (!name) return false;
-  return name.toLowerCase().includes(keyword);
-}
