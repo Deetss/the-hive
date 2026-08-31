@@ -1,27 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <defs>
-    <!-- Rich Honey Gold Gradients -->
-    <linearGradient id="goldHexWall" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FEF08A"/>
-      <stop offset="40%" stop-color="#FBBF24"/>
-      <stop offset="100%" stop-color="#F59E0B"/>
-    </linearGradient>
-
-    <linearGradient id="goldBee" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFFBEB"/>
-      <stop offset="35%" stop-color="#FDE047"/>
-      <stop offset="100%" stop-color="#F59E0B"/>
-    </linearGradient>
-
-    <linearGradient id="goldTip" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FEF08A"/>
-      <stop offset="100%" stop-color="#D97706"/>
-    </linearGradient>
-  </defs>
-
-  <!-- ==================== PERFECT HONEYCOMB TRIAD STRUCTURE ==================== -->
-  <!-- Outer Outline of the entire 3-hex cluster as a single solid honeycomb wall -->
-  <g fill="none" stroke="url(#goldHexWall)" stroke-width="26" stroke-linejoin="round" stroke-linecap="round">
+  <!-- ==================== MATTE HONEYCOMB TRIAD STRUCTURE ==================== -->
+  <!-- Solid matte honey amber (#F59E0B) hex walls with zero gradient -->
+  <g fill="none" stroke="#F59E0B" stroke-width="26" stroke-linejoin="round" stroke-linecap="round">
     <!-- Top Hexagon (Center: 512, 330) -->
     <polygon points="512,140 676.5,235 676.5,425 512,520 347.5,425 347.5,235" />
 
@@ -35,55 +15,53 @@
   <!-- ==================== CELL 1: TOP (QUEEN BEE) ==================== -->
   <g transform="translate(512, 330)">
     <!-- Queen Crown & Antennae -->
-    <polygon points="-24,-84 -34,-106 0,-95 34,-106 24,-84" fill="url(#goldBee)"/>
-    <circle cx="-34" cy="-106" r="6" fill="#FFFBEB"/>
-    <circle cx="0" cy="-95" r="7" fill="#FFFBEB"/>
-    <circle cx="34" cy="-106" r="6" fill="#FFFBEB"/>
+    <polygon points="-24,-84 -34,-106 0,-95 34,-106 24,-84" fill="#FBBF24"/>
+    <circle cx="-34" cy="-106" r="6" fill="#FEF3C7"/>
+    <circle cx="0" cy="-95" r="7" fill="#FEF3C7"/>
+    <circle cx="34" cy="-106" r="6" fill="#FEF3C7"/>
 
-    <!-- Queen Wings (Cream Gold) -->
-    <!-- Left Wing -->
-    <polygon points="-25,-30 -120,-68 -98,-15 -25,5" fill="#FEF3C7" opacity="0.95"/>
-    <polygon points="-25,12 -88,18 -68,60 -25,32" fill="#FDE68A" opacity="0.9"/>
-    <!-- Right Wing -->
-    <polygon points="25,-30 120,-68 98,-15 25,5" fill="#FEF3C7" opacity="0.95"/>
-    <polygon points="25,12 88,18 68,60 25,32" fill="#FDE68A" opacity="0.9"/>
+    <!-- Queen Wings (Solid Matte Cream) -->
+    <polygon points="-25,-30 -120,-68 -98,-15 -25,5" fill="#FEF3C7"/>
+    <polygon points="-25,12 -88,18 -68,60 -25,32" fill="#FDE68A"/>
+    <polygon points="25,-30 120,-68 98,-15 25,5" fill="#FEF3C7"/>
+    <polygon points="25,12 88,18 68,60 25,32" fill="#FDE68A"/>
 
     <!-- Queen Head & Thorax -->
-    <circle cx="0" cy="-56" r="24" fill="url(#goldBee)"/>
-    <polygon points="0,-32 28,-14 28,20 0,38 -28,20 -28,-14" fill="url(#goldHexWall)"/>
-    <circle cx="0" cy="2" r="8" fill="#FFFBEB"/>
+    <circle cx="0" cy="-56" r="24" fill="#FBBF24"/>
+    <polygon points="0,-32 28,-14 28,20 0,38 -28,20 -28,-14" fill="#F59E0B"/>
+    <circle cx="0" cy="2" r="8" fill="#FEF3C7"/>
 
-    <!-- Abdomen -->
-    <path d="M -26,46 Q 0,54 26,46 L 22,64 Q 0,72 -22,64 Z" fill="url(#goldBee)"/>
-    <path d="M -20,70 Q 0,78 20,70 L 15,88 Q 0,96 -15,88 Z" fill="url(#goldBee)"/>
-    <polygon points="-11,94 11,94 0,118" fill="url(#goldTip)"/>
+    <!-- Abdomen (Solid Matte Gold) -->
+    <path d="M -26,46 Q 0,54 26,46 L 22,64 Q 0,72 -22,64 Z" fill="#FBBF24"/>
+    <path d="M -20,70 Q 0,78 20,70 L 15,88 Q 0,96 -15,88 Z" fill="#FBBF24"/>
+    <polygon points="-11,94 11,94 0,118" fill="#D97706"/>
   </g>
 
   <!-- ==================== CELL 2: BOTTOM-LEFT (WORKER A) ==================== -->
   <g transform="translate(347.5, 615) scale(0.8) translate(0, -10)">
     <!-- Wings -->
-    <polygon points="-20,-25 -100,-58 -82,-10 -20,5" fill="#FEF3C7" opacity="0.95"/>
-    <polygon points="20,-25 100,-58 82,-10 20,5" fill="#FEF3C7" opacity="0.95"/>
+    <polygon points="-20,-25 -100,-58 -82,-10 -20,5" fill="#FEF3C7"/>
+    <polygon points="20,-25 100,-58 82,-10 20,5" fill="#FEF3C7"/>
     <!-- Body -->
-    <circle cx="0" cy="-46" r="20" fill="url(#goldBee)"/>
-    <ellipse cx="0" cy="-12" rx="24" ry="20" fill="url(#goldHexWall)"/>
+    <circle cx="0" cy="-46" r="20" fill="#FBBF24"/>
+    <ellipse cx="0" cy="-12" rx="24" ry="20" fill="#F59E0B"/>
     <!-- Abdomen -->
-    <path d="M -20,14 Q 0,22 20,14 L 16,34 Q 0,42 -16,34 Z" fill="url(#goldBee)"/>
-    <path d="M -14,40 Q 0,48 14,40 L 9,58 Q 0,66 -9,58 Z" fill="url(#goldBee)"/>
-    <polygon points="-7,64 7,64 0,86" fill="url(#goldTip)"/>
+    <path d="M -20,14 Q 0,22 20,14 L 16,34 Q 0,42 -16,34 Z" fill="#FBBF24"/>
+    <path d="M -14,40 Q 0,48 14,40 L 9,58 Q 0,66 -9,58 Z" fill="#FBBF24"/>
+    <polygon points="-7,64 7,64 0,86" fill="#D97706"/>
   </g>
 
   <!-- ==================== CELL 3: BOTTOM-RIGHT (WORKER B) ==================== -->
   <g transform="translate(676.5, 615) scale(0.8) translate(0, -10)">
     <!-- Wings -->
-    <polygon points="-20,-25 -100,-58 -82,-10 -20,5" fill="#FEF3C7" opacity="0.95"/>
-    <polygon points="20,-25 100,-58 82,-10 20,5" fill="#FEF3C7" opacity="0.95"/>
+    <polygon points="-20,-25 -100,-58 -82,-10 -20,5" fill="#FEF3C7"/>
+    <polygon points="20,-25 100,-58 82,-10 20,5" fill="#FEF3C7"/>
     <!-- Body -->
-    <circle cx="0" cy="-46" r="20" fill="url(#goldBee)"/>
-    <ellipse cx="0" cy="-12" rx="24" ry="20" fill="url(#goldHexWall)"/>
+    <circle cx="0" cy="-46" r="20" fill="#FBBF24"/>
+    <ellipse cx="0" cy="-12" rx="24" ry="20" fill="#F59E0B"/>
     <!-- Abdomen -->
-    <path d="M -20,14 Q 0,22 20,14 L 16,34 Q 0,42 -16,34 Z" fill="url(#goldBee)"/>
-    <path d="M -14,40 Q 0,48 14,40 L 9,58 Q 0,66 -9,58 Z" fill="url(#goldBee)"/>
-    <polygon points="-7,64 7,64 0,86" fill="url(#goldTip)"/>
+    <path d="M -20,14 Q 0,22 20,14 L 16,34 Q 0,42 -16,34 Z" fill="#FBBF24"/>
+    <path d="M -14,40 Q 0,48 14,40 L 9,58 Q 0,66 -9,58 Z" fill="#FBBF24"/>
+    <polygon points="-7,64 7,64 0,86" fill="#D97706"/>
   </g>
 </svg>
