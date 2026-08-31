@@ -210,11 +210,11 @@ export function DelegationsTab() {
               then configure it below.
             </div>
             <PixelButton
-              variant="secondary"
+              variant="primary"
               size="sm"
               onClick={() => window.dispatchEvent(new CustomEvent('cth:open-settings', { detail: { section: 'Connections' } }))}
             >
-              Open Settings → Connections
+              Configure in Settings → Connections
             </PixelButton>
           </div>
         ) : (
