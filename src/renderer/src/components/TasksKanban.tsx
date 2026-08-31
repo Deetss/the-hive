@@ -93,6 +93,7 @@ export function parseTasks(raw: unknown): HiveTask[] {
         ? (t.status as Status) : 'todo',
       dependsOn: Array.isArray(t.dependsOn) ? t.dependsOn.filter((d): d is string => typeof d === 'string') : [],
       priority: typeof t.priority === 'number' ? t.priority : 3,
+      progress: typeof t.progress === 'number' ? Math.max(0, Math.min(100, t.progress)) : undefined,
       createdAt: typeof t.createdAt === 'string' ? t.createdAt : new Date().toISOString(),
       humanQA: Array.isArray(t.humanQA)
         ? (t.humanQA as unknown[])
@@ -740,6 +741,7 @@ const TaskCard = memo(function TaskCard({ task, accent, assigneeName, onOpen, on
             color: 'var(--cth-ink-900)',
             display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
           }}>{task.title}</span>
+          {typeof task.progress === 'number' && <ProgressBar value={task.progress} />}
           {assigneeName && (
             <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
               {assigneeName.toUpperCase()}
@@ -813,12 +815,14 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
   const [notesDraft, setNotesDraft] = useState(task.notes || task.description || '');
   const [isEditingResult, setIsEditingResult] = useState(false);
   const [resultDraft, setResultDraft] = useState(task.result || '');
+  const [progressDraft, setProgressDraft] = useState<number>(task.progress ?? 0);
 
   useEffect(() => {
     setTitleDraft(task.title);
     setNotesDraft(task.notes || task.description || '');
     setResultDraft(task.result || '');
-  }, [task.title, task.notes, task.description, task.result]);
+    setProgressDraft(task.progress ?? 0);
+  }, [task.title, task.notes, task.description, task.result, task.progress]);
 
   const saveTitle = async () => {
     setIsEditingTitle(false);
@@ -839,6 +843,14 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
     setIsEditingResult(false);
     if (resultDraft !== (task.result || '')) {
       await onPatch?.({ result: resultDraft });
+    }
+  };
+
+  const saveProgress = async (next: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(next)));
+    setProgressDraft(clamped);
+    if (clamped !== (task.progress ?? 0)) {
+      await onPatch?.({ progress: clamped });
     }
   };
 
@@ -913,6 +925,32 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
               <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
                 {isNaN(created.getTime()) ? '' : created.toLocaleString()}
               </span>
+            </div>
+
+            {/* Progress — a bar plus a 0–100 numeric input */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
+                PROGRESS
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <ProgressBar value={progressDraft} />
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={progressDraft}
+                onChange={(e) => setProgressDraft(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                onBlur={() => void saveProgress(progressDraft)}
+                onKeyDown={(e) => { if (e.key === 'Enter') void saveProgress(progressDraft); }}
+                style={{
+                  width: 56, padding: '3px 6px', textAlign: 'right',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-900)',
+                  background: 'var(--cth-paper-100)', border: 'none',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', outline: 'none'
+                }}
+              />
+              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)', flexShrink: 0 }}>%</span>
             </div>
 
             {/* The contract / notes — preserved line by line & editable */}
@@ -1103,6 +1141,23 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
         </PixelPanel>
       </div>
     </div>
+  );
+}
+
+/** Thin horizontal completion bar (0–100). Fills green (--cth-accent-green) over
+ *  a gray track; a 0% bar reads as an empty track. */
+function ProgressBar({ value }: { value: number }) {
+  const pct = Math.max(0, Math.min(100, value));
+  return (
+    <span title={`${pct}% complete`} style={{
+      display: 'block', height: 4, width: '100%',
+      background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
+    }}>
+      <span style={{
+        display: 'block', height: '100%', width: `${pct}%`,
+        background: 'var(--cth-accent-green, var(--cth-mint))'
+      }} />
+    </span>
   );
 }
 

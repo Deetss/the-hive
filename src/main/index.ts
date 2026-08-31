@@ -968,6 +968,10 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       return true;
     }
 
+    if (typeof patch.progress === 'number') {
+      patch.progress = Math.max(0, Math.min(100, Math.round(patch.progress)));
+    }
+
     tasks[taskIndex] = {
       ...tasks[taskIndex],
       ...patch,

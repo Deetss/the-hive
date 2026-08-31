@@ -29,6 +29,9 @@ export interface HiveTask {
   priority: number;
   createdAt: string;
   result?: string;
+  /** Completion percent 0–100, shown as a bar on the card. Optional: a card
+   *  without it renders no bar. */
+  progress?: number;
   /** First-class human feedback: the god appends {q} when a card needs the human;
    *  the ASK ME view fills in {a}. Full history stays on the card. */
   humanQA?: HumanQA[];
