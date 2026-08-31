@@ -790,6 +790,27 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
     }
   };
 
+  // Respawn — archive this agent's current session and queue a fresh one that
+  // resumes from its memory.md. Distinct from "restart & continue", which keeps
+  // the live conversation; a respawn deliberately starts a clean session, which
+  // is the escape hatch when the current one is quota-locked or wedged.
+  const respawn = async (a: Agent) => {
+    if (!window.confirm(`Archive and respawn ${a.name}? It will resume from memory.md.`)) return;
+    setRestarting(a.id);
+    setRestartErrors((errors) => ({ ...errors, [a.id]: '' }));
+    try {
+      const res = await window.cth.respawnAgent(a.id);
+      if (!res.ok) throw new Error(res.error ?? 'respawn failed');
+    } catch (error) {
+      setRestartErrors((errors) => ({
+        ...errors,
+        [a.id]: error instanceof Error ? error.message : String(error)
+      }));
+    } finally {
+      setRestarting(null);
+    }
+  };
+
   const handleDispatchPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const hasImage = Array.from(e.clipboardData.items).some((item) => item.type.startsWith('image/'));
     if (!hasImage) return;
@@ -1263,6 +1284,17 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                   </span>
                 </PixelButton>
               </>}
+              <span style={{ flex: 1 }} />
+              <PixelButton
+                variant="secondary"
+                size="sm"
+                disabled={restarting === a.id}
+                onClick={() => respawn(a)}
+              >
+                <span title={`Archive ${a.name}'s current session and spawn a fresh one that resumes from memory.md`}>
+                  ↺ respawn
+                </span>
+              </PixelButton>
             </div>
             )}
             {restartErrors[a.id] && (
@@ -1323,6 +1355,20 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                 >
                   <span title="Kill and respawn Abathur, resuming the current conversation — fixes a corrupted/garbled terminal without losing context">
                     restart &amp; continue
+                  </span>
+                </PixelButton>
+                {/* Respawn — the escape hatch for a quota-locked or wedged Overmind:
+                    archive this session and start a clean one that resumes from
+                    memory.md (does NOT continue the current conversation). Prominent
+                    here because it is the primary recovery action for the god. */}
+                <PixelButton
+                  variant="primary"
+                  size="sm"
+                  disabled={restarting === a.id}
+                  onClick={() => respawn(a)}
+                >
+                  <span title="Archive Abathur's current session and spawn a fresh one that resumes from memory.md — use when the session is quota-locked or stuck">
+                    ↺ respawn
                   </span>
                 </PixelButton>
               </div>

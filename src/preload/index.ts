@@ -658,6 +658,10 @@ const api = {
     ipcRenderer.invoke('pty:redraw', id),
   killPty: (id: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pty:kill', id),
+  /** Archive an agent's current session and queue a fresh one that resumes from
+   *  its memory.md. Works for any agent, including the Overmind. */
+  respawnAgent: (agentId: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('agent:respawn', agentId),
   listPtys: (): Promise<Array<{
     id: string;
     cwd: string;

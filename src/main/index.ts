@@ -4837,6 +4837,60 @@ ipcMain.handle('pty:kill', (_evt, id: string) => {
 });
 ipcMain.handle('pty:list', () => ptyManager.list());
 
+// Respawn an agent: archive the current session and queue a fresh one that
+// resumes from the agent's memory.md. Treats the Overmind like any other agent
+// (no special-casing). The reconstructed config comes from the registry entry,
+// so the new session keeps the same name, cwd, provider, and runtime profile.
+ipcMain.handle('agent:respawn', async (_evt, agentId: unknown) => {
+  if (typeof agentId !== 'string' || !agentId.trim()) return { ok: false, error: 'invalid agentId' };
+  const id = agentId.trim();
+  const root = hive.root();
+  if (!root) return { ok: false, error: 'hive root unavailable' };
+  try {
+    const entry = hive.registry().agents[id];
+    if (!entry) return { ok: false, error: `agent "${id}" not found in registry` };
+
+    // 1) Ask the outgoing session to persist anything durable before it dies.
+    try {
+      hive.send({
+        to: id,
+        act: 'inform',
+        subject: 'Respawn requested — wrap up',
+        body: 'You are being respawned. Save anything durable to your memory.md now; a fresh session will resume from it.'
+      }, 'system');
+    } catch (e) { console.error('[respawn] inbox notice failed:', e); }
+
+    // 2) Kill the live PTY (if any) and run the shared teardown, which archives
+    //    the agent. setArchived is a belt-and-suspenders no-op when it had no PTY.
+    for (const [ptyId, mappedAgent] of ptyToAgent.entries()) {
+      if (mappedAgent === id) { ptyManager.kill(ptyId); teardownPty(ptyId); break; }
+    }
+    hive.setArchived(id, true);
+
+    // 3) Queue a fresh spawn-request reconstructed from the registry entry. The
+    //    objective points at the prior session's memory.md (absolute path) so the
+    //    respawn resumes that thread rather than starting cold.
+    const dir = spawnRequestsDir();
+    if (!dir) return { ok: false, error: 'spawn-requests dir unavailable' };
+    mkdirSync(dir, { recursive: true });
+    const reqId = `respawn-${id}-${Date.now().toString(36)}`;
+    const memPath = join(root, 'agents', id, 'memory.md');
+    const req: SpawnRequest = {
+      id: reqId,
+      name: entry.name,
+      objective: `You are a respawn of ${entry.name}. First read your prior session's memory at ${memPath}, then resume that work where the previous session left off.${entry.role ? ` Role: ${entry.role}.` : ''}`,
+      cwd: entry.cwd,
+      provider: entry.provider,
+      profile: entry.profileId,
+      isolate: false
+    };
+    writeFileSync(join(dir, `${reqId}.json`), JSON.stringify(req, null, 2), 'utf8');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+
 // Resolve a pasted Claude session id to the cwd it originally ran in, so the Add
 // Agent dialog can auto-fill the folder for a resume (#2 zero-step resume). Reads
 // the cwd from a transcript record; null when the id is invalid/unknown.
