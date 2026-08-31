@@ -13,6 +13,7 @@ import { TriggerHistoryTab } from './triggers/TriggerHistoryTab';
 import { WorkersTab } from './WorkersTab';
 import { DelegationsTab } from './DelegationsTab';
 import { SkillsTab } from './SkillsTab';
+import { ReviewPanel } from './ReviewPanel';
 import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool';
 import { terminalInstanceKey } from './terminalRecovery';
 import { Icon } from './Icon';
@@ -47,7 +48,7 @@ import { canReceiveInbox } from '@shared/agentProvider';
 // the old Schedules tab: schedules are now one of four trigger types, and the
 // whole surface lives in ./triggers (see src/shared/triggers.ts for the contract).
 type CCTab = 'terminal' | 'floor' | 'tasks' | 'ask' | 'human' | 'triggers' | 'trigger-history'
-  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations';
+  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations' | 'review';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
  *  is configured — so the bar reads as a budget estimate (filled + remaining)
@@ -78,7 +79,8 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
   { key: 'activity', label: 'activity', icon: 'bell' },
   { key: 'skills', label: 'skills', icon: 'sparkle' },
   { key: 'workers', label: 'workers', icon: 'gear' },
-  { key: 'delegations', label: 'delegations', icon: 'gear' }
+  { key: 'delegations', label: 'delegations', icon: 'gear' },
+  { key: 'review', label: 'review', icon: 'ledger' }
 ];
 
 type TabDef = { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] };
@@ -87,9 +89,11 @@ function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean;
   const msgPending = useStore((s) => s.humanMessages.filter((m) => !m.resolved).length);
   const activityUnread = useStore((s) => s.activityUnread);
   const assignedPending = useStore((s) => s.assignedPending);
+  const pendingArtifacts = useStore((s) => s.pendingArtifacts);
   const badge = t.key === 'human' ? msgPending
     : t.key === 'activity' ? activityUnread
     : t.key === 'tasks' ? assignedPending
+    : t.key === 'review' ? pendingArtifacts.length
     : 0;
   const showBadge = badge > 0 && !active;
   return (
@@ -549,6 +553,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         {tab === 'skills' && <SkillsTab agentCwd={agent.cwd} />}
         {tab === 'workers' && <WorkersTab />}
         {tab === 'delegations' && <DelegationsTab />}
+        {tab === 'review' && <ReviewPanel />}
       </div>
     </PixelPanel>
   );

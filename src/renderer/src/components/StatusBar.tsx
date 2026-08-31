@@ -329,7 +329,7 @@ export function StatusBar() {
               {ctxBar(worstFiveHour.pct)}
             </span>
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
-              {worstFiveHour.pct}%
+              {worstFiveHour.pct.toFixed(2)}%
             </span>
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
               {fmtReset(worstFiveHour.resetsAt)}
@@ -347,7 +347,7 @@ export function StatusBar() {
               {ctxBar(worstSevenDay.pct)}
             </span>
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
-              {worstSevenDay.pct}%
+              {worstSevenDay.pct.toFixed(2)}%
             </span>
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
               {fmtReset(worstSevenDay.resetsAt)}

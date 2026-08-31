@@ -28,7 +28,6 @@ import { acquireTerminal, notifyThemeChangeAll } from '@/components/terminalPool
 import { FullscreenTerminal } from '@/components/FullscreenTerminal';
 import { TaskDetailOverlay } from '@/components/TaskDetailOverlay';
 import { IdePanel } from '@/ide/IdePanel';
-import { ReviewPanel } from '@/components/ReviewPanel';
 import { useHoldOptionToTalk } from '@/freeflow/holdOption';
 import brandLogo from '@brand/logo.png?url';
 import { cancelQaTimer } from '@/components/QuickAskPanel';
@@ -51,11 +50,8 @@ export function App() {
   const setSidebarWidth = useStore(s => s.setSidebarWidth);
   const ideOpen = useStore(s => s.ideOpen);
   const setIdeOpen = useStore(s => s.setIdeOpen);
-  const reviewOpen = useStore(s => s.reviewOpen);
-  const setReviewOpen = useStore(s => s.setReviewOpen);
   const pendingArtifacts = useStore(s => s.pendingArtifacts);
   const setPendingArtifacts = useStore(s => s.setPendingArtifacts);
-  const pendingArtifactCount = pendingArtifacts.length;
 
   const isMobile = useMediaQuery('(max-width: 480px)');
   const [config, setConfig] = useState<HarnessConfig | null>(null);
@@ -444,37 +440,6 @@ export function App() {
         >
           {appThemeNow === 'dark' ? '☀' : '☾'}
         </button>
-        {/* Artifact review queue. Carries a badge with the pending count so a
-            drop awaiting sign-off is visible without opening the panel. */}
-        <button
-          className="cth-titlebar-nodrag cth-tip"
-          onClick={() => setReviewOpen(true)}
-          data-tip="Review artifacts"
-          aria-label="Review artifacts"
-          style={{
-            position: 'relative',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 28, height: 28, padding: 0,
-            background: 'var(--cth-paper-100)',
-            boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-            border: 'none', borderRadius: 2, cursor: 'pointer',
-            color: 'var(--cth-ink-900)'
-          }}
-        >
-          <Icon name="ledger" size={1} style={{ width: 16, height: 16 }} />
-          {pendingArtifactCount > 0 && (
-            <span style={{
-              position: 'absolute', top: -6, right: -6,
-              minWidth: 16, height: 16, padding: '0 4px', boxSizing: 'border-box',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: 1, fontWeight: 700,
-              color: 'var(--cth-paper-100)', background: 'var(--cth-coral)',
-              borderRadius: 8
-            }}>
-              {pendingArtifactCount > 99 ? '99+' : pendingArtifactCount}
-            </span>
-          )}
-        </button>
         {/* v0.3.4: the IDE button moved to agent level — every agent's header
             (sidebar detail, god Command Center, fullscreen) carries it. */}
         <button
@@ -659,7 +624,6 @@ export function App() {
 
       {fullscreenAgentId && <FullscreenTerminal config={config} />}
       {ideOpen && <IdePanel />}
-      {reviewOpen && <ReviewPanel />}
       <TaskDetailOverlay />
       {profileWalkthroughOpen && (
         <ProfileWalkthrough
