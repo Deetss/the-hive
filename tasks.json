@@ -1,6 +1,0 @@
-{
-  "review-panel-viewport": {
-    "status": "done",
-    "humanQA": "[review-panel-viewport] Fix: Review panel now fits inside the tab area. To verify: click Review tab in CommandCenter — panel should fill only the tab content area, not cover the roster or nav. Available in: dev app on integration/fork-v1 (HMR, no restart needed)"
-  }
-}
