@@ -607,7 +607,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
   // new agent spawn on this, so the picker marks it — otherwise the only entry
   // reading "default" was the CLI's, which is a different thing entirely.
   const [defaultModel, setDefaultModel] = useState<string | undefined>(undefined);
-  const [dispatchTo, setDispatchTo] = useState<string>(''); // '' = Abathur decides
+  const [dispatchTo, setDispatchTo] = useState<string>(''); // '' = BeeYoncé decides
   const [dispatchAct, setDispatchAct] = useState<'request' | 'query' | 'inform'>('request');
   const [dispatchSubject, setDispatchSubject] = useState('');
   const [dispatchText, setDispatchText] = useState('');
@@ -972,74 +972,72 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
 
   return (
     <Scroll>
-      <Section title="DISPATCH — VIA BEEYONCÉ">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
-            SUGGESTED OWNER
-          </span>
-          <Select value={dispatchTo} onChange={setDispatchTo}>
-            <option value="">BeeYoncé decides</option>
-            {agents.filter((a) => !a.isOvermind).map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </Select>
+      <Section title="DISPATCH · VIA BEEYONCÉ">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 150 }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)', flexShrink: 0 }}>OWNER</span>
+            <Select value={dispatchTo} onChange={setDispatchTo}>
+              <option value="">BeeYoncé decides</option>
+              {agents.filter((a) => !a.isOvermind).map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </Select>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)', flexShrink: 0 }}>ACT</span>
+            <Select value={dispatchAct} onChange={(v) => setDispatchAct(v as 'request' | 'query' | 'inform')}>
+              <option value="request">Request</option>
+              <option value="query">Query</option>
+              <option value="inform">Inform</option>
+            </Select>
+          </label>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
-            ACT
-          </span>
-          <Select value={dispatchAct} onChange={(v) => setDispatchAct(v as 'request' | 'query' | 'inform')}>
-            <option value="request">Request</option>
-            <option value="query">Query</option>
-            <option value="inform">Inform</option>
-          </Select>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
-            SUBJECT
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <input
             type="text"
             className="cth-input"
             value={dispatchSubject}
             onChange={(e) => setDispatchSubject(e.target.value)}
-            placeholder="Brief subject line"
+            placeholder="Subject"
             style={{
-              width: '100%',
+              flex: 1,
+              minWidth: 0,
               padding: '6px 8px',
               fontFamily: 'var(--cth-font-ui)',
-              fontSize: 13,
+              fontSize: 14,
+              fontWeight: 600,
               background: 'var(--cth-paper-100)',
               color: 'var(--cth-ink-900)',
               border: 'none',
+              boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
               outline: 'none',
               boxSizing: 'border-box'
             }}
           />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)', flexShrink: 0 }}>priority</span>
-          {(['urgent', 'normal', 'backlog'] as const).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setDispatchPriority(p)}
-              style={{
-                padding: '2px 8px',
-                fontFamily: 'var(--cth-font-ui)',
-                fontSize: 11,
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-                border: 'none',
-                borderRadius: 2,
-                cursor: 'pointer',
-                background: dispatchPriority === p ? 'var(--cth-ink-900)' : 'transparent',
-                color: dispatchPriority === p ? 'var(--cth-paper-100)' : 'var(--cth-ink-500)',
-                boxShadow: dispatchPriority === p ? 'none' : 'inset 0 0 0 1px var(--cth-ink-300)',
-                transition: 'background 0.1s, color 0.1s'
-              }}
-            >{p}</button>
-          ))}
+          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+            {(['urgent', 'normal', 'backlog'] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setDispatchPriority(p)}
+                title={`Priority: ${p}`}
+                style={{
+                  padding: '3px 8px',
+                  fontFamily: 'var(--cth-font-ui)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  border: 'none',
+                  borderRadius: 2,
+                  cursor: 'pointer',
+                  background: dispatchPriority === p ? 'var(--cth-ink-900)' : 'transparent',
+                  color: dispatchPriority === p ? 'var(--cth-paper-100)' : 'var(--cth-ink-500)',
+                  boxShadow: dispatchPriority === p ? 'none' : 'inset 0 0 0 1px var(--cth-ink-300)',
+                  transition: 'background 0.1s, color 0.1s'
+                }}
+              >{p}</button>
+            ))}
+          </div>
         </div>
         {(() => {
           const slashQ = dispatchText.startsWith('/') ? dispatchText.slice(1).toLowerCase() : null;
@@ -1109,7 +1107,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                     setDispatchText('');
                   }
                 }}
-                rows={2}
+                rows={3}
                 placeholder="Describe the task… or / for skills & commands"
                 style={textareaStyle}
               />
