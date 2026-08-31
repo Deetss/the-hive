@@ -64,7 +64,7 @@ const metaRow: React.CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
   gap: 12,
-  fontFamily: 'var(--cth-font-mono)',
+  fontFamily: 'var(--cth-font-ui)',
   fontSize: 11,
   color: 'var(--cth-ink-700)'
 };
@@ -72,6 +72,8 @@ const metaRow: React.CSSProperties = {
 function PixelButton(props: {
   onClick?: () => void;
   disabled?: boolean;
+  variant?: string;
+  size?: string;
   children: React.ReactNode;
 }): React.ReactElement {
   return (
@@ -245,7 +247,7 @@ export function DelegationsTab() {
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                     <span style={{
-                      fontFamily: 'var(--cth-font-mono)',
+                      fontFamily: 'var(--cth-font-ui)',
                       fontSize: 11,
                       color: 'var(--cth-ink-700)'
                     }}>

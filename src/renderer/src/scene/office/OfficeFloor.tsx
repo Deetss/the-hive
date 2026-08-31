@@ -275,7 +275,7 @@ export function OfficeFloor() {
           const note = document.createElement('div');
           note.style.cssText =
             'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
-            'padding:24px;color:#ffd0b5;font-family:monospace;font-size:13px;text-align:center;white-space:pre-wrap;';
+            'padding:24px;color:#ffd0b5;font-family:var(--cth-font-ui, sans-serif);font-size:13px;text-align:center;white-space:pre-wrap;';
           note.textContent =
             'The office floor lost its GPU context.\n\n' +
             'Too many terminals are using the GPU at once.\n' +

@@ -985,7 +985,7 @@ function SidebarRow({
               boxSizing: 'border-box',
               background: 'var(--cth-cream-100)',
               boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-              fontFamily: 'var(--cth-font-mono)',
+              fontFamily: 'var(--cth-font-ui)',
               fontSize: noteFontSize,
               lineHeight: `${Math.round(noteFontSize * 1.6)}px`,
               color: 'var(--cth-ink-900)'

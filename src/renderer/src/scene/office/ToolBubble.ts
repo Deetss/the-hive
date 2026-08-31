@@ -78,7 +78,7 @@ export class ToolBubble {
         fontSize: FONT_SIZE,
         fontWeight: 'bold',
         fill: TEXT_COLOR,
-        fontFamily: 'monospace',
+        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         align: 'left',
         wordWrap: true,
         wordWrapWidth: WRAP_WIDTH,
