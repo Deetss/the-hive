@@ -886,6 +886,14 @@ const api = {
   workersStop: (workerId: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('workers:stop', workerId),
 
+  // ─── Tracked processes (user-spawned terminals & long-running jobs) ──────
+  spawnProcess: (opts: { cmd: string; args?: string[]; cwd: string; label?: string; shell: 'wsl-bash' | 'powershell' | 'cmd' | 'bash' }): Promise<{ ok: boolean; processId?: string; error?: string }> =>
+    ipcRenderer.invoke('process:spawn', opts),
+  killProcess: (processId: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('process:kill', processId),
+  listProcesses: (): Promise<Array<{ processId: string; pid: number; label: string; cwd: string; shell: string; status: string; exitCode?: number; startedAt: number; uptimeMs: number }>> =>
+    ipcRenderer.invoke('process:list'),
+
   // ─── Delegations (LDA telemetry) ─────────────────────────────────────────
   delegationsList: (): Promise<{ log: DelegationEntry[]; stats: DelegationStats }> =>
     ipcRenderer.invoke('delegations:list'),

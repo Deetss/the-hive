@@ -2015,6 +2015,22 @@ const liveWorkers = new Map<string, WorkerRec>();
  *  ratio only grows, so without this a worker parked at 76% gets spammed forever. */
 const workerWarnedAt75 = new Set<string>();
 
+interface TrackedProcess {
+  pid: number;
+  label: string;
+  cmd: string;
+  args: string[];
+  cwd: string;
+  shell: 'wsl-bash' | 'powershell' | 'cmd' | 'bash';
+  startedAt: number;
+  status: 'running' | 'exited';
+  exitCode?: number;
+  ptyId?: string;
+}
+
+const trackedProcesses = new Map<string, TrackedProcess>();
+let processIdSeq = 0;
+
 interface RecentWorkerSnapshot {
   workerId: string;
   reqId: string;
@@ -7473,6 +7489,106 @@ ipcMain.handle('workers:stop', (_evt, workerId: string): { ok: boolean; error?: 
   try { ptyManager.kill(workerId); } catch (e) { return { ok: false, error: String(e) }; }
   teardownPty(workerId);
   return { ok: true };
+});
+
+interface ProcessSpawnOptions {
+  cmd: string;
+  args?: string[];
+  cwd: string;
+  label?: string;
+  shell: 'wsl-bash' | 'powershell' | 'cmd' | 'bash';
+}
+
+function convertToWslPath(windowsPath: string): string {
+  return windowsPath.replace(/^([A-Z]):\\/, (_, drive) => `/mnt/${drive.toLowerCase()}/`).replace(/\\/g, '/');
+}
+
+ipcMain.handle('process:spawn', (_evt, opts: unknown): { ok: boolean; processId?: string; error?: string } => {
+  if (!opts || typeof opts !== 'object') return { ok: false, error: 'invalid options' };
+  const { cmd, args = [], cwd, label, shell } = opts as ProcessSpawnOptions;
+  if (!cmd || !cwd || !shell) return { ok: false, error: 'missing required fields' };
+
+  const processId = `proc-${++processIdSeq}`;
+  const now = Date.now();
+
+  try {
+    let spawnCmd: string;
+    let spawnArgs: string[];
+
+    if (shell === 'wsl-bash') {
+      const wslPath = convertToWslPath(cwd);
+      spawnCmd = 'wsl.exe';
+      spawnArgs = ['-d', 'Ubuntu', '--', 'bash', '-c', `cd "${wslPath}" && exec bash`];
+    } else if (shell === 'powershell') {
+      spawnCmd = 'powershell.exe';
+      spawnArgs = ['-NoProfile', '-Command', `cd "${cwd}"; ${cmd} ${args.join(' ')}`];
+    } else if (shell === 'cmd') {
+      spawnCmd = 'cmd.exe';
+      spawnArgs = ['/c', `cd /d "${cwd}" && ${cmd} ${args.join(' ')}`];
+    } else {
+      spawnCmd = cmd;
+      spawnArgs = args as string[];
+    }
+
+    const proc = spawn(spawnCmd, spawnArgs, { cwd, shell: false });
+
+    const tracked: TrackedProcess = {
+      pid: proc.pid ?? 0,
+      label: label || cmd,
+      cmd,
+      args: args as string[],
+      cwd,
+      shell,
+      startedAt: now,
+      status: 'running'
+    };
+
+    trackedProcesses.set(processId, tracked);
+
+    proc.on('exit', (code) => {
+      const p = trackedProcesses.get(processId);
+      if (p) {
+        p.status = 'exited';
+        p.exitCode = code ?? undefined;
+      }
+    });
+
+    console.log(`[process] spawned ${processId}: ${label || cmd} (pid ${proc.pid})`);
+    return { ok: true, processId };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+ipcMain.handle('process:kill', (_evt, processId: string): { ok: boolean; error?: string } => {
+  if (typeof processId !== 'string' || !processId) return { ok: false, error: 'invalid process id' };
+  const proc = trackedProcesses.get(processId);
+  if (!proc) return { ok: false, error: 'no such process' };
+
+  try {
+    if (proc.status === 'running' && proc.pid) {
+      process.kill(proc.pid);
+      proc.status = 'exited';
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+ipcMain.handle('process:list', () => {
+  const now = Date.now();
+  return [...trackedProcesses.entries()].map(([id, p]) => ({
+    processId: id,
+    pid: p.pid,
+    label: p.label,
+    cwd: p.cwd,
+    shell: p.shell,
+    status: p.status,
+    exitCode: p.exitCode,
+    startedAt: p.startedAt,
+    uptimeMs: p.status === 'running' ? Math.max(0, now - p.startedAt) : 0
+  }));
 });
 
 ipcMain.handle('delegations:list', () => ({
