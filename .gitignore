@@ -30,3 +30,5 @@ docs/media/MunderDifflin*.mp4
 docs/blog-preview-*/
 .dev.log
 refs/
+
+tasks.json
