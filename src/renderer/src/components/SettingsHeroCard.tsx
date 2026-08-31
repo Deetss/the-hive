@@ -29,7 +29,6 @@ import { DEFAULT_HERO, type HeroPayload } from '@shared/heroPayload';
 import { manualDownloadUrl, pendingVersion, reduceStatus, type UpdateStatus } from '@shared/updateState';
 
 const GITHUB_REPO_URL = 'https://github.com/Deetss/the-hive';
-const FOUNDERS_WALL_URL = 'https://munderdiffl.in/wall.html';
 const DISCORD_URL = 'https://discord.gg/SEDzP5ZPk5';
 
 export function SettingsHeroCard() {
@@ -147,39 +146,6 @@ export function SettingsHeroCard() {
             and it stays ahead of Community, for power users who want the full potential of
             coding agents and agent harnesses. The Pro roadmap also includes a mobile app.
           </div>
-        </div>
-
-        {/* Founders' Wall offer. */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
-          padding: '12px 14px',
-          background: INK, color: 'var(--cth-paper-100)',
-          marginTop: 2
-        }}>
-          <div style={{
-            fontFamily: FONT, fontSize: 30, fontWeight: 700, lineHeight: 0.9,
-            letterSpacing: '-.05em', color: 'var(--cth-lemon)', textAlign: 'center', flexShrink: 0
-          }}>
-            50<span style={{
-              display: 'block', fontSize: 13, letterSpacing: '.2em', fontWeight: 500,
-              color: 'var(--cth-paper-100)', opacity: 0.7, marginTop: 5
-            }}>% OFF</span>
-          </div>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600 }}>On the Founders&rsquo; Wall?</div>
-            <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.85, marginTop: 2 }}>
-              A month of The Hive Pro free, then 50% off the annual plan. For the first
-              100 people on the wall.
-            </div>
-          </div>
-          <PixelButton variant="primary" size="sm" onClick={() => void window.cth.openExternal(FOUNDERS_WALL_URL)}>
-            see the wall
-          </PixelButton>
-          {PLAN.upgrade && (
-            <PixelButton variant="secondary" size="sm" onClick={() => void window.cth.openExternal(PLAN.upgrade!.url)}>
-              {PLAN.upgrade.label}
-            </PixelButton>
-          )}
         </div>
 
         {/* Sponsor — only when there is one. */}
