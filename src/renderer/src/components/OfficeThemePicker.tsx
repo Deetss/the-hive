@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { HarnessConfig } from '@/store/config';
 import { useStore } from '@/store/store';
-import { disposeTerminal } from './terminalPool';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { Icon } from './Icon';
@@ -30,11 +29,9 @@ const THEME_META: ThemeMeta[] = [
 export function OfficeThemePicker({ config }: { config: HarnessConfig }) {
   const [enabled, setEnabled] = useState(!!config.tvShowOffices);
   const [current, setCurrent] = useState<ThemeId>((config.officeTheme as ThemeId) ?? 'office');
-  const [pending, setPending] = useState<ThemeId | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
 
-  const archiveAgent = useStore((s) => s.archiveAgent);
   const setOfficeTheme = useStore((s) => s.setOfficeTheme);
 
   const toggleFlag = async () => {
@@ -51,45 +48,27 @@ export function OfficeThemePicker({ config }: { config: HarnessConfig }) {
     }
   };
 
-  const nonGodAgents = () =>
-    useStore.getState().agents.filter((a) => !a.isOvermind && !a.isAssistant);
-
   const onSelect = (id: ThemeId) => {
     setNote('');
-    if (busy || id === current) return;                 // no-op on the current theme
-    if (nonGodAgents().length === 0) { void applyTheme(id); return; } // god-only → instant
-    setPending(id);                                     // workers exist → confirm modal
+    if (busy || id === current) return;
+    void applyTheme(id);
   };
 
   const applyTheme = async (id: ThemeId) => {
     setBusy(true);
     try {
-      // Tear down every non-god agent through the EXISTING lifecycle (kill PTY →
-      // dispose terminal → archive). god + the prep assistant carry over; god's
-      // PTY is never touched. If a PTY won't die, abort the switch (surface the
-      // error, don't persist the new theme) rather than leave a half-switched floor.
-      const victims = nonGodAgents();
-      for (const a of victims) {
-        if (a.ptyId) {
-          await window.cth.killPty(a.ptyId);
-          disposeTerminal(a.ptyId);
-        }
-      }
-      for (const a of victims) archiveAgent(a.id);
+      // Only change the visual theme — agents keep running.
       await window.cth.updateConfig({ officeTheme: id });
       setCurrent(id);
-      setOfficeTheme(id); // → OfficeFloor rebuilds the scene on the new map/cast
+      setOfficeTheme(id);
       const meta = THEME_META.find((t) => t.id === id);
       if (meta && !meta.built) setNote(`${meta.label} isn't built yet — showing the office for now.`);
     } catch (e) {
-      setNote(`Switch aborted — a terminal wouldn't close: ${e instanceof Error ? e.message : String(e)}`);
+      setNote(`Switch failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
-      setPending(null);
     }
   };
-
-  const pendingMeta = pending ? THEME_META.find((t) => t.id === pending) : null;
 
   return (
     <div>
@@ -107,7 +86,7 @@ export function OfficeThemePicker({ config }: { config: HarnessConfig }) {
             TV-show office themes <span style={{ color: 'var(--cth-ink-500)' }}>(experimental)</span>
           </span>
           <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
-            Re-skin the pixel office as a TV show. Switching starts a fresh cast.
+            Re-skin the pixel office as a TV show. Your agents keep running.
           </span>
         </div>
         <PixelButton variant={enabled ? 'primary' : 'secondary'} size="sm" onClick={toggleFlag}>
@@ -169,87 +148,6 @@ export function OfficeThemePicker({ config }: { config: HarnessConfig }) {
         <div style={{ marginTop: 10, fontSize: 12, color: 'var(--cth-ink-500)' }}>{note}</div>
       )}
 
-      {pending && pendingMeta && (
-        <ThemeSwitchConfirmModal
-          label={pendingMeta.label}
-          agents={nonGodAgents()}
-          busy={busy}
-          onCancel={() => setPending(null)}
-          onConfirm={() => void applyTheme(pending)}
-        />
-      )}
-    </div>
-  );
-}
-
-interface VictimAgent { id: string; status?: string; }
-
-/** Destructive confirm for a theme switch with live workers (report §E copy). */
-function ThemeSwitchConfirmModal({
-  label, agents, busy, onCancel, onConfirm,
-}: {
-  label: string;
-  agents: VictimAgent[];
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  const n = agents.length;
-  const working = agents.filter((a) => a.status && !['idle', 'success', 'error'].includes(a.status)).length;
-  const godName = useStore.getState().agents.find((a) => a.isOvermind)?.name ?? 'the orchestrator';
-
-  return (
-    <div
-      onClick={busy ? undefined : onCancel}
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(26, 19, 32, 0.7)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400,
-      }}
-    >
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: '92vw' }}>
-        <PixelPanel variant="dialog" title={`SWITCH OFFICE TO "${label.toUpperCase()}"?`} noPadding>
-          <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <div style={{
-                width: 32, height: 32, flexShrink: 0,
-                background: 'var(--cth-coral-light)',
-                boxShadow: 'inset 0 0 0 1.5px var(--cth-ink-500)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icon name="bell" />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '20px',
-                  color: 'var(--cth-ink-900)', marginBottom: 4,
-                }}>
-                  STARTS A FRESH CAST
-                </div>
-                <div style={{ fontSize: 15, lineHeight: '22px', color: 'var(--cth-ink-700)' }}>
-                  Your <strong>{n} current agent{n === 1 ? '' : 's'}</strong> will be deleted — their terminals close and any in-progress work stops. Only <strong>{godName}</strong> carries over.
-                  {working > 0 && (
-                    <span style={{ display: 'block', marginTop: 6, color: 'var(--cth-coral)' }}>
-                      ⚠ {working} agent{working === 1 ? ' is' : 's are'} still working.
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', marginTop: 8 }}>
-                  This can't be undone.
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <PixelButton variant="secondary" size="md" onClick={onCancel} disabled={busy}>
-                cancel
-              </PixelButton>
-              <PixelButton variant="destructive" size="md" onClick={onConfirm} disabled={busy}>
-                {busy ? 'switching…' : `delete ${n} & switch`}
-              </PixelButton>
-            </div>
-          </div>
-        </PixelPanel>
-      </div>
     </div>
   );
 }
