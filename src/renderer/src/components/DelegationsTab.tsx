@@ -113,7 +113,11 @@ export function DelegationsTab() {
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
 
   const refresh = useCallback(() => {
-    window.cth.delegationsList?.().then(setData).catch(() => {});
+    if (!window.cth.delegationsList) {
+      setData({ log: [], stats: { delegated: 0, allowed: 0, blocked: 0 } });
+      return;
+    }
+    window.cth.delegationsList().then(setData).catch(() => {});
   }, []);
 
   useEffect(() => {
