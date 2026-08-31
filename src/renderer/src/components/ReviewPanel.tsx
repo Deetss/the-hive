@@ -163,10 +163,15 @@ export function ReviewPanel({ onClose }: { onClose?: () => void }) {
   useEffect(() => { setNote(''); }, [selectedId]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setReviewOpen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setReviewOpen(false);
+        onClose?.();
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [setReviewOpen]);
+  }, [setReviewOpen, onClose]);
 
   const selected = useMemo(() => pending.find((a) => a.id === selectedId) ?? null, [pending, selectedId]);
 
@@ -187,20 +192,18 @@ export function ReviewPanel({ onClose }: { onClose?: () => void }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 290,
+      height: '100%',
       background: 'var(--cth-cream-100)',
-      display: 'flex', flexDirection: 'column',
-      paddingTop: 36
+      display: 'flex', flexDirection: 'column'
     }}>
       {/* Title bar */}
       <div
-        className="cth-titlebar-drag"
         style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 36,
+          flexShrink: 0, height: 36,
           background: 'linear-gradient(180deg, var(--cth-cream-100) 0%, var(--cth-cream-200) 100%)',
           borderBottom: '1px solid var(--cth-ink-300)',
           display: 'flex', alignItems: 'center',
-          paddingLeft: 96, paddingRight: 8, gap: 10,
+          paddingLeft: 12, paddingRight: 8, gap: 10,
           userSelect: 'none'
         }}
       >
@@ -211,7 +214,6 @@ export function ReviewPanel({ onClose }: { onClose?: () => void }) {
           {pending.length} pending
         </span>
         <button
-          className="cth-titlebar-nodrag"
           onClick={() => { setReviewOpen(false); onClose?.(); }}
           title="Close Review (Esc)"
           aria-label="Close Review"
