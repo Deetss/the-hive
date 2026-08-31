@@ -70,6 +70,10 @@ export class HookServer {
     sevenDay:  { pct: number; resetsAt: string } | null;
     ts: number;
   }>();
+  /** agentId → total tool call count for this session (circuit breaker enforcement). */
+  private toolCallCounts = new Map<string, number>();
+  /** agentId → the tool call count at which we last sent a warning (rate-limit warnings). */
+  private lastWarningAt = new Map<string, number>();
 
   constructor(
     private hive: HiveManager,
@@ -134,6 +138,12 @@ export class HookServer {
   /** All agents' most-recent rate-limit entries, keyed by agent id. */
   allRateLimits(): Record<string, { fiveHour: { pct: number; resetsAt: string } | null; sevenDay: { pct: number; resetsAt: string } | null; ts: number }> {
     return Object.fromEntries(this.rateLimitsById.entries());
+  }
+
+  /** Clear tool call counter for an agent (called on spawn/archive). */
+  clearToolCallCount(agentId: string): void {
+    this.toolCallCounts.delete(agentId);
+    this.lastWarningAt.delete(agentId);
   }
 
   private handle(p: HookPayload): unknown {
@@ -249,6 +259,47 @@ export class HookServer {
     // A repeated identical (name+input) PostToolUse is the runaway-loop tell.
     if (event === 'PostToolUse' && agentId) {
       this.breaker?.recordToolUse(agentId, p.tool_name, p.tool_input);
+
+      // Tool call counter enforcement: track total tool calls per session and
+      // enforce repeatedToolLimit to prevent runaway sessions (e.g. 21k+ tool calls).
+      const count = (this.toolCallCounts.get(agentId) ?? 0) + 1;
+      this.toolCallCounts.set(agentId, count);
+
+      const cfg = this.getConfig();
+      const limit = cfg.circuitBreaker?.repeatedToolLimit ?? 8;
+
+      if (cfg.circuitBreaker?.enabled !== false && count >= limit) {
+        const lastWarn = this.lastWarningAt.get(agentId) ?? 0;
+
+        // Rate-limit warnings: only fire once per 100 calls after the limit
+        if (count === limit || count - lastWarn >= 100) {
+          this.lastWarningAt.set(agentId, count);
+
+          // Send warning to agent inbox
+          this.hive.send({
+            from: 'system',
+            to: agentId,
+            act: 'warn',
+            subject: 'Tool call limit reached',
+            body: `You have made ${count} tool calls this session, hitting the repeatedToolLimit. Commit any pending work and wrap up immediately.`,
+            priority: 'urgent'
+          });
+
+          // If hardStop is enabled, archive the agent
+          if (cfg.circuitBreaker?.hardStop === true) {
+            try {
+              this.hive.setArchived(agentId, true);
+              this.hive.appendLog({
+                kind: 'breaker-stop',
+                agentId,
+                reason: `tool call limit (${count} >= ${limit})`
+              });
+            } catch (e) {
+              console.error(`[hooks] failed to archive ${agentId} on tool limit:`, e);
+            }
+          }
+        }
+      }
     }
 
     // Compaction exemption (issue #109): PreCompact opens it so the compaction
@@ -258,6 +309,10 @@ export class HookServer {
     if (event === 'PreCompact' && agentId) this.breaker?.recordCompactStart(agentId);
     if ((event === 'PostCompact' || event === 'SessionStart') && agentId) {
       this.breaker?.recordCompactEnd(agentId);
+      // Reset tool call counter on new session
+      if (event === 'SessionStart') {
+        this.clearToolCallCount(agentId);
+      }
     }
 
     if ((event === 'Stop' || event === 'SubagentStop') && agentId) {
