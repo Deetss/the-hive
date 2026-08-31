@@ -449,15 +449,34 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
             {/* The god agent runs the floor rather than a checkout, so it gets no
                 repository header — it sits alone at the top of the roster. */}
             {gods.map(a => (
-              <SidebarRow
-                key={a.id}
-                agent={a}
-                active={a.id === agent.id}
-                onClick={() => { select(a.id); setFullscreen(a.id); }}
-                onNoteChange={(note) => setAgentNote(a.id, note)}
-                drag={drag}
-                scale={scale}
-              />
+              <div key={a.id}>
+                <SidebarRow
+                  agent={a}
+                  active={a.id === agent.id}
+                  onClick={() => { select(a.id); setFullscreen(a.id); }}
+                  onNoteChange={(note) => setAgentNote(a.id, note)}
+                  drag={drag}
+                  scale={scale}
+                />
+                {a.isOvermind && (
+                  <div style={{ display: 'flex', gap: 4, padding: '4px 8px 6px' }}>
+                    <PixelButton
+                      variant="primary"
+                      size="sm"
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        if (!window.confirm(`Archive and respawn ${a.name}? It will start a fresh session.`)) return;
+                        if (a.ptyId) {
+                          void window.cth.killPty(a.ptyId).catch(() => {});
+                        }
+                        void window.cth.respawnAgent(a.id).catch((e: unknown) => console.error('[respawn]', e));
+                      }}
+                    >
+                      ↺ respawn
+                    </PixelButton>
+                  </div>
+                )}
+              </div>
             ))}
             {groups.map(([repoKey, { label, members }]) => (
               // Repos are the roster's real structure, so they get real
