@@ -1447,7 +1447,7 @@ async function toggleAgentTerminal(agentId) {
   const toggleText = toggleBtn?.querySelector('.terminal-toggle-text');
   if (!terminalEl || !toggleText) return;
 
-  const state = agentTerminalState.get(agentId) || { expanded: false, interval: null };
+  const state = agentTerminalState.get(agentId) || { expanded: false, interval: null, userScrolling: false, lastLineCount: 0 };
 
   if (state.expanded) {
     terminalEl.hidden = true;
@@ -1456,14 +1456,29 @@ async function toggleAgentTerminal(agentId) {
       clearInterval(state.interval);
       state.interval = null;
     }
+    if (state.scrollTimeout) {
+      clearTimeout(state.scrollTimeout);
+      state.scrollTimeout = null;
+    }
     state.expanded = false;
   } else {
     terminalEl.hidden = false;
     toggleText.textContent = 'Hide';
     state.expanded = true;
     await loadAgentTerminal(agentId, terminalEl);
+
+    terminalEl.addEventListener('scroll', () => {
+      const s = agentTerminalState.get(agentId);
+      if (!s) return;
+      s.userScrolling = true;
+      if (s.scrollTimeout) clearTimeout(s.scrollTimeout);
+      s.scrollTimeout = setTimeout(() => {
+        s.userScrolling = false;
+      }, 500);
+    });
+
     state.interval = setInterval(() => {
-      if (agentTerminalState.get(agentId)?.expanded) {
+      if (agentTerminalState.get(agentId)?.expanded && document.visibilityState === 'visible') {
         loadAgentTerminal(agentId, terminalEl);
       }
     }, 3000);
@@ -1474,6 +1489,9 @@ async function toggleAgentTerminal(agentId) {
 
 async function loadAgentTerminal(agentId, terminalEl) {
   if (!terminalEl) return;
+  const state = agentTerminalState.get(agentId);
+  if (state?.userScrolling) return;
+
   try {
     const res = await apiFetch(`/api/workers/${encodeURIComponent(agentId)}/tail`);
     if (!res.ok) {
@@ -1482,8 +1500,12 @@ async function loadAgentTerminal(agentId, terminalEl) {
     }
     const data = await res.json();
     if (data.ok && data.tail) {
-      terminalEl.textContent = data.tail.join('\n') || '(no output)';
-      terminalEl.scrollTop = terminalEl.scrollHeight;
+      const lines = data.tail.slice(-100);
+      const userScrolledUp = terminalEl.scrollTop < terminalEl.scrollHeight - terminalEl.clientHeight - 50;
+      terminalEl.textContent = lines.join('\n') || '(no output)';
+      if (!userScrolledUp) {
+        terminalEl.scrollTop = terminalEl.scrollHeight;
+      }
     } else {
       terminalEl.textContent = '(no output)';
     }
@@ -1645,7 +1667,7 @@ function workerCard(w) {
 document.getElementById('workers-refresh').addEventListener('click', loadWorkers);
 
 // Worker terminal expansion state and polling
-const workerTerminalState = new Map(); // workerId -> { expanded: boolean, interval: null }
+const workerTerminalState = new Map();
 
 // Event delegation for terminal toggle buttons
 document.getElementById('workers-list').addEventListener('click', (e) => {
@@ -1661,29 +1683,39 @@ async function toggleWorkerTerminal(workerId) {
   const toggleText = toggleBtn?.querySelector('.terminal-toggle-text');
   if (!terminalEl || !toggleText) return;
 
-  const state = workerTerminalState.get(workerId) || { expanded: false, interval: null };
+  const state = workerTerminalState.get(workerId) || { expanded: false, interval: null, userScrolling: false, scrollTimeout: null };
 
   if (state.expanded) {
-    // Collapse
     terminalEl.hidden = true;
     toggleText.textContent = 'Show Terminal';
     if (state.interval) {
       clearInterval(state.interval);
       state.interval = null;
     }
+    if (state.scrollTimeout) {
+      clearTimeout(state.scrollTimeout);
+      state.scrollTimeout = null;
+    }
     state.expanded = false;
   } else {
-    // Expand
     terminalEl.hidden = false;
     toggleText.textContent = 'Hide Terminal';
     state.expanded = true;
 
-    // Load immediately
     await loadWorkerTerminal(workerId, terminalEl);
 
-    // Poll every 3s while expanded
+    terminalEl.addEventListener('scroll', () => {
+      const s = workerTerminalState.get(workerId);
+      if (!s) return;
+      s.userScrolling = true;
+      if (s.scrollTimeout) clearTimeout(s.scrollTimeout);
+      s.scrollTimeout = setTimeout(() => {
+        s.userScrolling = false;
+      }, 500);
+    });
+
     state.interval = setInterval(() => {
-      if (workerTerminalState.get(workerId)?.expanded) {
+      if (workerTerminalState.get(workerId)?.expanded && document.visibilityState === 'visible') {
         loadWorkerTerminal(workerId, terminalEl);
       }
     }, 3000);
@@ -1694,6 +1726,8 @@ async function toggleWorkerTerminal(workerId) {
 
 async function loadWorkerTerminal(workerId, terminalEl) {
   if (!terminalEl) return;
+  const state = workerTerminalState.get(workerId);
+  if (state?.userScrolling) return;
 
   try {
     const res = await apiFetch(`/api/workers/${encodeURIComponent(workerId)}/tail`);
@@ -1703,10 +1737,12 @@ async function loadWorkerTerminal(workerId, terminalEl) {
     }
     const data = await res.json();
     if (data.ok && data.tail) {
-      const lines = data.tail;
+      const lines = data.tail.slice(-100);
+      const userScrolledUp = terminalEl.scrollTop < terminalEl.scrollHeight - terminalEl.clientHeight - 50;
       terminalEl.textContent = lines.join('\n') || '(no output)';
-      // Auto-scroll to bottom
-      terminalEl.scrollTop = terminalEl.scrollHeight;
+      if (!userScrolledUp) {
+        terminalEl.scrollTop = terminalEl.scrollHeight;
+      }
     } else {
       terminalEl.textContent = '(no output)';
     }
