@@ -1282,7 +1282,14 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
 
                       <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
 
-                      <AiEnginesSettings config={config} onOpenProfileWalkthrough={onOpenProfileWalkthrough} />
+                      <AiEnginesSettings
+                        config={config}
+                        onOpenProfileWalkthrough={onOpenProfileWalkthrough}
+                        onProfilesChanged={(profiles) => {
+                          // Update config in place so the profile picker refreshes immediately
+                          Object.assign(config, { runtimeProfiles: profiles });
+                        }}
+                      />
 
                       <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
 
