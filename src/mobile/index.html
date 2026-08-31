@@ -1361,6 +1361,18 @@ function renderFleet() {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">🕳</div><div class="empty-msg">No agents on floor</div></div>';
     return;
   }
+
+  agentTerminalState.forEach((state, agentId) => {
+    if (state.expanded) {
+      const terminalEl = document.querySelector(`.agent-terminal[data-agent-id="${CSS.escape(agentId)}"]`);
+      if (terminalEl) {
+        state.lastContent = terminalEl.textContent || '';
+        const userScrolledUp = terminalEl.scrollTop < terminalEl.scrollHeight - terminalEl.clientHeight - 50;
+        state.scrollAtBottom = !userScrolledUp;
+      }
+    }
+  });
+
   el.innerHTML = agents.map(a => agentCard(a)).join('');
 
   agentTerminalState.forEach((state, agentId) => {
@@ -1371,6 +1383,10 @@ function renderFleet() {
       if (terminalEl && toggleText) {
         terminalEl.hidden = false;
         toggleText.textContent = 'Hide';
+        terminalEl.textContent = state.lastContent || '(no output)';
+        if (state.scrollAtBottom) {
+          terminalEl.scrollTop = terminalEl.scrollHeight;
+        }
         if (!state.interval) {
           state.interval = setInterval(() => {
             if (agentTerminalState.get(agentId)?.expanded && document.visibilityState === 'visible') {
@@ -1524,6 +1540,7 @@ async function loadAgentTerminal(agentId, terminalEl) {
     const res = await apiFetch(`/api/workers/${encodeURIComponent(agentId)}/tail`);
     if (!res.ok) {
       terminalEl.textContent = 'Failed to load terminal output';
+      if (state) state.lastContent = terminalEl.textContent;
       return;
     }
     const data = await res.json();
@@ -1531,14 +1548,17 @@ async function loadAgentTerminal(agentId, terminalEl) {
       const lines = data.tail.slice(-100);
       const userScrolledUp = terminalEl.scrollTop < terminalEl.scrollHeight - terminalEl.clientHeight - 50;
       terminalEl.textContent = lines.join('\n') || '(no output)';
+      if (state) state.lastContent = terminalEl.textContent;
       if (!userScrolledUp) {
         terminalEl.scrollTop = terminalEl.scrollHeight;
       }
     } else {
       terminalEl.textContent = '(no output)';
+      if (state) state.lastContent = terminalEl.textContent;
     }
   } catch (e) {
     terminalEl.textContent = 'Error loading terminal';
+    if (state) state.lastContent = terminalEl.textContent;
   }
 }
 
@@ -1647,6 +1667,18 @@ function renderWorkers(data) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">🕳</div><div class="empty-msg">No workers running</div></div>';
     return;
   }
+
+  workerTerminalState.forEach((state, workerId) => {
+    if (state.expanded) {
+      const terminalEl = document.querySelector(`.worker-terminal[data-worker-id="${CSS.escape(workerId)}"]`);
+      if (terminalEl) {
+        state.lastContent = terminalEl.textContent || '';
+        const userScrolledUp = terminalEl.scrollTop < terminalEl.scrollHeight - terminalEl.clientHeight - 50;
+        state.scrollAtBottom = !userScrolledUp;
+      }
+    }
+  });
+
   el.innerHTML = live.map(w => workerCard(w)).join('');
 
   workerTerminalState.forEach((state, workerId) => {
@@ -1657,6 +1689,10 @@ function renderWorkers(data) {
       if (terminalEl && toggleText) {
         terminalEl.hidden = false;
         toggleText.textContent = 'Hide Terminal';
+        terminalEl.textContent = state.lastContent || '(no output)';
+        if (state.scrollAtBottom) {
+          terminalEl.scrollTop = terminalEl.scrollHeight;
+        }
         if (!state.interval) {
           state.interval = setInterval(() => {
             if (workerTerminalState.get(workerId)?.expanded && document.visibilityState === 'visible') {
@@ -1789,6 +1825,7 @@ async function loadWorkerTerminal(workerId, terminalEl) {
     const res = await apiFetch(`/api/workers/${encodeURIComponent(workerId)}/tail`);
     if (!res.ok) {
       terminalEl.textContent = 'Failed to load terminal output';
+      if (state) state.lastContent = terminalEl.textContent;
       return;
     }
     const data = await res.json();
@@ -1796,14 +1833,17 @@ async function loadWorkerTerminal(workerId, terminalEl) {
       const lines = data.tail.slice(-100);
       const userScrolledUp = terminalEl.scrollTop < terminalEl.scrollHeight - terminalEl.clientHeight - 50;
       terminalEl.textContent = lines.join('\n') || '(no output)';
+      if (state) state.lastContent = terminalEl.textContent;
       if (!userScrolledUp) {
         terminalEl.scrollTop = terminalEl.scrollHeight;
       }
     } else {
       terminalEl.textContent = '(no output)';
+      if (state) state.lastContent = terminalEl.textContent;
     }
   } catch (e) {
     terminalEl.textContent = 'Error loading terminal';
+    if (state) state.lastContent = terminalEl.textContent;
   }
 }
 
