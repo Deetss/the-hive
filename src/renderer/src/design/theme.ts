@@ -31,7 +31,11 @@ let theme: AppTheme = load();
 const subscribers = new Set<() => void>();
 
 function apply(): void {
-  try { document.documentElement.dataset.cthTheme = theme; } catch { /* SSR/tests */ }
+  try {
+    document.documentElement.dataset.cthTheme = theme;
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch { /* SSR/tests */ }
 }
 apply();
 

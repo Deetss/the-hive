@@ -3,44 +3,44 @@
 
 export const colors = {
   cream: {
-    50: 0xfffdf5,
-    100: 0xfff8e7,
-    200: 0xf4e9c7,
-    300: 0xe8d9a0
+    50: 0xfbfdf6,
+    100: 0xf5f9e7,
+    200: 0xebf0d8,
+    300: 0xdfe5c8
   },
   paper: {
-    100: 0xfcfaf0,
-    200: 0xf0ead2
+    100: 0xfcfdf8,
+    200: 0xedf2dc
   },
   ink: {
-    900: 0x1a1320,
-    700: 0x3d2e4a,
-    500: 0x6b5878,
-    300: 0xa899b5,
-    100: 0xd9cfe0
+    900: 0x1a2416,
+    700: 0x334130,
+    500: 0x5a6657,
+    300: 0x9da899,
+    100: 0xd6dec0
   },
-  // v0.3.4 recalibration: same hues, professional saturation (mirrors tokens.css)
+  // Brand color calibrations: Blue #274579, Green #75aa5c, Cream #f5f9e7, Red #ef3e2d, Salmon #f47d55, Gray #6e7167
   accent: {
-    coral: 0xd96a62,
-    coralLight: 0xf3d3cd,
-    mint: 0x5ca97a,
-    mintLight: 0xd2e7da,
-    sky: 0x4f9faf,
-    skyLight: 0xcfe5e9,
-    lemon: 0xdcab3c,
-    lemonLight: 0xf3e4bc,
-    lilac: 0x9482d3,
-    lilacLight: 0xe0daf2,
-    peach: 0xd99168,
-    peachLight: 0xf3daca
+    coral: 0xef3e2d,
+    coralLight: 0xfce2df,
+    mint: 0x75aa5c,
+    mintLight: 0xe5f2df,
+    sky: 0x274579,
+    skyLight: 0xdde6f5,
+    lemon: 0xd4a02a,
+    lemonLight: 0xfaf1d6,
+    lilac: 0x7c6db2,
+    lilacLight: 0xede8f8,
+    peach: 0xf47d55,
+    peachLight: 0xfde8e0
   },
   status: {
-    idle: 0xa199ab,
-    thinking: 0x4f9faf,
-    working: 0xdcab3c,
-    blocked: 0xd96a62,
-    success: 0x5ca97a,
-    ghost: 0xd9d3de
+    idle: 0x6e7167,
+    thinking: 0x274579,
+    working: 0xd4a02a,
+    blocked: 0xef3e2d,
+    success: 0x75aa5c,
+    ghost: 0xd0d6c8
   },
   world: {
     grassLight: 0xd4eab0,
