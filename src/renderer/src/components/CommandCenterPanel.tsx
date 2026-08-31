@@ -40,6 +40,7 @@ import {
   type AgentProvider
 } from '@/store/config';
 import { canReceiveInbox } from '@shared/agentProvider';
+import { submitToPty, INITIAL_GOD_PROMPT } from '@/hooks/useHive';
 
 /** Abathur's control surface. Shown instead of the plain terminal/files panel
  *  when the god agent is selected: terminal + queue, the floor roster (with
@@ -802,6 +803,15 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
               action: provider === previousProvider ? 'restarting…' : `switching to ${providerPreset(provider).label}…`
             };
         updateAgent(a.id, patch);
+        // A fresh (non-resumed) overmind spawn needs the orientation prompt —
+        // useHive's bootstrap effect only runs on mount and won't re-fire for a
+        // respawn. Send it on the same 1200ms delay the bootstrap uses.
+        if (!resume && a.isOvermind && a.ptyId) {
+          const ptyId = a.ptyId;
+          setTimeout(() => {
+            void submitToPty(ptyId, INITIAL_GOD_PROMPT, provider).catch(() => {});
+          }, 1200);
+        }
       }
     } catch (error) {
       setRestartErrors((errors) => ({

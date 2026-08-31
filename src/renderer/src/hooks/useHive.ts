@@ -76,7 +76,7 @@ function withStandingGoal(agent: Agent, text: string): string {
 
 // The first thing Abathur (god) is told on a fresh spawn — orient him and put
 // him to work running the floor. Kept terse and action-oriented.
-const INITIAL_GOD_PROMPT = [
+export const INITIAL_GOD_PROMPT = [
   "You're online as BeeYoncé, the Queen of the hive. Get oriented, then start running the hive:",
   '1. Read your memory.md and drain every message in your inbox.',
   '2. Review board.md + tasks.json and the current roster of agents (active vs archived).',
@@ -129,7 +129,7 @@ async function waitForTerminalReady(
  * input box. Without them, every "\n" in a multi-line message acted as Enter —
  * the message submitted line-by-line in fragments (the agent saw only the last
  * chunk). The closing Enter, sent a tick later, submits the whole block. (#24) */
-function submitToPty(
+export function submitToPty(
   ptyId: string,
   text: string,
   provider: AgentProvider,
