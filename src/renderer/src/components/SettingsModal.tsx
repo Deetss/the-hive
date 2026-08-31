@@ -2092,7 +2092,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                 readOnly
                                 value={mobileUrl || 'starting mobile server…'}
                                 onFocus={(e) => e.target.select()}
-                                style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)', fontSize: 11 }}
+                                style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-ui)', fontSize: 12 }}
                               />
                             </label>
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

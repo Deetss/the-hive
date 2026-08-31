@@ -817,11 +817,20 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
   const [resultDraft, setResultDraft] = useState(task.result || '');
   const [progressDraft, setProgressDraft] = useState<number>(task.progress ?? 0);
 
+  const agents = useStore((s) => s.agents);
+  const requestDispatchSeed = useStore((s) => s.requestDispatchSeed);
+  const [isDispatchOpen, setIsDispatchOpen] = useState(false);
+  const [dispatchRecipient, setDispatchRecipient] = useState(() => agents.find((a) => a.isOvermind)?.id ?? (agents[0]?.id ?? 'god'));
+  const [dispatchMessage, setDispatchMessage] = useState(() => `Task: ${task.title}\nContext: ${task.notes || task.description || ''}`);
+  const [dispatchFeedback, setDispatchFeedback] = useState<string | null>(null);
+  const [dispatchBusy, setDispatchBusy] = useState(false);
+
   useEffect(() => {
     setTitleDraft(task.title);
     setNotesDraft(task.notes || task.description || '');
     setResultDraft(task.result || '');
     setProgressDraft(task.progress ?? 0);
+    setDispatchMessage(`Task: ${task.title}\nContext: ${task.notes || task.description || ''}`);
   }, [task.title, task.notes, task.description, task.result, task.progress]);
 
   const saveTitle = async () => {
@@ -1117,6 +1126,104 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
               </div>
             )}
 
+            {/* Dispatch / Assign Inline Panel */}
+            {isDispatchOpen && (
+              <div style={{
+                padding: 10, background: 'var(--cth-paper-100)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-lemon)',
+                display: 'flex', flexDirection: 'column', gap: 8,
+                borderRadius: 2
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 700, color: 'var(--cth-ink-900)' }}>
+                    DISPATCH / ASSIGN TASK
+                  </span>
+                  {dispatchFeedback && (
+                    <span style={{ fontSize: 12, color: 'var(--cth-mint)', fontWeight: 600 }}>
+                      {dispatchFeedback}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--cth-ink-700)', flexShrink: 0 }}>Assign to:</span>
+                  <select
+                    value={dispatchRecipient}
+                    onChange={(e) => setDispatchRecipient(e.target.value)}
+                    style={{
+                      flex: 1, padding: '4px 8px', background: 'var(--cth-cream-100)',
+                      boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', border: 'none',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-900)',
+                      outline: 'none'
+                    }}
+                  >
+                    {agents.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.isOvermind ? 'Overmind' : a.description ? a.description.slice(0, 24) : a.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <textarea
+                  value={dispatchMessage}
+                  onChange={(e) => setDispatchMessage(e.target.value)}
+                  rows={3}
+                  placeholder="Instructions for the agent…"
+                  style={{
+                    width: '100%', padding: '6px 8px', fontFamily: 'var(--cth-font-ui)', fontSize: 12,
+                    lineHeight: '18px', color: 'var(--cth-ink-900)', background: 'var(--cth-cream-100)',
+                    border: '1px solid var(--cth-ink-300)', outline: 'none', resize: 'vertical', boxSizing: 'border-box'
+                  }}
+                />
+
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                  <PixelButton variant="ghost" size="sm" onClick={() => setIsDispatchOpen(false)}>
+                    cancel
+                  </PixelButton>
+                  <PixelButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      requestDispatchSeed(dispatchMessage);
+                      setDispatchFeedback('✓ Queued in dispatch box');
+                      setTimeout(() => setDispatchFeedback(null), 3000);
+                    }}
+                  >
+                    queue in dispatch box
+                  </PixelButton>
+                  <PixelButton
+                    variant="primary"
+                    size="sm"
+                    disabled={dispatchBusy || !dispatchMessage.trim()}
+                    onClick={async () => {
+                      setDispatchBusy(true);
+                      try {
+                        await window.cth.hiveSend({
+                          to: dispatchRecipient,
+                          act: 'request',
+                          subject: task.title,
+                          body: dispatchMessage
+                        }, 'human');
+                        await onPatch?.({ assignee: dispatchRecipient, status: 'doing' });
+                        setDispatchFeedback(`✓ Dispatched to ${agents.find(a => a.id === dispatchRecipient)?.name || dispatchRecipient}`);
+                        setTimeout(() => {
+                          setDispatchFeedback(null);
+                          setIsDispatchOpen(false);
+                        }, 1800);
+                      } catch {
+                        setDispatchFeedback('✗ Send failed');
+                      } finally {
+                        setDispatchBusy(false);
+                      }
+                    }}
+                  >
+                    {dispatchBusy ? 'dispatching…' : 'dispatch now'}
+                  </PixelButton>
+                </div>
+              </div>
+            )}
+
             {/* Controls */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <select
@@ -1130,7 +1237,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
               >
                 {COLUMNS.map((c) => (<option key={c.key} value={c.key}>{c.label.toLowerCase()}</option>))}
               </select>
-              <PixelButton variant="secondary" size="sm" onClick={onAssign}>
+              <PixelButton variant="secondary" size="sm" onClick={() => { setIsDispatchOpen((prev) => !prev); onAssign?.(); }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                   <Icon name="arrow-right" /> assign
                 </span>

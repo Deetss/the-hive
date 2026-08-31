@@ -113,7 +113,7 @@ function DesignArtifact({ artifact }: { artifact: ArtifactDescriptor }) {
       <p style={{ margin: 0, fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-700)' }}>
         {artifact.description || 'No description provided.'}
       </p>
-      <div style={{ fontFamily: 'var(--cth-font-mono, monospace)', fontSize: 12, color: 'var(--cth-ink-500)', wordBreak: 'break-all' }}>
+      <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)', wordBreak: 'break-all' }}>
         {artifact.filePath}
       </div>
       <div>

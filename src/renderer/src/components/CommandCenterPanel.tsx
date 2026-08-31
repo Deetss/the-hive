@@ -448,7 +448,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
               value={mobileUrl || 'starting mobile server…'}
               onFocus={(e) => e.target.select()}
               style={{
-                fontFamily: 'var(--cth-font-mono)', fontSize: 11,
+                fontFamily: 'var(--cth-font-ui)', fontSize: 12,
                 padding: '6px 8px', background: 'var(--cth-cream-50)',
                 border: '1px solid var(--cth-ink-300)', color: 'var(--cth-ink-900)',
                 width: '100%', boxSizing: 'border-box'

@@ -591,7 +591,8 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                       <code
                         key={`${f}-${i}`}
                         style={{
-                          fontFamily: 'var(--cth-font-mono)',
+                          fontFamily: 'var(--cth-font-ui)',
+                          fontWeight: 600,
                           fontSize: 12,
                           padding: '0 4px',
                           background: 'var(--cth-paprika-light, #f6d3c4)',
@@ -611,7 +612,8 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                       <code
                         key={s}
                         style={{
-                          fontFamily: 'var(--cth-font-mono)',
+                          fontFamily: 'var(--cth-font-ui)',
+                          fontWeight: 600,
                           fontSize: 12,
                           padding: '0 4px',
                           background: 'var(--cth-mint-light, #d0f0e0)',
@@ -638,7 +640,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                           <span style={{ fontSize: 12 }}>MCP servers (safe, pre-enabled):</span>
                           {safe.map((id) => (
                             <code key={id} style={{
-                              fontFamily: 'var(--cth-font-mono)', fontSize: 12, padding: '0 4px',
+                              fontFamily: 'var(--cth-font-ui)', fontWeight: 600, fontSize: 12, padding: '0 4px',
                               background: 'var(--cth-sky-light, #d0e8f8)',
                               boxShadow: 'inset 0 0 0 1px var(--cth-sky-700, #1f5a8a)',
                               color: 'var(--cth-ink-900)'
@@ -651,7 +653,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                           <span style={{ fontSize: 12 }}>⚠️ MCP (needs your consent — NOT auto-enabled):</span>
                           {consent.map((id) => (
                             <code key={id} style={{
-                              fontFamily: 'var(--cth-font-mono)', fontSize: 12, padding: '0 4px',
+                              fontFamily: 'var(--cth-font-ui)', fontWeight: 600, fontSize: 12, padding: '0 4px',
                               background: 'var(--cth-paprika-light, #f6d3c4)',
                               boxShadow: 'inset 0 0 0 1px var(--cth-paprika-700, #b3502e)',
                               color: 'var(--cth-ink-900)'
