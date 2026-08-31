@@ -65,9 +65,12 @@ export const HIVE_CAST: HiveCastMember[] = [
 export const HIVE_CAST_BY_NAME: Record<HiveCharacterName, HiveCastMember> =
   Object.fromEntries(HIVE_CAST.map((c) => [c.name, c])) as Record<HiveCharacterName, HiveCastMember>;
 
-/** Hash a string to a deterministic worker bee. The queen (index 0) is the god
- *  seat, assigned explicitly, so workers draw from the rest of the roster. */
+/** Hash a string to a deterministic worker bee. The god seat (agent id 'god',
+ *  BeeYoncé) is always the queen — her stored character is an office name
+ *  ('michael'), so OfficeFloor remaps her through here; every other agent hashes
+ *  to a stable worker bee, and the queen is reserved for the god alone. */
 export function getDefaultHiveCharacter(nameOrId: string): HiveCharacterName {
+  if (nameOrId === 'god') return 'queen';
   const workers = HIVE_CAST.slice(1);
   let h = 0;
   for (let i = 0; i < nameOrId.length; i++) {
