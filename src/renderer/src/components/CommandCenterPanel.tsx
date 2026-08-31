@@ -11,6 +11,7 @@ import { QuickAskPanel } from './QuickAskPanel';
 import { TriggersTab } from './triggers/TriggersTab';
 import { TriggerHistoryTab } from './triggers/TriggerHistoryTab';
 import { WorkersTab } from './WorkersTab';
+import { DelegationsTab } from './DelegationsTab';
 import { SkillsTab } from './SkillsTab';
 import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool';
 import { terminalInstanceKey } from './terminalRecovery';
@@ -46,7 +47,7 @@ import { canReceiveInbox } from '@shared/agentProvider';
 // the old Schedules tab: schedules are now one of four trigger types, and the
 // whole surface lives in ./triggers (see src/shared/triggers.ts for the contract).
 type CCTab = 'terminal' | 'floor' | 'tasks' | 'ask' | 'human' | 'triggers' | 'trigger-history'
-  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers';
+  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
  *  is configured — so the bar reads as a budget estimate (filled + remaining)
@@ -76,7 +77,8 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
   { key: 'graph', label: 'graph', icon: 'web' },
   { key: 'activity', label: 'activity', icon: 'bell' },
   { key: 'skills', label: 'skills', icon: 'sparkle' },
-  { key: 'workers', label: 'workers', icon: 'gear' }
+  { key: 'workers', label: 'workers', icon: 'gear' },
+  { key: 'delegations', label: 'delegations', icon: 'gear' }
 ];
 
 type TabDef = { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] };
@@ -546,6 +548,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         {tab === 'activity' && <ActivityTab />}
         {tab === 'skills' && <SkillsTab agentCwd={agent.cwd} />}
         {tab === 'workers' && <WorkersTab />}
+        {tab === 'delegations' && <DelegationsTab />}
       </div>
     </PixelPanel>
   );

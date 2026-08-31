@@ -615,6 +615,23 @@ export interface PreservedWorktreeSnapshot {
   preservedAt: number;
 }
 
+/** One delegation decision logged by the LDA pre-tool hook. */
+export interface DelegationEntry {
+  ts: number;
+  tool: string;
+  fileOrArg: string;
+  decision: 'delegated' | 'allowed' | 'blocked';
+  durationMs: number;
+  resultSnippet?: string;
+}
+
+/** Session-wide delegation stats. */
+export interface DelegationStats {
+  delegated: number;
+  allowed: number;
+  blocked: number;
+}
+
 const api = {
   version: __APP_VERSION__,
 
@@ -838,6 +855,17 @@ const api = {
     ipcRenderer.invoke('workers:stop', workerId),
   workersStop: (workerId: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('workers:stop', workerId),
+
+  // ─── Delegations (LDA telemetry) ─────────────────────────────────────────
+  delegationsList: (): Promise<{ log: DelegationEntry[]; stats: DelegationStats }> =>
+    ipcRenderer.invoke('delegations:list'),
+  delegationsClear: (): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('delegations:clear'),
+  onDelegationEvent: (cb: (entry: DelegationEntry) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, entry: DelegationEntry) => cb(entry);
+    ipcRenderer.on('hive:delegationEvent', listener);
+    return () => ipcRenderer.removeListener('hive:delegationEvent', listener);
+  },
 
   // ─── Semantic memory (MemPalace CLI) ─────────────────────────────────────
   memoryStatus: (): Promise<MemoryStatus> => ipcRenderer.invoke('hive:memoryStatus'),
