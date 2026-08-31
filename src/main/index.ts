@@ -4123,6 +4123,34 @@ function findCodexHomeForSession(sessionId: string, siblingsRoot: string): strin
  *  ephemeral-worker watcher. */
 type AgentSpawnOptions = SpawnOptions & { hive?: AgentMeta; isolate?: boolean; resume?: boolean; requireResume?: boolean; resumeSessionId?: string; provider?: AgentProvider; noAutoInstall?: boolean };
 
+/** 1on1-resume: a permanent 1:1 agent (not god, not an ephemeral `worker-*`)
+ *  whose workspace carries a .remember/remember.md handoff is nudged ~15s after
+ *  spawn (past Claude's boot, mirroring the worker spawn nudge) to read the
+ *  handoff and continue where its previous session left off. No handoff file,
+ *  no nudge. Best-effort: a dead PTY or a throw here never affects the spawn. */
+function maybeScheduleResumeNudge(opts: AgentSpawnOptions): void {
+  const meta = opts.hive;
+  if (!meta || meta.isOvermind) return;
+  if (typeof meta.id === 'string' && meta.id.startsWith('worker-')) return;
+  const ptyId = opts.id;
+  const rememberPath = join(opts.cwd, '.remember', 'remember.md');
+  setTimeout(() => {
+    try {
+      if (!existsSync(rememberPath)) return;
+      // Text first, Enter a tick later (the submitToPty pattern): a single-chunk
+      // write lands the "\r" inside the input box and never submits (see nudgeWorker).
+      const wrote = ptyManager.write(ptyId, '\nYour last session handoff is in .remember/remember.md. Read it now and resume your previous work.\n');
+      if (!wrote.ok) { console.warn(`[resume-nudge] write failed for ${ptyId}: ${wrote.error}`); return; }
+      setTimeout(() => {
+        try { ptyManager.write(ptyId, '\r'); }
+        catch (e) { console.error('[resume-nudge] submit threw:', e); }
+      }, 140);
+    } catch (e) {
+      console.error('[resume-nudge] failed:', e);
+    }
+  }, 15_000);
+}
+
 ipcMain.handle('pty:spawn', async (evt, opts: AgentSpawnOptions) => {
   if (!opts || typeof opts.id !== 'string' || typeof opts.cwd !== 'string' || typeof opts.command !== 'string') {
     return { ok: false, error: 'invalid SpawnOptions' };
@@ -4617,7 +4645,10 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     ];
   }
   const res = ptyManager.spawn(opts, owner);
-  if (res.ok) analytics.track('agent_spawned', { provider });
+  if (res.ok) {
+    analytics.track('agent_spawned', { provider });
+    maybeScheduleResumeNudge(opts);
+  }
   syncKeepAwake(); // arm the power-save blocker while ≥1 agent PTY is alive (#18)
   // Hand the resolved worktree path back to the renderer so it can persist it on
   // the agent (only set when isolation actually provisioned a worktree above).
