@@ -371,6 +371,15 @@ export function useHive(config: HarnessConfig | null): void {
     if (!config?.onboardingComplete || !config.harnessHome) return;
     let cancelled = false;
     useStore.getState().setGodStatus('booting');
+    // Hard ceiling: if the whole bootstrap hasn't resolved in 45s, surface 'failed'
+    // so the retry UI is reachable. spawnPty itself has a 20s race; this outer
+    // watchdog covers the case where the PTY spawns ok but Claude's startup hangs.
+    const hardTimeout = setTimeout(() => {
+      if (!cancelled && useStore.getState().godStatus === 'booting') {
+        useStore.getState().setGodStatus('failed');
+        console.error('[god bootstrap] hard timeout — bootstrap did not resolve in 45s');
+      }
+    }, 45_000);
     const t = setTimeout(async () => {
       if (cancelled) return;
       const live = await window.cth.listPtys().catch(() => []);
@@ -471,7 +480,7 @@ export function useHive(config: HarnessConfig | null): void {
         finally { bootGraceUntil.current[GOD_ID] = 0; }
       })();
     }, 1200);
-    return () => { cancelled = true; clearTimeout(t); };
+    return () => { cancelled = true; clearTimeout(t); clearTimeout(hardTimeout); };
   }, [config?.onboardingComplete, config?.harnessHome]);
 
   // 2) Drive avatars from real hook events emitted by each agent's shim.
