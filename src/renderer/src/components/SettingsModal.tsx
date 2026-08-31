@@ -1628,7 +1628,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                             margin: 0, padding: 10, whiteSpace: 'pre-wrap',
                             background: 'var(--cth-paper-100)',
                             boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                            fontFamily: 'var(--cth-font-mono)', fontSize: 13, lineHeight: '16px',
+                            fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '18px',
                             color: 'var(--cth-ink-700)'
                           }}>{SLACK_CONNECT_STEPS}</pre>
                         )}

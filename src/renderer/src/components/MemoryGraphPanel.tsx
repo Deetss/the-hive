@@ -329,7 +329,7 @@ export function MemoryGraphPanel({
                   textAnchor="middle"
                   opacity={dim ? 0.25 : 1}
                   style={{
-                    fontFamily: isTopic ? 'var(--cth-font-mono)' : 'var(--cth-font-ui)',
+                    fontFamily: 'var(--cth-font-ui)',
                     fontSize: isTopic ? 12 : 11,
                     fill: isTopic ? 'var(--cth-ink-700)' : 'var(--cth-ink-900)'
                   }}
