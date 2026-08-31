@@ -6,6 +6,7 @@ import type { StatusKind } from '@/components/PixelBadge';
 import type { ActiveTaskSession, HiveTask, TaskSessionSnapshot } from '@/types/tasks';
 import type { AgentProvider } from '@shared/agentProvider';
 import type { HireManifest } from '@shared/hire';
+import type { ArtifactDescriptor } from '@shared/artifacts';
 import {
   EMPTY_HIRE_QUEUE,
   clearHireQueue,
@@ -315,6 +316,15 @@ interface State {
    *  Callers therefore state their intent, and `selectedId` stays as the
    *  fallback for anything that genuinely has no particular agent in mind. */
   ideAgentId: string | null;
+  /** Whether the full-window artifact Review panel is open. Toggled from the
+   *  title-bar Review button; a global surface like the IDE panel. */
+  reviewOpen: boolean;
+  setReviewOpen: (open: boolean) => void;
+  /** Pending artifact descriptors from <hive>/artifacts/. Kept in the store (not
+   *  local to the panel) so the title-bar badge count is live whether or not the
+   *  panel is open. Populated by the always-mounted App.tsx subscription. */
+  pendingArtifacts: ArtifactDescriptor[];
+  setPendingArtifacts: (items: ArtifactDescriptor[]) => void;
   sidebarWidth: number;
   sidebarTab: SidebarTab;
   godStatus: GodStatus;
@@ -814,6 +824,10 @@ export const useStore = create<State>((set, get) => ({
   ideInitialFile: null,
   ideOpen: false,
   ideAgentId: null,
+  reviewOpen: false,
+  setReviewOpen: (open) => set({ reviewOpen: open }),
+  pendingArtifacts: [],
+  setPendingArtifacts: (items) => set({ pendingArtifacts: items }),
   sidebarWidth: initialSidebarWidth,
   sidebarTab: initialSidebarTab,
   godStatus: 'booting',
