@@ -5240,7 +5240,9 @@ ipcMain.handle('ai:improveText', async (_evt, text: unknown, context: unknown) =
   // Completion-template format: Claude fills in the blank after "IMPROVED:" which
   // prevents it from asking clarifying questions. Run in os.tmpdir() so no CLAUDE.md
   // or git repo is picked up and Claude stays in pure text-transformation mode.
-  const prompt = `Rewrite the following ${context} to be specific, clear, and actionable for an AI agent. Output only the rewritten text — no explanation, no preamble.\n\n${context.toUpperCase()}: ${text}\n\nREWRITTEN ${context.toUpperCase()}:`;
+  // Delimit the user's text with backticks so Claude treats it as content to transform,
+  // never as an instruction (even if the text itself is a verb like "Rewrite").
+  const prompt = `You are a text editor for AI agent configuration. The user has typed the following as an agent ${context}. Rewrite it to be specific, clear, and actionable. Output ONLY the improved version — no commentary, no preamble, no quotes.\n\nText to improve:\n\`\`\`\n${text}\n\`\`\`\n\nImproved version:`;
   return new Promise<{ ok: boolean; result?: string; error?: string }>((resolve) => {
     const child = spawn('claude', ['--print', prompt], {
       shell: true,
