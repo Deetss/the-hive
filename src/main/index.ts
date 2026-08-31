@@ -1620,8 +1620,20 @@ const lastAgentTool = new Map<string, string>();
 const lastAgentStatus = new Map<string, 'working' | 'idle'>();
 /** Debounce timers to transition agent to idle after 3s of silence. */
 const agentIdleTimers = new Map<string, NodeJS.Timeout>();
+/** Token counts parsed from PTY stdout for non-Claude agents. */
+const lastAgentPtyTokens = new Map<string, number>();
+/** Cost in USD parsed from PTY stdout for non-Claude agents. */
+const lastAgentPtyCost = new Map<string, number>();
+/** Context window percentage parsed from PTY stdout for non-Claude agents. */
+const lastAgentPtyCtx = new Map<string, number>();
 
 const AGY_TOOL_RE = /(?:(?:\[?\b(?:Tool|Calling tool|Running tool|Executing|Tool call|Tool Call|Action)\b\]?)\s*[:\s]\s*([A-Za-z0-9_.:-]+)|●\s+([A-Za-z][A-Za-z0-9_]*))/i;
+/** Parse token counts from PTY stdout. Matches: "tokens: 1234", "Used 1234 tokens", "1234 tokens", etc. */
+const PTY_TOKENS_RE = /(?:tokens?|tok)(?:\s*used)?[:\s]+(\d+)|(?:used|consuming)\s+(\d+)\s+tokens?/i;
+/** Parse cost from PTY stdout. Matches: "cost: $1.23", "$1.23", "Usage: $0.45", etc. */
+const PTY_COST_RE = /(?:cost|usage|spent)[:\s]+\$?([\d.]+)|\$([\d.]+)/i;
+/** Parse context window percentage from PTY stdout. Matches: "ctx 45%", "context: 67%", "45% of context", etc. */
+const PTY_CTX_RE = /(?:ctx|context)[:\s]+(\d+)%|(\d+)%\s+(?:of\s+)?(?:ctx|context)/i;
 
 function stripAnsiText(str: string): string {
   return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
@@ -1655,6 +1667,36 @@ function notifyAgentPtyActivity(ptyId: string, chunk?: string): void {
       detectedTool = (m[1] || m[2] || '').trim();
       if (detectedTool) {
         lastAgentTool.set(agentId, detectedTool);
+      }
+    }
+
+    // Parse token/cost/ctx data from PTY output for non-Claude agents
+    const tokensMatch = PTY_TOKENS_RE.exec(plain);
+    if (tokensMatch) {
+      const tokens = parseInt(tokensMatch[1] || tokensMatch[2] || '0', 10);
+      if (tokens > 0) {
+        // Accumulate tokens across multiple outputs
+        const existing = lastAgentPtyTokens.get(agentId) ?? 0;
+        lastAgentPtyTokens.set(agentId, existing + tokens);
+      }
+    }
+
+    const costMatch = PTY_COST_RE.exec(plain);
+    if (costMatch) {
+      const cost = parseFloat(costMatch[1] || costMatch[2] || '0');
+      if (cost > 0) {
+        // Accumulate cost across multiple outputs
+        const existing = lastAgentPtyCost.get(agentId) ?? 0;
+        lastAgentPtyCost.set(agentId, existing + cost);
+      }
+    }
+
+    const ctxMatch = PTY_CTX_RE.exec(plain);
+    if (ctxMatch) {
+      const ctx = parseInt(ctxMatch[1] || ctxMatch[2] || '0', 10);
+      if (ctx > 0 && ctx <= 100) {
+        // Context % is a snapshot, not cumulative — keep the latest
+        lastAgentPtyCtx.set(agentId, ctx);
       }
     }
 
@@ -2875,11 +2917,17 @@ function writeFleetSnapshot(): void {
       .map(([id, a]) => {
         const u = usageById.get(id);
         const spans = snap.spans[id] ?? [];
-        const tokens = u ? u.input + u.output + u.cacheRead + u.cacheCreation : 0;
+        // For Claude agents, use telemetry data; for non-Claude agents (agy, etc.),
+        // fall back to PTY-parsed data when telemetry is unavailable
+        const telemetryTokens = u ? u.input + u.output + u.cacheRead + u.cacheCreation : 0;
+        const ptyTokens = lastAgentPtyTokens.get(id) ?? 0;
+        const tokens = telemetryTokens > 0 ? telemetryTokens : ptyTokens;
         // `usd` is LIFETIME (reset-corrected). Until the first fold completes we
         // fall back to the session figure rather than publishing a cold $0.
         const lifetime = costTotals.usdFor(id);
-        const sessionUsd = u ? Number(u.usd.toFixed(4)) : 0;
+        const telemetryUsd = u ? Number(u.usd.toFixed(4)) : 0;
+        const ptyUsd = lastAgentPtyCost.get(id) ?? 0;
+        const sessionUsd = telemetryUsd > 0 ? telemetryUsd : ptyUsd;
         const ptyId = ptyForAgent(id);
         const ptyLastOutput = ptyId ? ptyManager.lastOutputAt(ptyId) : undefined;
         const lastPty = Math.max(ptyLastOutput ?? 0, lastAgentPtyActivityMs.get(id) ?? 0);
@@ -2887,6 +2935,7 @@ function writeFleetSnapshot(): void {
         const isWorking = lastActiveMs > 0 && (now - lastActiveMs) <= 3000;
         const agentStatus = isWorking ? 'working' : (lastAgentStatus.get(id) ?? (a.status || 'idle'));
         const agentLastTool = lastAgentTool.get(id) ?? (spans.length ? spans[spans.length - 1].tool : null);
+        const ptyCtx = lastAgentPtyCtx.get(id);
         return {
           id,
           name: a.name,
@@ -2902,7 +2951,8 @@ function writeFleetSnapshot(): void {
           lastActiveSecAgo: lastActiveMs > 0 ? Math.round((now - lastActiveMs) / 1000) : null,
           inboxBacklog: hive.inboxBacklog(id),
           onHold: !!a.onHold,
-          profileId: a.profileId ?? null
+          profileId: a.profileId ?? null,
+          ctxPct: ptyCtx ?? (u?.contextWindow?.percentage ? Math.round(u.contextWindow.percentage * 100) : null)
         };
       });
     hive.writeFleetSnapshot({ ts: now, agents });
