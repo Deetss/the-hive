@@ -5244,11 +5244,15 @@ ipcMain.handle('ai:improveText', async (_evt, text: unknown, context: unknown) =
   // never as an instruction (even if the text itself is a verb like "Rewrite").
   const prompt = `You are a text editor for AI agent configuration. The user has typed the following as an agent ${context}. Rewrite it to be specific, clear, and actionable. Output ONLY the improved version — no commentary, no preamble, no quotes.\n\nText to improve:\n\`\`\`\n${text}\n\`\`\`\n\nImproved version:`;
   return new Promise<{ ok: boolean; result?: string; error?: string }>((resolve) => {
-    const child = spawn('claude', ['--print', prompt], {
+    // Pipe the prompt via stdin to avoid shell-escaping mangling newlines/backticks.
+    const child = spawn('claude', ['--print'], {
       shell: true,
       cwd: require('node:os').tmpdir(),
-      env: process.env
+      env: process.env,
+      stdio: ['pipe', 'pipe', 'pipe']
     });
+    child.stdin?.write(prompt);
+    child.stdin?.end();
     let stdout = '';
     let stderr = '';
     child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
