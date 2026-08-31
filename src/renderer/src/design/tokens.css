@@ -34,6 +34,7 @@
   --cth-mint:  #75AA5C;       --cth-mint-light:  #E5F2DF;  /* Brand Green */
   --cth-sky:   #274579;       --cth-sky-light:   #DDE6F5;  /* Brand Blue */
   --cth-lemon: #D4A02A;       --cth-lemon-light: #FAF1D6;  /* Warm Honey */
+  --cth-lemon-dark: #B8891F;  /* Deeper honey — primary-button hover */
   --cth-lilac: #7C6DB2;       --cth-lilac-light: #EDE8F8;  /* Soft Lilac */
   --cth-peach: #F47D55;       --cth-peach-light: #FDE8E0;  /* Brand Salmon */
 
@@ -117,6 +118,7 @@
   --cth-mint:  #75AA5C;       --cth-mint-light:  #E5F2DF;
   --cth-sky:   #274579;       --cth-sky-light:   #DDE6F5;
   --cth-lemon: #D4A02A;       --cth-lemon-light: #FAF1D6;
+  --cth-lemon-dark: #B8891F;
   --cth-lilac: #7C6DB2;       --cth-lilac-light: #EDE8F8;
   --cth-peach: #F47D55;       --cth-peach-light: #FDE8E0;
 
@@ -160,6 +162,7 @@
     --cth-mint:  #8CC770;       --cth-mint-light:  #223318;
     --cth-sky:   #6E9BE6;       --cth-sky-light:   #1E2A4A;
     --cth-lemon: #F2C55A;       --cth-lemon-light: #3D3216;
+    --cth-lemon-dark: #D9A93E;
     --cth-lilac: #B0A0F0;       --cth-lilac-light: #2C2548;
     --cth-peach: #FA9878;       --cth-peach-light: #42261E;
 
@@ -201,6 +204,7 @@
   --cth-mint:  #8CC770;       --cth-mint-light:  #223318;
   --cth-sky:   #6E9BE6;       --cth-sky-light:   #1E2A4A;
   --cth-lemon: #F2C55A;       --cth-lemon-light: #3D3216;
+  --cth-lemon-dark: #D9A93E;
   --cth-lilac: #B0A0F0;       --cth-lilac-light: #2C2548;
   --cth-peach: #FA9878;       --cth-peach-light: #42261E;
 
