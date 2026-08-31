@@ -1567,6 +1567,21 @@ function ensureBrowserServer(): Promise<string> {
         }
 
         const subPath = pathname === '/mobile' || pathname === '/mobile/' ? 'index.html' : pathname.replace(/^\/mobile\/?/, '');
+
+        // In dev, serve a passthrough SW that clears all caches so edits to
+        // src/mobile/index.html are visible on the phone without a cache wipe.
+        if (!app.isPackaged && subPath === 'sw.js') {
+          const devSw = Buffer.from([
+            "self.addEventListener('install', () => self.skipWaiting());",
+            "self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => self.clients.claim())));",
+            "self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));"
+          ].join('\n'), 'utf8');
+          res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-store', 'Content-Length': devSw.byteLength });
+          if (method === 'HEAD') res.end();
+          else res.end(devSw);
+          return;
+        }
+
         const resolved = resolveMobileStaticFile(subPath);
         if (resolved) {
           try {
