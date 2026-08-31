@@ -767,22 +767,38 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                           <button
                             key={c.name}
                             onClick={() => { setCharacter(c.name as OfficeCharacterName); setName(c.displayName); }}
-                            title={c.blurb}
+                            title={c.blurb ? `${c.displayName} — ${c.blurb}` : c.displayName}
                             style={{
-                              padding: 4,
+                              padding: '4px 2px',
                               background: character === c.name ? `var(--cth-${accent}-light)` : 'var(--cth-cream-100)',
                               boxShadow: character === c.name
                                 ? 'inset 0 0 0 1.5px var(--cth-ink-500)'
                                 : 'inset 0 0 0 1px var(--cth-ink-100)',
                               cursor: 'pointer',
                               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                              border: 'none', width: 56
+                              border: 'none', width: 68
                             }}
                           >
-                            <div style={{ width: 44, height: 56, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden' }}>
-                              <SpritePortrait character={c.name} scale={2} />
+                            <div style={{ width: 48, height: 56, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden' }}>
+                              <SpritePortrait character={c.name as OfficeCharacterName} scale={2} />
                             </div>
-                            <span style={{ fontSize: 13, color: 'var(--cth-ink-700)' }}>{c.displayName}</span>
+                            <span
+                              title={c.displayName}
+                              style={{
+                                fontSize: c.displayName.length > 10 ? 11 : 12,
+                                lineHeight: '14px',
+                                color: 'var(--cth-ink-700)',
+                                width: '100%',
+                                textAlign: 'center',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                display: 'block',
+                                padding: '0 2px'
+                              }}
+                            >
+                              {c.displayName}
+                            </span>
                           </button>
                         ))}
                       </div>
