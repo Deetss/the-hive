@@ -134,6 +134,9 @@ export interface HiveTask {
   /** Outcome summary, surfaced by the Slack done-notifier when this card reaches
    *  'done'. Optional; the notifier falls back to description/title. */
   result?: string;
+  /** Completion percent 0–100, shown as a bar on the kanban card. Updated via
+   *  PATCH /api/tasks/:id or a worker's {act:'task-progress'} outbox message. */
+  progress?: number;
   /** Set when this task originated from a Slack message — the thread the
    *  done-summary reply is posted back into. Consumed OUTBOUND only; populating
    *  it is the inbound/kanban side's job and does not affect routing. */
@@ -1778,7 +1781,20 @@ export class HiveManager {
         if (!f.endsWith('.json')) continue;
         const full = join(outbox, f);
         try {
-          const partial = JSON.parse(readFileSync(full, 'utf8')) as Partial<HiveMessage>;
+          const partial = JSON.parse(readFileSync(full, 'utf8')) as Partial<HiveMessage> & Record<string, unknown>;
+          // Control message: not mail to route, a task-ledger side effect. A worker
+          // reports progress by dropping {act:'task-progress', taskId, progress} in
+          // its outbox; patch the card and archive it without delivering to any inbox.
+          if ((partial.act as string) === 'task-progress') {
+            const taskId = typeof partial.taskId === 'string' ? partial.taskId : '';
+            const raw = Number(partial.progress);
+            if (taskId && Number.isFinite(raw)) {
+              this.patchTask(taskId, { progress: Math.max(0, Math.min(100, Math.round(raw))) } as Partial<Omit<HiveTask, 'id'>>);
+            }
+            renameSync(full, join(outbox, '.sent', f));
+            routed++;
+            continue;
+          }
           const msg = this.normalize(partial, id);
           msg.from = id; // sender is authoritative — the owning directory
           this.routeMessage(msg);
