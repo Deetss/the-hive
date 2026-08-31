@@ -294,36 +294,28 @@ export function AgentCard({
             >{infoLine}</div>
 
             {(toolLabel || activityLabel || location) && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: 8,
-                  fontSize: 10.5,
-                  lineHeight: '14px',
-                  color: 'var(--cth-ink-500)',
-                  opacity: 0.85,
-                  marginTop: 2
-                }}
-              >
-                {toolLabel && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }} title={`Last tool: ${toolLabel}`}>
-                    <Icon name="terminal" size={1} style={{ color: 'var(--cth-ink-500)' }} />
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>{toolLabel}</span>
-                  </span>
-                )}
-                {activityLabel && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={lastActivityTs ? new Date(lastActivityTs).toLocaleString() : undefined}>
-                    <Icon name="clock" size={1} style={{ color: 'var(--cth-ink-500)' }} />
-                    <span>{activityLabel}</span>
-                  </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
+                {(toolLabel || activityLabel) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, lineHeight: '14px', color: 'var(--cth-ink-500)', opacity: 0.85 }}>
+                    {toolLabel && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }} title={`Last tool: ${toolLabel}`}>
+                        <Icon name="terminal" size={1} style={{ color: 'var(--cth-ink-500)' }} />
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>{toolLabel}</span>
+                      </span>
+                    )}
+                    {activityLabel && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={lastActivityTs ? new Date(lastActivityTs).toLocaleString() : undefined}>
+                        <Icon name="clock" size={1} style={{ color: 'var(--cth-ink-500)' }} />
+                        <span>{activityLabel}</span>
+                      </span>
+                    )}
+                  </div>
                 )}
                 {location && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }} title={location.title}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, lineHeight: '14px', color: 'var(--cth-ink-500)', opacity: 0.85 }}>
                     <Icon name="folder" size={1} style={{ color: 'var(--cth-ink-500)' }} />
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>{location.display}</span>
-                  </span>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }} title={location.title}>{location.display}</span>
+                  </div>
                 )}
               </div>
             )}
