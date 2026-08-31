@@ -8325,6 +8325,7 @@ function runGovernorBeat(): void {
   profileSettingsCache.set(DEFAULT_CLAUDE_PROFILE_KEY, baselineSettings);
 
   const profileUsage = new Map<string, { settings: ResolvedProfileSettings; fiveHour: WindowUsage | null; sevenDay: WindowUsage | null }>();
+  const profileCostUsage = new Map<string, { settings: ResolvedProfileSettings; usd: number }>();
   let maxFiveHour: WindowUsage | null = null;
   let maxSevenDay: WindowUsage | null = null;
 
@@ -8347,6 +8348,7 @@ function runGovernorBeat(): void {
 
     const settings = getProfileSettings(meta.profileId ?? null);
     if (!settings.enabled) continue;
+    if (settings.mode === 'costCap') continue;
     if (settings.spawnGate.exemptAgents.has(agentId)) continue;
 
     const runtimeProfile = meta.profileId ? runtimeProfiles.get(meta.profileId) : undefined;
@@ -8417,7 +8419,31 @@ function runGovernorBeat(): void {
     }
   }
 
-  if (!maxFiveHour && !maxSevenDay && profileUsage.size === 0) return;
+  for (const [agentId, meta] of Object.entries(reg.agents ?? {})) {
+    if (!meta || meta.archived || meta.isOvermind) continue;
+    const settings = getProfileSettings(meta.profileId ?? null);
+    if (!settings.enabled) continue;
+    if (settings.mode !== 'costCap') continue;
+    if (settings.spawnGate.exemptAgents.has(agentId)) continue;
+    const runtimeProfile = meta.profileId ? runtimeProfiles.get(meta.profileId) : undefined;
+    const usageSample = telemetry.getAgentUsage(agentId);
+    let modelSlug = runtimeProfile?.model?.trim().toLowerCase() ?? '';
+    if (usageSample?.model) {
+      const normalized = usageSample.model.trim().toLowerCase();
+      if (normalized) modelSlug = normalized;
+    }
+    if (settings.spawnGate.governModels.length && (!modelSlug || !settings.spawnGate.governModels.includes(modelSlug))) continue;
+    const key = claudeAccountKey(meta.profileId);
+    let costState = profileCostUsage.get(key);
+    if (!costState) {
+      costState = { settings, usd: 0 };
+      profileCostUsage.set(key, costState);
+    }
+    const usd = usageSample && Number.isFinite(usageSample.usd) ? usageSample.usd : 0;
+    costState.usd += usd;
+  }
+
+  if (!maxFiveHour && !maxSevenDay && profileUsage.size === 0 && profileCostUsage.size === 0) return;
 
   const profilesToPersist: GovernorUsageProfiles = {};
   for (const [key, usageState] of profileUsage.entries()) {
@@ -8465,6 +8491,20 @@ function runGovernorBeat(): void {
     return { level: 'green', reason: `usage ${usage.pct.toFixed(1)}% < pace ${elapsed.toFixed(1)}%` };
   };
 
+  const evaluateCostCap = (usd: number, cap: number | null): { level: GovernorLevel; reason: string } => {
+    if (cap == null || !Number.isFinite(cap) || cap <= 0) {
+      return { level: 'green', reason: 'cost cap disabled' };
+    }
+    const spend = Number.isFinite(usd) ? Math.max(0, usd) : 0;
+    if (spend >= cap) {
+      return { level: 'red', reason: `cost $${spend.toFixed(2)} >= cap $${cap.toFixed(2)}` };
+    }
+    if (spend >= cap * 0.8) {
+      return { level: 'yellow', reason: `cost $${spend.toFixed(2)} nearing cap $${cap.toFixed(2)}` };
+    }
+    return { level: 'green', reason: `cost $${spend.toFixed(2)} < cap $${cap.toFixed(2)}` };
+  };
+
   const fiveEval = maxFiveHour ? evaluateWindowUsage(maxFiveHour, WINDOW_5H_MS, baselineSettings.windows.fiveHour) : null;
   const sevenEval = maxSevenDay ? evaluateWindowUsage(maxSevenDay, WINDOW_7D_MS, baselineSettings.windows.sevenDay) : null;
 
@@ -8484,6 +8524,14 @@ function runGovernorBeat(): void {
     profileStates.set(key, { level: best.level, reason: best.reason });
     if (settings.autoOffloadMerged) profileAutoOffloadConfigs[key] = settings.autoOffloadMerged;
     if (best.level === 'red') redProfiles.push(key);
+  }
+
+  for (const [key, costState] of profileCostUsage.entries()) {
+    const { settings, usd } = costState;
+    const evaluation = evaluateCostCap(usd, settings.costCapUsd);
+    profileStates.set(key, { level: evaluation.level, reason: evaluation.reason });
+    if (settings.autoOffloadMerged) profileAutoOffloadConfigs[key] = settings.autoOffloadMerged;
+    if (evaluation.level === 'red' && !redProfiles.includes(key)) redProfiles.push(key);
   }
 
   governorProfileStates.clear();
@@ -8514,14 +8562,20 @@ function runGovernorBeat(): void {
     if (prevMode !== 'red') {
       for (const [id, a] of Object.entries(reg.agents)) {
         if (a.archived || a.isOvermind) continue;
-        if (!isClaudeProvider((a.provider as AgentProvider | undefined) ?? 'claude')) continue;
         const settings = getProfileSettings(a.profileId ?? null);
         if (!settings.enabled) continue;
         if (settings.spawnGate.exemptAgents.has(id)) continue;
-        const runtimeProfile = a.profileId ? runtimeProfiles.get(a.profileId) : undefined;
-        const modelSlug = runtimeProfile?.model?.trim().toLowerCase() ?? '';
-        if (settings.spawnGate.governModels.length && (!modelSlug || !settings.spawnGate.governModels.includes(modelSlug))) continue;
         if (!redSet.has(claudeAccountKey(a.profileId))) continue;
+        const provider = inferAgentProvider(a.command, a.provider ?? undefined);
+        if (settings.mode === 'windows' && !isClaudeProvider(provider)) continue;
+        const runtimeProfile = a.profileId ? runtimeProfiles.get(a.profileId) : undefined;
+        const usageSample = telemetry.getAgentUsage(id);
+        let modelSlug = runtimeProfile?.model?.trim().toLowerCase() ?? '';
+        if (usageSample?.model) {
+          const normalized = usageSample.model.trim().toLowerCase();
+          if (normalized) modelSlug = normalized;
+        }
+        if (settings.spawnGate.governModels.length && (!modelSlug || !settings.spawnGate.governModels.includes(modelSlug))) continue;
         if (!ptyForAgent(id)) continue;
         try { control.pause(id, true); governorPausedAgents.add(id); } catch { /* */ }
       }
