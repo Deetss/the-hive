@@ -805,8 +805,8 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
   // picked in the dropdown is forwarded as a SUGGESTION the god may follow.
   const dispatch = async () => {
     const body = dispatchText.trim();
-    const subject = dispatchSubject.trim();
-    if (!body || !subject) return;
+    const subject = dispatchSubject.trim() || body.slice(0, 60);
+    if (!body) return;
     const suggested = dispatchTo ? agents.find((a) => a.id === dispatchTo) : undefined;
     const full = suggested
       ? `${body}\n\n(The human suggests ${suggested.name} (${suggested.id}) for this — your call as orchestrator.)`
@@ -1042,7 +1042,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
           );
         })()}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-          <PixelButton variant="primary" size="sm" onClick={dispatch} disabled={!dispatchText.trim() || !dispatchSubject.trim()}>
+          <PixelButton variant="primary" size="sm" onClick={dispatch} disabled={!dispatchText.trim()}>
             dispatch
           </PixelButton>
           {dispatchMsg && <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{dispatchMsg}</span>}
