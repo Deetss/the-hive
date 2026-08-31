@@ -71,8 +71,8 @@
     <!-- Worker Bee Silhouette (Golden with Transparent Gaps) -->
     <g transform="scale(0.78) translate(0, -10)">
       <!-- Wings -->
-      <polygon points="-20,-25 -100,-58 -82,-10 -20,5" fill="#FEF3C7" opacity="0.95"/>
-      <polygon points="20,-25 100,-58 82,-10 20,5" fill="#FEF3C7" opacity="0.95"/>
+      <polygon points="-20,-25 -100,-58 -82,-10 -20,5" fill="#FEF08A" opacity="0.95"/>
+      <polygon points="20,-25 100,-58 82,-10 20,5" fill="#FEF08A" opacity="0.95"/>
       <!-- Body -->
       <circle cx="0" cy="-46" r="20" fill="url(#goldBodyPure)"/>
       <ellipse cx="0" cy="-12" rx="24" ry="20" fill="url(#goldWallPure)"/>
@@ -95,8 +95,8 @@
     <!-- Worker Bee Silhouette -->
     <g transform="scale(0.78) translate(0, -10)">
       <!-- Wings -->
-      <polygon points="-20,-25 -100,-58 -82,-10 -20,5" fill="#FEF3C7" opacity="0.95"/>
-      <polygon points="20,-25 100,-58 82,-10 20,5" fill="#FEF3C7" opacity="0.95"/>
+      <polygon points="-20,-25 -100,-58 -82,-10 -20,5" fill="#FEF08A" opacity="0.95"/>
+      <polygon points="20,-25 100,-58 82,-10 20,5" fill="#FEF08A" opacity="0.95"/>
       <!-- Body -->
       <circle cx="0" cy="-46" r="20" fill="url(#goldBodyPure)"/>
       <ellipse cx="0" cy="-12" rx="24" ry="20" fill="url(#goldWallPure)"/>
