@@ -113,19 +113,19 @@ export function DelegationsTab() {
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
 
   const refresh = useCallback(() => {
-    window.cth.delegationsList().then(setData).catch(() => {});
+    window.cth.delegationsList?.().then(setData).catch(() => {});
   }, []);
 
   useEffect(() => {
     refresh();
-    const unsub = window.cth.onDelegationEvent(() => {
+    const unsub = window.cth.onDelegationEvent?.(() => {
       refresh();
     });
     return unsub;
   }, [refresh]);
 
   const clear = useCallback(() => {
-    window.cth.delegationsClear()
+    window.cth.delegationsClear?.()
       .then(() => { refresh(); })
       .catch(() => {});
   }, [refresh]);
