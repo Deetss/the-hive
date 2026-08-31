@@ -11,6 +11,8 @@ import type { ToolStatus } from '../shared/toolCatalog';
 export type { ToolStatus } from '../shared/toolCatalog';
 import type { HeroPayload } from '../shared/heroPayload';
 export type { HeroPayload } from '../shared/heroPayload';
+import type { ArtifactDescriptor } from '../shared/artifacts';
+export type { ArtifactDescriptor } from '../shared/artifacts';
 import type { LocalSkill, CatalogSkill } from '../main/skills';
 export type { LocalSkill, CatalogSkill } from '../main/skills';
 import type {
@@ -911,6 +913,33 @@ const api = {
     ipcRenderer.invoke('history:search', query, limit),
   hiveSend: (msg: Partial<HiveMessage>, from?: string): Promise<{ ok: boolean; error?: string; message?: HiveMessage }> =>
     ipcRenderer.invoke('hive:send', msg, from),
+
+  // ─── Artifact review queue ─────────────────────────────────────────────────
+  /** Pending artifact descriptors from <hive>/artifacts/, newest first. */
+  artifactsList: (): Promise<ArtifactDescriptor[]> =>
+    ipcRenderer.invoke('artifacts:list'),
+  artifactsApprove: (id: string, note?: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('artifacts:approve', id, note),
+  artifactsReject: (id: string, note?: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('artifacts:reject', id, note),
+  /** Read a plan/doc artifact's text for markdown preview. */
+  artifactsReadFile: (id: string): Promise<{ ok: true; content: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('artifacts:readFile', id),
+  /** Read an image artifact's bytes (renderer turns them into a blob: URL).
+   *  `Uint8Array<ArrayBuffer>`, not the bare alias, so the value goes straight
+   *  into `new Blob([...])` — see readBinary above for the reasoning. */
+  artifactsReadImage: (id: string): Promise<{ ok: true; bytes: Uint8Array<ArrayBuffer>; mime: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('artifacts:readImage', id),
+  /** Reveal a `design` artifact's file in the OS file browser. */
+  artifactsReveal: (id: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('artifacts:reveal', id),
+  /** Fires when <hive>/artifacts/ changes (add/approve/reject). No payload —
+   *  the renderer re-fetches the list. Same listener pattern as onHiveMessage. */
+  onArtifactsChanged: (cb: () => void): (() => void) => {
+    const listener = () => cb();
+    ipcRenderer.on('hive:artifactsChanged', listener);
+    return () => ipcRenderer.removeListener('hive:artifactsChanged', listener);
+  },
 
   onHiveHookEvent: (
     cb: (e: { agentId?: string; event: string; tool?: string; notificationType?: string; source?: string; message?: string; blocked?: boolean }) => void

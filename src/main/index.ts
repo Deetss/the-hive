@@ -41,6 +41,7 @@ import {
 } from './config';
 import { attemptGovernorOffloads, releaseOffloadSlot, requeueOffloadObjective, queueOffloadObjective, type OffloadWorkSpec } from './governor-offload';
 import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde } from './fs';
+import * as artifacts from './artifacts';
 import * as syncLock from './syncLock';
 import * as sync from './sync';
 import * as profiles from './profiles';
@@ -5089,6 +5090,77 @@ ipcMain.handle('fs:revealPath', async (_evt, p: unknown) => {
   return err ? { ok: false, error: err } : { ok: true };
 });
 
+// ─── IPC: artifact review queue ───────────────────────────────────────────────
+// Human review of agent-generated artifacts dropped into <hive>/artifacts/.
+// See src/main/artifacts.ts and hive/artifacts/README.md.
+function artifactsHiveRoot(): string | null {
+  return hive.root() ?? (resolveHarnessHome() ? join(resolveHarnessHome()!, 'hive') : null);
+}
+
+let artifactsWatchStarted = false;
+/** Start the artifacts directory watcher once the hive root is known, pushing
+ *  `hive:artifactsChanged` to the renderer on every change so the queue and its
+ *  tab badge stay live. Idempotent. */
+function ensureArtifactsWatcher(): void {
+  if (artifactsWatchStarted) return;
+  const root = artifactsHiveRoot();
+  if (!root) return;
+  artifactsWatchStarted = true;
+  artifacts.startWatch(root, () => {
+    try { liveWebContents()?.send('hive:artifactsChanged'); } catch { /* window torn down */ }
+  });
+}
+
+ipcMain.handle('artifacts:list', async () => {
+  const root = artifactsHiveRoot();
+  if (!root) return [];
+  ensureArtifactsWatcher();
+  return artifacts.list(root);
+});
+ipcMain.handle('artifacts:approve', async (_evt, id: unknown, note: unknown) => {
+  const root = artifactsHiveRoot();
+  if (!root) return { ok: false, error: 'no hive root' };
+  if (typeof id !== 'string' || !id) return { ok: false, error: 'invalid id' };
+  const res = await artifacts.decide(root, id, 'approved', typeof note === 'string' ? note : undefined);
+  if (res.ok) { try { liveWebContents()?.send('hive:artifactsChanged'); } catch { /* window gone */ } }
+  return res;
+});
+ipcMain.handle('artifacts:reject', async (_evt, id: unknown, note: unknown) => {
+  const root = artifactsHiveRoot();
+  if (!root) return { ok: false, error: 'no hive root' };
+  if (typeof id !== 'string' || !id) return { ok: false, error: 'invalid id' };
+  const res = await artifacts.decide(root, id, 'rejected', typeof note === 'string' ? note : undefined);
+  if (res.ok) { try { liveWebContents()?.send('hive:artifactsChanged'); } catch { /* window gone */ } }
+  return res;
+});
+ipcMain.handle('artifacts:readFile', async (_evt, id: unknown) => {
+  const root = artifactsHiveRoot();
+  if (!root) return { ok: false, error: 'no hive root' };
+  if (typeof id !== 'string' || !id) return { ok: false, error: 'invalid id' };
+  return artifacts.readText(root, id);
+});
+ipcMain.handle('artifacts:readImage', async (_evt, id: unknown) => {
+  const root = artifactsHiveRoot();
+  if (!root) return { ok: false, error: 'no hive root' };
+  if (typeof id !== 'string' || !id) return { ok: false, error: 'invalid id' };
+  return artifacts.readImage(root, id);
+});
+// Reveal the artifact file in the OS browser (the `design` preview's open button).
+// showItemInFolder only — never shell.openPath on a file — same reasoning as
+// fs:revealPath above: the path is agent-authored and openPath would launch it.
+ipcMain.handle('artifacts:reveal', async (_evt, id: unknown) => {
+  const root = artifactsHiveRoot();
+  if (!root) return { ok: false, error: 'no hive root' };
+  if (typeof id !== 'string' || !id) return { ok: false, error: 'invalid id' };
+  const p = await artifacts.filePathOf(root, id);
+  if (!p) return { ok: false, error: 'artifact not found' };
+  const st = await statAbs(p);
+  if (!st.exists) return { ok: false, error: 'file not found' };
+  if (st.isFile) { shell.showItemInFolder(st.path); return { ok: true }; }
+  const err = await shell.openPath(st.path);
+  return err ? { ok: false, error: err } : { ok: true };
+});
+
 // ─── IPC: git ───────────────────────────────────────────────────────────────
 ipcMain.handle('git:isRepo', (_evt, cwd: unknown) => {
   if (typeof cwd !== 'string') return false;
@@ -7169,6 +7241,7 @@ function bootstrapHiveServices(): void {
   control.replaceAutoDeliveryPauses(readConfig().autoDeliveryPausedAgents ?? []);
   archiveOrphanedAgents(); // #57/#58: archive stale archived:false entries with no live PTY
   hive.startRouter();
+  ensureArtifactsWatcher(); // watch <hive>/artifacts/ for the human review queue
   startEphemeralWorkerWatcher(); // poll HIVE_ROOT/spawn-requests → ephemeral workers
   // Phase 2: the loopback secret broker. Bind it BEFORE workers spawn so each spawn can
   // be granted a capability token + the broker URL in its env. Loopback-only, idempotent.
