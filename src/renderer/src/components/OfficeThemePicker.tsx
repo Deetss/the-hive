@@ -20,7 +20,8 @@ const THEME_META: ThemeMeta[] = [
   { id: 'siliconvalley', label: 'Silicon Valley',     blurb: 'The Hacker Hostel',                   built: false, swatch: '#4a6a4a' },
   { id: 'got',           label: 'Game of Thrones',    blurb: 'The Red Keep throne room',            built: false, swatch: '#6a2630' },
   { id: 'hogwarts',      label: 'Harry Potter',       blurb: 'Hogwarts great hall',                 built: false, swatch: '#39305a' },
-  { id: 'zerg',          label: 'The Hive',           blurb: 'Abathur and the swarm',               built: true,  swatch: '#6a2f7a' },
+  { id: 'zerg',          label: 'The Swarm',          blurb: 'Zerg brood (legacy reskin)',          built: true,  swatch: '#6a2f7a' },
+  { id: 'hive',          label: 'The Hive',           blurb: "BeeYoncé's bee colony",               built: true,  swatch: '#d4a02a' },
 ];
 
 /** Settings "Office Theme" section: an experimental flag toggle + a 6-card
