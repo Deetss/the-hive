@@ -173,7 +173,7 @@ export function QuickAskPanel() {
           value={draft}
           onChange={(e) => setDraft('__quickask__', e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Ask the Overmind a question…"
+          placeholder="Message the Overmind with a question or task…"
           rows={2}
           style={{
             flex: 1, resize: 'none', background: 'transparent', border: 'none', outline: 'none',
@@ -182,7 +182,7 @@ export function QuickAskPanel() {
           }}
         />
         <PixelButton variant="primary" size="sm" onClick={submit} disabled={!draft.trim()}>
-          ask
+          send
         </PixelButton>
       </div>
     </div>
