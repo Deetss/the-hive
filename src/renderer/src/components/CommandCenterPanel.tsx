@@ -790,12 +790,22 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
     }
   };
 
-  // Respawn — archive this agent's current session and queue a fresh one that
-  // resumes from its memory.md. Distinct from "restart & continue", which keeps
-  // the live conversation; a respawn deliberately starts a clean session, which
-  // is the escape hatch when the current one is quota-locked or wedged.
+  // Respawn — start a CLEAN session for this agent. Distinct from "restart &
+  // continue", which resumes the live conversation; a respawn deliberately drops
+  // the current session, the escape hatch when it is quota-locked or wedged.
+  //
+  // A live agent is respawned through the SAME spawn path as "restart & continue"
+  // but with resume:false. That reuses the agent's own identity — its id,
+  // isOvermind flag, and cwd — so the Overmind comes back as a PROPER Overmind
+  // (godId, god's cwd + CLAUDE.md/skills), NOT a generic worker. A worker
+  // spawn-request can never produce that, so the IPC fallback below is only for
+  // an agent with no live PTY (already archived), which cannot use this path.
   const respawn = async (a: Agent) => {
-    if (!window.confirm(`Archive and respawn ${a.name}? It will resume from memory.md.`)) return;
+    if (!window.confirm(`Archive and respawn ${a.name}? It will start a fresh session (resuming from memory.md).`)) return;
+    if (a.ptyId) {
+      await restartWithModel(a, a.model, { resume: false });
+      return;
+    }
     setRestarting(a.id);
     setRestartErrors((errors) => ({ ...errors, [a.id]: '' }));
     try {
