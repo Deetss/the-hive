@@ -4869,16 +4869,24 @@ ipcMain.handle('agent:respawn', async (_evt, agentId: unknown) => {
 
     // 3) Queue a fresh spawn-request reconstructed from the registry entry. The
     //    objective points at the prior session's memory.md (absolute path) so the
-    //    respawn resumes that thread rather than starting cold.
+    //    respawn resumes that thread rather than starting cold. This IPC path is
+    //    the FALLBACK for an agent with no live PTY — a live agent (including the
+    //    Overmind) is respawned renderer-side through the identity-preserving
+    //    restart path instead, so it never becomes a generic worker. The Overmind
+    //    objective still names its CLAUDE.md/PROTOCOL.md so a no-PTY god comes back
+    //    orchestrating the floor rather than acting like a one-off worker.
     const dir = spawnRequestsDir();
     if (!dir) return { ok: false, error: 'spawn-requests dir unavailable' };
     mkdirSync(dir, { recursive: true });
     const reqId = `respawn-${id}-${Date.now().toString(36)}`;
     const memPath = join(root, 'agents', id, 'memory.md');
+    const objective = entry.isOvermind
+      ? `You are resuming as ${entry.name}, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.`
+      : `You are a respawn of ${entry.name}. First read your prior session's memory at ${memPath}, then resume that work where the previous session left off.${entry.role ? ` Role: ${entry.role}.` : ''}`;
     const req: SpawnRequest = {
       id: reqId,
       name: entry.name,
-      objective: `You are a respawn of ${entry.name}. First read your prior session's memory at ${memPath}, then resume that work where the previous session left off.${entry.role ? ` Role: ${entry.role}.` : ''}`,
+      objective,
       cwd: entry.cwd,
       provider: entry.provider,
       profile: entry.profileId,
