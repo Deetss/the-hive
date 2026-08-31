@@ -74,6 +74,8 @@ export class HookServer {
   private toolCallCounts = new Map<string, number>();
   /** agentId → the tool call count at which we last sent a warning (rate-limit warnings). */
   private lastWarningAt = new Map<string, number>();
+  /** agentId → last tool executed (for descriptive idle notifications). */
+  private lastToolById = new Map<string, string>();
 
   constructor(
     private hive: HiveManager,
@@ -258,6 +260,7 @@ export class HookServer {
     // Feed the breaker its hook-derived loop signal: a tool that actually ran.
     // A repeated identical (name+input) PostToolUse is the runaway-loop tell.
     if (event === 'PostToolUse' && agentId) {
+      if (p.tool_name) this.lastToolById.set(agentId, p.tool_name);
       this.breaker?.recordToolUse(agentId, p.tool_name, p.tool_input);
 
       // Tool call counter enforcement: track total tool calls per session and
@@ -325,7 +328,9 @@ export class HookServer {
       // path bypassed terminal-draft/HITL safety and could spend credits while a
       // user was answering a question. Inbox files remain durable; the renderer
       // wakes the agent later through its guarded idle-only delivery path.
-      this.notify(agentId ?? 'Agent', 'finished — idle');
+      const name = this.getAgentName(agentId);
+      const actionSummary = this.describeStopAction(agentId);
+      this.notify(name, actionSummary);
       this.emit(agentId, event, p);
       return {};
     }
@@ -402,12 +407,45 @@ export class HookServer {
       (p.notification_type === 'idle' ||
         (p.message ?? '').toLowerCase().includes('waiting for your input'))
     ) {
-      this.notify(agentId ?? 'Agent', p.message ?? 'needs your attention');
+      const name = this.getAgentName(agentId);
+      const msg = (p.message ?? '').trim() || 'Waiting for your input';
+      this.notify(name, msg);
     }
 
     // Forward everything else to the renderer so avatars reflect real activity.
     this.emit(agentId, event, p);
     return {};
+  }
+
+  private getAgentName(agentId?: string | null): string {
+    if (!agentId) return 'Agent';
+    try {
+      const reg = this.hive.registry();
+      if (agentId === 'god' || reg.godId === agentId) {
+        return reg.agents[agentId]?.name ?? reg.agents[reg.godId ?? 'god']?.name ?? 'Overmind';
+      }
+      return reg.agents[agentId]?.name ?? agentId;
+    } catch {
+      return agentId;
+    }
+  }
+
+  private describeStopAction(agentId: string): string {
+    try {
+      const raw = this.hive.tasks() as { tasks?: Array<{ id: string; title: string; assignee?: string; status?: string }> };
+      const tasks = Array.isArray(raw?.tasks) ? raw.tasks : [];
+      const reg = this.hive.registry();
+      const isGod = agentId === 'god' || reg.godId === agentId;
+      const activeTask = tasks.find((t) => (t.assignee === agentId || (isGod && (t.assignee === 'god' || t.assignee === reg.godId))) && (t.status === 'doing' || t.status === 'done'));
+      if (activeTask?.title) {
+        return `Finished task: "${activeTask.title}"`;
+      }
+    } catch { /* ignore */ }
+    const lastTool = this.lastToolById.get(agentId);
+    if (lastTool) {
+      return `Finished turn (last action: ${lastTool})`;
+    }
+    return 'Finished turn and is now idle';
   }
 
   /** Fire a native desktop notification — gated on the user's `notifications`

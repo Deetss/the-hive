@@ -18,6 +18,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
+import { useStore } from '@/store/store';
 
 /** Mirrors the `window.cth.onRealtimeCompletion` payload (preload). `summary` is the
  *  human-speakable line Abathur relays; the rest is context for this toast. */
@@ -43,6 +44,7 @@ const MAX_VISIBLE = 4;
 
 export function CompletionToast(): JSX.Element | null {
   const [toasts, setToasts] = useState<ActiveToast[]>([]);
+  const agents = useStore((s) => s.agents);
   // Stable across renders so the subscription's closures always see live timers.
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -96,69 +98,76 @@ export function CompletionToast(): JSX.Element | null {
         pointerEvents: 'none'
       }}
     >
-      {toasts.map((t) => (
-        <div
-          key={t.key}
-          role="status"
-          style={{
-            pointerEvents: 'auto',
-            background: 'var(--cth-paper-100)',
-            boxShadow: 'inset 0 0 0 1.5px var(--cth-ink-500), 4px 4px 0 0 var(--cth-ink-900)',
-            padding: 12,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 6
-          }}
-        >
+      {toasts.map((t) => {
+        const agent = agents.find((a) => a.id === t.targetAgentId || (t.targetAgentId === 'god' && a.isOvermind));
+        const head = t.targetAgentId ? t.targetAgentId.split('-')[0] : '';
+        const fallbackName = head ? head.charAt(0).toUpperCase() + head.slice(1) : 'Agent';
+        const agentName = agent?.name ?? fallbackName;
+
+        return (
           <div
+            key={t.key}
+            role="status"
             style={{
+              pointerEvents: 'auto',
+              background: 'var(--cth-paper-100)',
+              boxShadow: 'inset 0 0 0 1.5px var(--cth-ink-500), 4px 4px 0 0 var(--cth-ink-900)',
+              padding: 12,
               display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              fontFamily: 'var(--cth-font-ui)',
-              fontSize: 13,
-              lineHeight: '12px',
-              color: 'var(--cth-ink-900)',
-              textTransform: 'uppercase'
+              flexDirection: 'column',
+              gap: 6
             }}
           >
-            <Icon name="bell" /> Abathur · completed
-            <button
-              type="button"
-              onClick={() => dismiss(t.key)}
-              aria-label="Dismiss"
+            <div
               style={{
-                marginLeft: 'auto',
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
                 fontFamily: 'var(--cth-font-ui)',
                 fontSize: 13,
-                lineHeight: '10px',
-                color: 'var(--cth-ink-700)',
-                padding: 0
+                lineHeight: '12px',
+                color: 'var(--cth-ink-900)',
+                textTransform: 'uppercase'
               }}
             >
-              ✕
-            </button>
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--cth-font-ui)',
-              fontSize: 15,
-              lineHeight: '20px',
-              color: 'var(--cth-ink-900)'
-            }}
-          >
-            {t.summary}
-          </div>
-          {t.objective && (
-            <div style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-700)' }}>
-              {t.objective}
+              <Icon name="bell" /> {agentName} · completed
+              <button
+                type="button"
+                onClick={() => dismiss(t.key)}
+                aria-label="Dismiss"
+                style={{
+                  marginLeft: 'auto',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--cth-font-ui)',
+                  fontSize: 13,
+                  lineHeight: '10px',
+                  color: 'var(--cth-ink-700)',
+                  padding: 0
+                }}
+              >
+                ✕
+              </button>
             </div>
-          )}
-        </div>
-      ))}
+            <div
+              style={{
+                fontFamily: 'var(--cth-font-ui)',
+                fontSize: 15,
+                lineHeight: '20px',
+                color: 'var(--cth-ink-900)'
+              }}
+            >
+              {t.summary}
+            </div>
+            {t.objective && (
+              <div style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-700)' }}>
+                {t.objective}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

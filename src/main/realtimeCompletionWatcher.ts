@@ -65,6 +65,7 @@ export interface InboxMessage {
 export interface CompletionContext {
   tasks: TaskCard[];
   inbox: InboxMessage[];
+  registry?: { godId: string | null; agents: Record<string, { name?: string }> } | null;
 }
 
 /** Outcome of the pure detection predicate. */
@@ -89,7 +90,7 @@ export interface CompletionResult {
  */
 export interface RealtimeCompletion {
   correlationId: string;
-  kind: PendingDispatch['kind'];
+  kind: string;
   targetAgentId: string;
   taskId?: string;
   /** Human-speakable line, e.g. "Oscar finished the cost guard." */
@@ -110,6 +111,8 @@ export interface CompletionWatcherDeps {
   readTasks: () => TaskCard[];
   /** Current dispatcher-inbox messages (where assignee replies land). Called each poll. */
   readInbox: () => InboxMessage[];
+  /** Optional registry reader so spoken summaries use actual agent display names. */
+  readRegistry?: () => { godId: string | null; agents: Record<string, { name?: string }> } | null;
   /** Clock — injectable for tests. Defaults to Date.now. */
   now?: () => number;
   /** Poll cadence in ms. Default 4000. */
@@ -162,14 +165,22 @@ function isSystemSender(from: string | undefined): boolean {
   return f === 'breaker' || f === 'scheduler' || f === 'system' || f === '';
 }
 
-function speakableName(agentId: string): string {
+function speakableName(agentId: string, registry?: { godId: string | null; agents: Record<string, { name?: string }> } | null): string {
+  if (registry) {
+    if (agentId === 'god' || registry.godId === agentId) {
+      const g = registry.agents[agentId] ?? registry.agents[registry.godId ?? 'god'];
+      if (g?.name) return g.name;
+    }
+    const a = registry.agents[agentId];
+    if (a?.name) return a.name;
+  }
   // "oscar-mqpbr18v" → "Oscar". Falls back to the raw id if it has no name segment.
   const head = agentId.split('-')[0] ?? agentId;
   return head ? head.charAt(0).toUpperCase() + head.slice(1) : agentId;
 }
 
-function summarize(pending: PendingDispatch, via: CompletionResult['via']): string {
-  const who = speakableName(pending.targetAgentId);
+function summarize(pending: PendingDispatch, via: CompletionResult['via'], registry?: { godId: string | null; agents: Record<string, { name?: string }> } | null): string {
+  const who = speakableName(pending.targetAgentId, registry);
   // N3: the objective is task-supplied — neutralize it before it reaches the voice model.
   const obj = pending.objective ? neutralizeForVoice(pending.objective) : '';
   const what = obj ? ` on "${obj}"` : '';
@@ -189,7 +200,7 @@ export function detectCompletion(pending: PendingDispatch, ctx: CompletionContex
   if (pending.taskId) {
     const card = ctx.tasks.find((t) => t.id === pending.taskId);
     if (card && isDoneStatus(card.status)) {
-      return { done: true, via: 'card-done', at: pending.dispatchedAt, summary: summarize(pending, 'card-done') };
+      return { done: true, via: 'card-done', at: pending.dispatchedAt, summary: summarize(pending, 'card-done', ctx.registry) };
     }
   }
 
@@ -215,7 +226,7 @@ export function detectCompletion(pending: PendingDispatch, ctx: CompletionContex
       via: 'inbox-reply',
       at: best.at,
       messageId: best.msg.id,
-      summary: summarize(pending, 'inbox-reply')
+      summary: summarize(pending, 'inbox-reply', ctx.registry)
     };
   }
 
@@ -359,14 +370,17 @@ export class RealtimeCompletionWatcher {
     }
   }
 
-  // --- internals ---
-
   private snapshot(): CompletionContext {
-    return { tasks: safeRead(this.deps.readTasks), inbox: safeRead(this.deps.readInbox) };
+    return {
+      tasks: safeRead(this.deps.readTasks),
+      inbox: safeRead(this.deps.readInbox),
+      registry: this.deps.readRegistry ? safeRegistry(this.deps.readRegistry) : null
+    };
   }
 
   private checkOne(record: PendingDispatch): RealtimeCompletion | null {
-    const res = detectCompletion(record, this.snapshot());
+    const snap = this.snapshot();
+    const res = detectCompletion(record, snap);
     if (!res.done) return null;
     return {
       correlationId: record.correlationId,
@@ -376,7 +390,7 @@ export class RealtimeCompletionWatcher {
       objective: record.objective,
       via: res.via ?? 'inbox-reply',
       completedAt: res.at ?? this.now(),
-      summary: res.summary ?? summarize(record, res.via),
+      summary: res.summary ?? summarize(record, res.via, snap.registry),
       messageId: res.messageId
     };
   }
@@ -427,6 +441,14 @@ function safeRead<T>(reader: () => T[]): T[] {
     return Array.isArray(v) ? v : [];
   } catch {
     return [];
+  }
+}
+
+function safeRegistry<T>(reader: () => T): T | null {
+  try {
+    return reader() ?? null;
+  } catch {
+    return null;
   }
 }
 

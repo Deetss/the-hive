@@ -7163,7 +7163,18 @@ const completionWatcher = initCompletionWatcher({
       return [];
     }
   },
-  onNotify: (evt) => { try { if (Notification.isSupported()) new Notification({ title: 'Abathur', body: evt.summary }).show(); } catch { /* best-effort */ } }
+  readRegistry: () => hive.registry(),
+  onNotify: (evt) => {
+    try {
+      if (Notification.isSupported()) {
+        const reg = hive.registry();
+        const agentName = reg.agents[evt.targetAgentId]?.name ?? (evt.targetAgentId === 'god' || evt.targetAgentId === reg.godId ? (reg.agents[reg.godId ?? 'god']?.name ?? 'BeeYoncé') : evt.targetAgentId);
+        const title = agentName || 'Agent';
+        const body = evt.summary || (evt.objective ? `Finished "${evt.objective}"` : 'Task completed');
+        new Notification({ title, body }).show();
+      }
+    } catch { /* best-effort */ }
+  }
 });
 
 registerRealtimeActionIpc({
