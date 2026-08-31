@@ -1362,6 +1362,34 @@ function renderFleet() {
     return;
   }
   el.innerHTML = agents.map(a => agentCard(a)).join('');
+
+  agentTerminalState.forEach((state, agentId) => {
+    if (state.expanded) {
+      const terminalEl = document.querySelector(`.agent-terminal[data-agent-id="${CSS.escape(agentId)}"]`);
+      const toggleBtn = document.querySelector(`.agent-terminal-toggle[data-agent-id="${CSS.escape(agentId)}"]`);
+      const toggleText = toggleBtn?.querySelector('.terminal-toggle-text');
+      if (terminalEl && toggleText) {
+        terminalEl.hidden = false;
+        toggleText.textContent = 'Hide';
+        if (!state.interval) {
+          state.interval = setInterval(() => {
+            if (agentTerminalState.get(agentId)?.expanded && document.visibilityState === 'visible') {
+              loadAgentTerminal(agentId, terminalEl);
+            }
+          }, 3000);
+        }
+        terminalEl.addEventListener('scroll', () => {
+          const s = agentTerminalState.get(agentId);
+          if (!s) return;
+          s.userScrolling = true;
+          if (s.scrollTimeout) clearTimeout(s.scrollTimeout);
+          s.scrollTimeout = setTimeout(() => {
+            s.userScrolling = false;
+          }, 500);
+        });
+      }
+    }
+  });
 }
 
 function agentCard(a) {
@@ -1620,6 +1648,34 @@ function renderWorkers(data) {
     return;
   }
   el.innerHTML = live.map(w => workerCard(w)).join('');
+
+  workerTerminalState.forEach((state, workerId) => {
+    if (state.expanded) {
+      const terminalEl = document.querySelector(`.worker-terminal[data-worker-id="${CSS.escape(workerId)}"]`);
+      const toggleBtn = document.querySelector(`.worker-terminal-toggle[data-worker-id="${CSS.escape(workerId)}"]`);
+      const toggleText = toggleBtn?.querySelector('.terminal-toggle-text');
+      if (terminalEl && toggleText) {
+        terminalEl.hidden = false;
+        toggleText.textContent = 'Hide Terminal';
+        if (!state.interval) {
+          state.interval = setInterval(() => {
+            if (workerTerminalState.get(workerId)?.expanded && document.visibilityState === 'visible') {
+              loadWorkerTerminal(workerId, terminalEl);
+            }
+          }, 3000);
+        }
+        terminalEl.addEventListener('scroll', () => {
+          const s = workerTerminalState.get(workerId);
+          if (!s) return;
+          s.userScrolling = true;
+          if (s.scrollTimeout) clearTimeout(s.scrollTimeout);
+          s.scrollTimeout = setTimeout(() => {
+            s.userScrolling = false;
+          }, 500);
+        });
+      }
+    }
+  });
 }
 
 function workerCard(w) {
