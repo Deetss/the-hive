@@ -412,12 +412,9 @@ export function useHive(config: HarnessConfig | null): void {
             args,
             cols: 100,
             rows: 30,
-            // Restore Abathur's prior conversation across an app restart. His session
-            // id lives in the hive registry (recorded from his hooks), so the main
-            // process attaches `--resume <id>`; a missing transcript falls back to a
-            // fresh session. Without this the most important context on the floor —
-            // the orchestrator's — was lost on every restart.
-            resume: true,
+            // Resume Abathur's prior conversation in production. Skipped in dev
+            // to avoid loading the production session's massive transcript.
+            resume: import.meta.env.PROD,
             hive: { id: GOD_ID, name: 'Abathur', provider: overmindProvider, cwd: config.harnessHome!, isOvermind: true, role: 'Overmind' }
           }),
           new Promise<never>((_, reject) =>
