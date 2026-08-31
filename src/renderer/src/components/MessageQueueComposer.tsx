@@ -31,6 +31,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   const queue = useStore((s) => s.messageQueues[agent.id]) ?? EMPTY_QUEUE;
   const enqueueMessage = useStore((s) => s.enqueueMessage);
   const removeQueuedMessage = useStore((s) => s.removeQueuedMessage);
+  const updateQueuedMessage = useStore((s) => s.updateQueuedMessage);
   const releaseQueuedMessage = useStore((s) => s.releaseQueuedMessage);
   const clearQueue = useStore((s) => s.clearQueue);
 
@@ -276,6 +277,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
               paused={deliveryPaused}
               onSendNow={() => releaseQueuedMessage(agent.id, m.id)}
               onRemove={() => removeQueuedMessage(agent.id, m.id)}
+              onEdit={(text) => updateQueuedMessage(agent.id, m.id, text)}
             />
           ))}
         </div>
@@ -424,17 +426,20 @@ function useDeliveryPaused(agentId: string, active: boolean): boolean {
  * toggle only renders when the text actually clips, so short messages stay tidy.
  */
 function QueuedMessageRow(
-  { index, message, paused, onSendNow, onRemove }: {
+  { index, message, paused, onSendNow, onRemove, onEdit }: {
     index: number;
     message: QueuedMessage;
     /** Floor-wide auto-delivery is paused — offer the per-message override. */
     paused: boolean;
     onSendNow: () => void;
     onRemove: () => void;
+    onEdit: (text: string) => void;
   }
 ) {
   const [expanded, setExpanded] = useState(false);
   const [clipped, setClipped] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
 
   // Measure against the CLAMPED box, so the toggle survives being expanded (the
@@ -465,24 +470,49 @@ function QueuedMessageRow(
         color: 'var(--cth-ink-500)', lineHeight: '18px', flexShrink: 0
       }}>{`${index + 1}.`}</span>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <div
-          ref={bodyRef}
-          title={expanded ? undefined : message.text}
-          style={{
-            fontSize: 12, lineHeight: '18px',
-            color: 'var(--cth-ink-900)',
-            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-            ...(expanded
-              // Cap the expanded body so one long message can't push the rest of
-              // the queue out of the list's own 280px scroll area.
-              ? { maxHeight: 220, overflowY: 'auto' as const }
-              : {
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden'
-                })
-          }}
-        >{message.text}</div>
-        {(clipped || expanded || paused) && (
+        {editing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <textarea
+              autoFocus
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              style={{
+                fontSize: 12, lineHeight: '18px', resize: 'vertical',
+                minHeight: 60, width: '100%', boxSizing: 'border-box',
+                border: '1px solid var(--cth-sky)', borderRadius: 2,
+                background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
+                fontFamily: 'var(--cth-font-mono)', padding: 4
+              }}
+            />
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => { onEdit(editText.trim() || message.text); setEditing(false); }}
+                style={{ border: 'none', background: 'var(--cth-sky)', cursor: 'pointer', padding: '2px 8px', fontSize: 11, borderRadius: 2, color: '#fff' }}>
+                save
+              </button>
+              <button onClick={() => setEditing(false)}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', fontSize: 11, color: 'var(--cth-ink-500)' }}>
+                cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            ref={bodyRef}
+            title={expanded ? undefined : message.text}
+            style={{
+              fontSize: 12, lineHeight: '18px',
+              color: 'var(--cth-ink-900)',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              ...(expanded
+                ? { maxHeight: 220, overflowY: 'auto' as const }
+                : {
+                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden'
+                  })
+            }}
+          >{message.text}</div>
+        )}
+        {!editing && (clipped || expanded || paused) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {(clipped || expanded) && (
               <button
@@ -514,18 +544,30 @@ function QueuedMessageRow(
           </div>
         )}
       </div>
-      <button
-        onClick={onRemove}
-        title="Remove from queue"
-        style={{
-          flexShrink: 0, border: 'none', background: 'transparent',
-          cursor: 'pointer',
-          color: 'var(--cth-ink-500)', padding: 0,
-          display: 'inline-flex', alignItems: 'center'
-        }}
-      >
-        <Icon name="x" />
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+        <button
+          onClick={() => { setEditText(message.text); setEditing((e) => !e); }}
+          title={editing ? 'Cancel edit' : 'Edit this queued message'}
+          style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            color: editing ? 'var(--cth-sky)' : 'var(--cth-ink-500)', padding: 0,
+            display: 'inline-flex', alignItems: 'center'
+          }}
+        >
+          <Icon name="edit" />
+        </button>
+        <button
+          onClick={onRemove}
+          title="Remove from queue"
+          style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            color: 'var(--cth-ink-500)', padding: 0,
+            display: 'inline-flex', alignItems: 'center'
+          }}
+        >
+          <Icon name="x" />
+        </button>
+      </div>
     </div>
   );
 }

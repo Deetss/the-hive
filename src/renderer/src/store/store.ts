@@ -463,6 +463,7 @@ interface State {
    *  `text` (UI/card surfaces still show `text`). */
   enqueueMessage: (agentId: string, text: string, meta?: { slack?: { channel: string; thread_ts: string }; instruction?: string; precondition?: QueuedMessage['precondition'] }) => void;
   /** Drop a single queued message (user removed it, or it was just delivered). */
+  updateQueuedMessage: (agentId: string, messageId: string, text: string) => void;
   removeQueuedMessage: (agentId: string, messageId: string) => void;
   /** "Send now" while floor auto-delivery is paused: marks the message manual
    *  (drain bypasses the pause gate for it) and moves it to the queue front. */
@@ -1174,6 +1175,15 @@ export const useStore = create<State>((set, get) => ({
         ...(meta?.precondition ? { precondition: meta.precondition } : {})
       };
       const messageQueues = { ...s.messageQueues, [agentId]: [...(s.messageQueues[agentId] ?? []), msg] };
+      persistQueues(messageQueues);
+      return { messageQueues };
+    }),
+  updateQueuedMessage: (agentId, messageId, text) =>
+    set((s) => {
+      const current = s.messageQueues[agentId];
+      if (!current) return s;
+      const next = current.map((m) => m.id === messageId ? { ...m, text, instruction: undefined } : m);
+      const messageQueues = { ...s.messageQueues, [agentId]: next };
       persistQueues(messageQueues);
       return { messageQueues };
     }),

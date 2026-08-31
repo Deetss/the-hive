@@ -529,7 +529,7 @@ export function App() {
                       </p>
                       <PixelButton variant="primary" size="md" onClick={() => window.location.reload()}>
                         <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                          <Icon name="mcp" /> retry Abathur
+                          <Icon name="mcp" /> retry BeeYoncé
                         </span>
                       </PixelButton>
                       <PixelButton variant="secondary" size="md" onClick={() => setAddAgentOpen(true)}>
@@ -543,11 +543,11 @@ export function App() {
                   <PixelPanel variant="dialog" title="EMPTY FLOOR" noPadding>
                     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <p style={{ margin: 0, fontSize: 13, lineHeight: '20px' }}>
-                        No agents on the floor yet. Re-launch Abathur or spawn any agent.
+                        No agents on the floor yet. Launch BeeYoncé or spawn any agent.
                       </p>
                       <PixelButton variant="primary" size="md" onClick={() => window.location.reload()}>
                         <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                          <Icon name="mcp" /> launch Abathur
+                          <Icon name="mcp" /> launch BeeYoncé
                         </span>
                       </PixelButton>
                       <PixelButton variant="secondary" size="md" onClick={() => setAddAgentOpen(true)}>

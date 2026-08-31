@@ -39,9 +39,9 @@ const FEATURES: Feature[] = [
   },
   {
     icon: 'gear',
-    label: 'ABATHUR IS YOUR CLONE',
-    desc: 'Your clone runs the floor — triages requests, routes tasks, and escalates only what needs you.',
-    descPlain: 'Your clone, Abathur, takes your requests, hands work to the right agent, and only interrupts you when it matters.',
+    label: 'BEEYONCÉ RUNS THE HIVE',
+    desc: 'Your Queen runs the floor — triages requests, routes tasks, and escalates only what needs you.',
+    descPlain: 'BeeYoncé takes your requests, hands work to the right agent, and only interrupts you when it matters.',
     tint: 'var(--cth-sky-light)', edge: 'var(--cth-sky)'
   },
   {
@@ -396,11 +396,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               <>
                 <p style={{ margin: 0, lineHeight: '22px' }}>
                   {plain ? (
-                    <><strong>Abathur is your clone</strong> — he reads your requests, breaks
+                    <><strong>BeeYoncé runs the hive</strong> — he reads your requests, breaks
                     them into tasks, and hands them to the right agent. He's the boss of the
                     floor; you're still the boss of him. Choose which AI engine powers him.</>
                   ) : (
-                    <><strong>Abathur is your clone</strong> — the boss of the floor you just
+                    <><strong>BeeYoncé runs the hive</strong> — the boss of the floor you just
                     met. He triages your requests, assigns tasks, and manages the team, while
                     escalating anything that genuinely needs you. Pick the engine and model that
                     power him; give him a longer-context, higher-capability model.</>
@@ -425,8 +425,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                       <>Each option is a <strong>CLI engine</strong> (Claude Code, Codex,
                       Antigravity/Gemini, or a local proxy like Qwen). Engines marked
                       INSTALLED are already on this machine; INSTALLS ON FIRST RUN means the app
-                      sets it up when Abathur first starts.
-                      <strong> Your clone</strong> (Abathur) is the engine that orchestrates the whole
+                      sets it up when BeeYoncé first starts.
+                      <strong> BeeYoncé</strong> is the engine that orchestrates the whole
                       hive. Recommended: Claude Code · Opus 4.8 · 1M. Other providers can be wired
                       per agent later.</>
                     )}
@@ -531,7 +531,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     ))}
                   </select>
                   <div style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>
-                    This only sets Abathur's engine. You can run other providers per agent later.
+                    This only sets BeeYoncé's engine. You can run other providers per agent later.
                   </div>
                 </div>
               </>

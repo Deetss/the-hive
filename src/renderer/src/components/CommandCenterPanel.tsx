@@ -406,7 +406,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
           </PixelButton>
           {agent.isOvermind && (
             <button
-              title="Archive this session and spawn a fresh Abathur (respawn)"
+              title="Archive this session and spawn a fresh BeeYoncé (respawn)"
               onClick={() => respawn(agent)}
               style={{
                 border: 'none', cursor: 'pointer', padding: '3px 6px',
@@ -553,7 +553,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
               <MessageQueueComposer agent={agent} />
             </>
           ) : (
-            <Centered>Abathur has no live terminal.</Centered>
+            <Centered>BeeYoncé has no live terminal.</Centered>
           )
         )}
         {tab === 'floor' && <FloorTab seed={dispatchSeed} onSeedConsumed={resetDispatchSeed} />}
@@ -901,7 +901,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
       setDispatchSubject('');
     }
     setDispatchMsg(res.ok
-      ? `sent to Abathur${suggested ? ` (suggesting ${suggested.name})` : ''}`
+      ? `sent to BeeYoncé${suggested ? ` (suggesting ${suggested.name})` : ''}`
       : `failed: ${res.error ?? '?'}`);
     setTimeout(() => setDispatchMsg(null), 4000);
   };
@@ -972,13 +972,13 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
 
   return (
     <Scroll>
-      <Section title="DISPATCH — VIA ABATHUR">
+      <Section title="DISPATCH — VIA BEEYONCÉ">
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
           <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
             SUGGESTED OWNER
           </span>
           <Select value={dispatchTo} onChange={setDispatchTo}>
-            <option value="">Abathur decides</option>
+            <option value="">BeeYoncé decides</option>
             {agents.filter((a) => !a.isOvermind).map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
@@ -1380,7 +1380,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                   onClick={async () => {
                     const currentProvider = inferAgentProvider(a.command, a.provider);
                     if (engineProvider !== currentProvider) {
-                      if (!window.confirm("This restarts Abathur; a conversation on a different engine can't be resumed.")) return;
+                      if (!window.confirm("This restarts BeeYoncé; a conversation on a different engine can't be resumed.")) return;
                     }
                     await window.cth.updateConfig({ overmindProvider: engineProvider, overmindModel: engineModel });
                     await restartWithModel(a, engineModel, { provider: engineProvider, resume: false });
@@ -1396,7 +1396,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                   disabled={restarting === a.id}
                   onClick={() => restartWithModel(a, a.model, { resume: true })}
                 >
-                  <span title="Kill and respawn Abathur, resuming the current conversation — fixes a corrupted/garbled terminal without losing context">
+                  <span title="Kill and respawn BeeYoncé, resuming the current conversation — fixes a corrupted/garbled terminal without losing context">
                     restart &amp; continue
                   </span>
                 </PixelButton>
@@ -1410,7 +1410,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                   disabled={restarting === a.id}
                   onClick={() => respawn(a)}
                 >
-                  <span title="Archive Abathur's current session and spawn a fresh one that resumes from memory.md — use when the session is quota-locked or stuck">
+                  <span title="Archive BeeYoncé's current session and spawn a fresh one that resumes from memory.md — use when the session is quota-locked or stuck">
                     ↺ respawn
                   </span>
                 </PixelButton>

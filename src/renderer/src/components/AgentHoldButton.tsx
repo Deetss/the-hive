@@ -4,7 +4,7 @@ import { Icon } from './Icon';
 import { useStore } from '@/store/store';
 
 /**
- * 1:1 — "I have this agent, Abathur stop sending it work."
+ * 1:1 — "I have this agent, BeeYoncé stop sending it work."
  *
  * Lives in `AgentControlStrip` beside "block tools" and "stop after this step",
  * so it is present in both sidebar and focus mode. It was briefly in the title
@@ -18,7 +18,7 @@ import { useStore } from '@/store/store';
  * step" is in fact the worst thing to reach for in a 1:1, because it stops the
  * agent you wanted to talk to.
  *
- * Never rendered for Abathur himself: telling the orchestrator to stop routing
+ * Never rendered for BeeYoncé himself: telling the orchestrator to stop routing
  * work to itself is not a state worth having.
  */
 export function AgentHoldButton({ agentId }: { agentId: string }) {
@@ -62,7 +62,7 @@ export function AgentHoldButton({ agentId }: { agentId: string }) {
           .then(() => window.cth.hiveSetAgentHold?.(agentId, !on)
             ?? Promise.reject(new Error('restart the app: this build\'s preload predates the 1:1 control')))
           // Mirror locally only after main confirms the write. Flipping
-          // optimistically would show a hold Abathur never heard about.
+          // optimistically would show a hold BeeYoncé never heard about.
           .then((r) => {
             if (r?.ok) { setErr(null); useStore.getState().updateAgent(agentId, { onHold: !on }); }
             else setErr(r?.error ?? 'could not set the hold');
@@ -74,9 +74,9 @@ export function AgentHoldButton({ agentId }: { agentId: string }) {
       <span
         className="cth-tip cth-tip-wrap"
         data-tip={err ? err : on
-          ? `End the 1:1. Abathur can hand ${agent.name} work again.`
-          : `Take ${agent.name} aside. Abathur stops sending them work until you end it. Unlike the two buttons here, this does not restrain the agent: they keep running and keep answering you.`}
-        aria-label={on ? 'End the 1:1 and release this agent to Abathur' : 'Take this agent aside for a 1:1'}
+          ? `End the 1:1. BeeYoncé can hand ${agent.name} work again.`
+          : `Take ${agent.name} aside. BeeYoncé stops sending them work until you end it. Unlike the two buttons here, this does not restrain the agent: they keep running and keep answering you.`}
+        aria-label={on ? 'End the 1:1 and release this agent to BeeYoncé' : 'Take this agent aside for a 1:1'}
         style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
       >
         <Icon name={on ? 'pause' : 'play'} /> {err ? '1:1 failed' : on ? 'in 1:1' : '1:1'}
