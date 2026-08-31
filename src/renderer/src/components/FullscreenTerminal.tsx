@@ -568,6 +568,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
               )}
             </div>
           )}
+          </>
         </aside>
         )}
 
