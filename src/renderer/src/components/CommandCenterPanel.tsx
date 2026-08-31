@@ -184,7 +184,14 @@ function QrGlyph({ size = 1 }: { size?: number }) {
  *  fullscreen" placeholder instead — two live xterms on one pty fight over its
  *  cols/rows and corrupt the display. */
 export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }: { agent: Agent; fullscreen?: boolean; mobile?: boolean }) {
-  const [tab, setTab] = useState<CCTab>('terminal');
+  const tabKey = `cth.tab.${agent.id}`;
+  const [tab, setTabState] = useState<CCTab>(() => {
+    try { return (localStorage.getItem(tabKey) ?? 'terminal') as CCTab; } catch { return 'terminal'; }
+  });
+  const setTab = (next: CCTab) => {
+    try { localStorage.setItem(tabKey, next); } catch { /* private mode */ }
+    setTabState(next);
+  };
 
   // The trigger-history ledger has nothing to say until an outside party can
   // reach us, so its tab appears only once an org key or a webhook exists. This
