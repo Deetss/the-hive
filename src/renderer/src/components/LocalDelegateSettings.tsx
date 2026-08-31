@@ -287,11 +287,11 @@ export function LocalDelegateSettings() {
                     {h.checking ? 'pinging…' : h.ok ? `OK ${h.latencyMs}ms` : 'OFFLINE'}
                   </span>
                 )}
-                <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-600)' }}
+                <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-700)' }}
                   onClick={() => checkHealth(d.id)}>ping</button>
-                <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-600)' }}
+                <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-700)' }}
                   onClick={() => openForm(d)}>edit</button>
-                <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: d.enabled ? 'var(--cth-ink-100)' : 'var(--cth-ink-200)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-600)' }}
+                <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: d.enabled ? 'var(--cth-ink-100)' : 'var(--cth-ink-200)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-700)' }}
                   onClick={() => toggleEnabled(d)}>{d.enabled ? 'enabled' : 'disabled'}</button>
                 <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'transparent', border: '1px solid #c0392b', borderRadius: 3, color: '#c0392b' }}
                   onClick={() => remove(d.id)}>remove</button>
@@ -332,7 +332,7 @@ export function LocalDelegateSettings() {
               {(['wsl-exec', 'ssh', 'http'] as const).map((k) => (
                 <button key={k}
                   onClick={() => setTransportKind(k)}
-                  style={{ fontSize: 13, padding: '3px 10px', cursor: 'pointer', borderRadius: 4, border: '1px solid var(--cth-ink-300)', fontFamily: 'var(--cth-font-ui)', background: form.transport.kind === k ? 'var(--cth-ink-900)' : 'var(--cth-ink-100)', color: form.transport.kind === k ? 'var(--cth-bg)' : 'var(--cth-ink-700)' }}>
+                  style={{ fontSize: 13, padding: '3px 10px', cursor: 'pointer', borderRadius: 4, border: '1px solid var(--cth-ink-300)', fontFamily: 'var(--cth-font-ui)', background: form.transport.kind === k ? 'var(--cth-ink-900)' : 'var(--cth-ink-100)', color: form.transport.kind === k ? 'var(--cth-paper-100)' : 'var(--cth-ink-700)' }}>
                   {k}
                 </button>
               ))}
@@ -441,11 +441,11 @@ export function LocalDelegateSettings() {
                   onChange={(e) => setKeyDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') void setApiKey(); if (e.key === 'Escape') setKeyStatus('none'); }} />
                 <button onClick={() => void setApiKey()} disabled={!keyDraft.trim()}
-                  style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'var(--cth-ink-900)', border: 'none', borderRadius: 4, color: 'var(--cth-bg)', opacity: keyDraft.trim() ? 1 : 0.5 }}>
+                  style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'var(--cth-ink-900)', border: 'none', borderRadius: 4, color: 'var(--cth-paper-100)', opacity: keyDraft.trim() ? 1 : 0.5 }}>
                   store
                 </button>
                 <button onClick={() => { setKeyDraft(''); setKeyStatus('none'); }}
-                  style={{ fontSize: 13, padding: '4px 8px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-300)', borderRadius: 4, color: 'var(--cth-ink-600)' }}>
+                  style={{ fontSize: 13, padding: '4px 8px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-300)', borderRadius: 4, color: 'var(--cth-ink-700)' }}>
                   cancel
                 </button>
               </div>
@@ -503,11 +503,11 @@ export function LocalDelegateSettings() {
           {/* ─── Actions ─────────────────────────────────────────────── */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
             <button onClick={save}
-              style={{ fontSize: 13, padding: '4px 14px', cursor: 'pointer', background: 'var(--cth-ink-900)', border: 'none', borderRadius: 4, color: 'var(--cth-bg)' }}>
+              style={{ fontSize: 13, padding: '4px 14px', cursor: 'pointer', background: 'var(--cth-ink-900)', border: 'none', borderRadius: 4, color: 'var(--cth-paper-100)' }}>
               save
             </button>
             <button onClick={() => void testConnection()}
-              style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--cth-ink-300)', borderRadius: 4, color: 'var(--cth-ink-700)' }}>
+              style={{ fontSize: 13, padding: '4px 10px', cursor: 'pointer', background: 'var(--cth-paper-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 4, color: 'var(--cth-ink-900)' }}>
               test connection
             </button>
             {testResult && (
