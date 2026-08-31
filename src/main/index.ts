@@ -2956,6 +2956,14 @@ function writeFleetSnapshot(): void {
         };
       });
     hive.writeFleetSnapshot({ ts: now, agents });
+    // Push per-agent token data to renderer for non-Claude agents (Antigravity, Gemini)
+    // that don't emit Claude Code hook events. The renderer uses this as fallback when
+    // useFleetTelemetry samples are missing.
+    const fleetTokenMap: Record<string, { tokens: number; ctxPct: number | null; usd: number }> = {};
+    for (const a of agents) {
+      fleetTokenMap[a.id] = { tokens: a.tokens, ctxPct: a.ctxPct, usd: a.sessionUsd };
+    }
+    try { liveWebContents()?.send('hive:fleetTokens', fleetTokenMap); } catch { /* window torn down */ }
   } catch (e) {
     console.error('[fleet] snapshot failed:', e);
   }

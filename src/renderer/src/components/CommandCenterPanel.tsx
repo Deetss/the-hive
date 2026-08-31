@@ -596,6 +596,8 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
   const [issues, setIssues] = useState<GHIssue[]>([]);
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [issuesError, setIssuesError] = useState<string | null>(null);
+  // Fleet token data from PTY-parsed fleet.json (fallback for non-Claude agents)
+  const [fleetTokens, setFleetTokens] = useState<Record<string, { tokens: number; ctxPct: number | null; usd: number }>>({});
 
   useEffect(() => {
     window.cth.getConfig().then((c) => {
@@ -625,6 +627,15 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
         .catch(() => {});
     }
   }, [dispatchText, localSkills.length]);
+
+  // Subscribe to fleet token data (PTY-parsed from fleet.json for non-Claude agents)
+  useEffect(() => {
+    if (!window.cth.onFleetTokens) return;
+    const unsubscribe = window.cth.onFleetTokens((data) => {
+      setFleetTokens(data);
+    });
+    return unsubscribe;
+  }, []);
 
   // Restart an agent's PTY in place. `resume:true` reattaches its prior Claude
   // conversation (`--resume <sessionId>`, resolved in the main process from the
@@ -1056,7 +1067,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
           const sample = samples[a.id];
           const breaker = breakers[a.id];
           const armed = !!breaker && (breaker.level === 'constrained' || breaker.level === 'stopped');
-          const tokens = sample ? sample.input + sample.output + sample.cacheRead + sample.cacheCreation : 0;
+          const tokens = sample ? sample.input + sample.output + sample.cacheRead + sample.cacheCreation : (fleetTokens[a.id]?.tokens ?? 0);
           const agentCap = agentTokenCaps[a.id]; // per-agent limit, if set
           const denom = agentCap && agentCap > 0 ? agentCap : floorCap;
           const pct = Math.min(100, Math.round((tokens / denom) * 100));
@@ -1153,6 +1164,20 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                     </span>
                     <div
                       title={`Context window: ${a.contextTokens!.toLocaleString()} of ${a.contextLimit!.toLocaleString()} tokens (${cpct}%)`}
+                      style={{ width: 96, height: 8, background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0 }}
+                    >
+                      <div style={{ width: `${cpct}%`, height: '100%', background: ccolor }} />
+                    </div>
+                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', width: 30, textAlign: 'right' }}>{cpct}%</span>
+                  </>
+                );
+              })() : fleetTokens[a.id]?.ctxPct !== null && fleetTokens[a.id]?.ctxPct !== undefined ? (() => {
+                const cpct = Math.min(100, fleetTokens[a.id].ctxPct!);
+                const ccolor = cpct >= 88 ? 'var(--cth-coral)' : cpct >= 75 ? 'var(--cth-lemon)' : `var(--cth-${a.accent})`;
+                return (
+                  <>
+                    <div
+                      title={`Context window: ${cpct}% (PTY-parsed)`}
                       style={{ width: 96, height: 8, background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0 }}
                     >
                       <div style={{ width: `${cpct}%`, height: '100%', background: ccolor }} />
