@@ -15,6 +15,7 @@ import { SkillsTab } from './SkillsTab';
 import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool';
 import { terminalInstanceKey } from './terminalRecovery';
 import { Icon } from './Icon';
+import QRCode from '@/lib/qrcodejs';
 import { MemoryGraphPanel } from './MemoryGraphPanel';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
 import { COMMAND_GROUPS } from '@shared/claudeCommands';
@@ -121,6 +122,50 @@ function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean;
   );
 }
 
+/** Pixel QR glyph — three finder squares plus a few data modules, drawn in the
+ *  same 16×16 crispEdges style as the Icon set (Icon.tsx has no phone/QR glyph
+ *  and is out of scope to edit). Inherits currentColor like the real icons. */
+function QrGlyph({ size = 1 }: { size?: number }) {
+  const dim = 16 * size;
+  const finder = (x: number, y: number) => (
+    <>
+      <rect x={x} y={y} width={5} height={1} />
+      <rect x={x} y={y + 4} width={5} height={1} />
+      <rect x={x} y={y + 1} width={1} height={3} />
+      <rect x={x + 4} y={y + 1} width={1} height={3} />
+      <rect x={x + 2} y={y + 2} width={1} height={1} />
+    </>
+  );
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width={dim}
+      height={dim}
+      shapeRendering="crispEdges"
+      style={{ display: 'inline-block' }}
+      fill="currentColor"
+      aria-hidden
+    >
+      {finder(1, 1)}
+      {finder(10, 1)}
+      {finder(1, 10)}
+      <rect x={10} y={10} width={1} height={1} />
+      <rect x={12} y={10} width={1} height={1} />
+      <rect x={14} y={10} width={1} height={1} />
+      <rect x={11} y={11} width={1} height={1} />
+      <rect x={13} y={11} width={1} height={1} />
+      <rect x={10} y={12} width={1} height={1} />
+      <rect x={12} y={12} width={1} height={1} />
+      <rect x={14} y={12} width={1} height={1} />
+      <rect x={11} y={13} width={1} height={1} />
+      <rect x={13} y={13} width={1} height={1} />
+      <rect x={10} y={14} width={1} height={1} />
+      <rect x={12} y={14} width={1} height={1} />
+      <rect x={14} y={14} width={1} height={1} />
+    </svg>
+  );
+}
+
 /** @param fullscreen this instance IS the fullscreen overlay, so it owns the pty
  *  and renders the real terminal. The docked instance renders the "open in
  *  fullscreen" placeholder instead — two live xterms on one pty fight over its
@@ -181,8 +226,16 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
   // Seeded from the god's own control state (the floor is kept in sync by
   // this single control, so any agent's state reflects the floor's).
   const [floorDeliveryPaused, setFloorDeliveryPaused] = useState(false);
-  const [openBrowserPending, setOpenBrowserPending] = useState(false);
-  const [openBrowserUrl, setOpenBrowserUrl] = useState<string | null>(null);
+  // Mobile-remote pairing QR. The phone always connects to the PACKAGED app's
+  // mobile server on 48003, so the URL hardcodes that port even though
+  // getMobileApiSecret reports the live port (48103 under dev).
+  const [qrOpen, setQrOpen] = useState(false);
+  const [mobilePairing, setMobilePairing] = useState<{ secret: string; hostname: string } | null>(null);
+  const [qrCopyNote, setQrCopyNote] = useState('');
+  const qrRef = useRef<HTMLDivElement | null>(null);
+  const mobileUrl = mobilePairing
+    ? `http://${mobilePairing.hostname || window.location.hostname}:48003/mobile?token=${mobilePairing.secret}`
+    : '';
   useEffect(() => {
     let alive = true;
     window.cth.controlSnapshot(agent.id)
@@ -196,26 +249,43 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
     const all = useStore.getState().agents;
     await Promise.all(all.map((a) => window.cth.controlAutoDelivery(a.id, next).catch(() => null)));
   };
-  const openBrowser = useCallback(async () => {
-    if (openBrowserPending) return;
-    if (!window.cth.openInBrowser) {
-      console.warn('[command-center] openInBrowser bridge missing');
-      return;
-    }
-    setOpenBrowserPending(true);
+  const openQr = useCallback(async () => {
+    setQrOpen(true);
+    if (mobilePairing) return;
     try {
-      const result = await window.cth.openInBrowser();
-      if (result && result.ok && result.url) {
-        setOpenBrowserUrl(result.url);
-      } else if (result && 'error' in result && result.error) {
-        console.error('[command-center] openInBrowser failed:', result.error);
-      }
+      const info = await window.cth.getMobileApiSecret();
+      setMobilePairing({ secret: info.secret, hostname: info.hostname });
     } catch (err) {
-      console.error('[command-center] openInBrowser error:', err);
-    } finally {
-      setOpenBrowserPending(false);
+      console.error('[command-center] getMobileApiSecret error:', err);
     }
-  }, [openBrowserPending]);
+  }, [mobilePairing]);
+
+  const copyQrLink = useCallback(() => {
+    if (!mobileUrl) return;
+    void window.cth.copyToClipboard(mobileUrl);
+    setQrCopyNote('copied');
+    setTimeout(() => setQrCopyNote(''), 1500);
+  }, [mobileUrl]);
+
+  useEffect(() => {
+    if (!qrOpen || !mobileUrl || !qrRef.current) return;
+    qrRef.current.innerHTML = '';
+    new QRCode(qrRef.current, {
+      text: mobileUrl,
+      width: 168,
+      height: 168,
+      colorDark: '#1a1a1a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  }, [qrOpen, mobileUrl]);
+
+  useEffect(() => {
+    if (!qrOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setQrOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [qrOpen]);
 
   return (
     <PixelPanel
@@ -310,22 +380,88 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
           <PixelButton
             variant="secondary"
             size="sm"
-            disabled={openBrowserPending}
-            onClick={() => { void openBrowser(); }}
+            onClick={() => { void openQr(); }}
           >
             <span
               className="cth-tip cth-tip-wrap"
-              data-tip={openBrowserUrl
-                ? `Open the UI in your browser (last served at ${openBrowserUrl}).`
-                : 'Serve the UI on localhost and open it in your browser.'}
-              aria-label="Open the UI in your browser"
+              data-tip="Scan to pair your phone with the mobile remote."
+              aria-label="Show the mobile-remote pairing QR code"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
-              <Icon name="web" /> {openBrowserPending ? 'opening…' : 'browser'}
+              <QrGlyph /> mobile
             </span>
           </PixelButton>
         </div>
       </div>
+
+      {qrOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mobile remote pairing"
+          onClick={() => setQrOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--cth-cream-100)',
+              boxShadow: 'inset 0 0 0 1px var(--cth-ink-700), 4px 4px 0 var(--cth-ink-700)',
+              padding: 16, maxWidth: 320, width: 'calc(100% - 32px)',
+              display: 'flex', flexDirection: 'column', gap: 10
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                flex: 1, fontFamily: 'var(--cth-font-ui)', fontSize: 13,
+                color: 'var(--cth-ink-900)', textTransform: 'uppercase'
+              }}>Pair your phone</div>
+              <PixelButton variant="secondary" size="sm" onClick={() => setQrOpen(false)}>
+                <span aria-label="Close" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                  <Icon name="x" />
+                </span>
+              </PixelButton>
+            </div>
+            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+              Point your phone's camera at the code to open the mobile remote — the link and token
+              fill in automatically, no typing required.
+            </span>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div
+                ref={qrRef}
+                style={{
+                  width: 168, height: 168, flexShrink: 0,
+                  background: '#ffffff', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
+                }}
+              />
+            </div>
+            <input
+              type="text"
+              readOnly
+              value={mobileUrl || 'starting mobile server…'}
+              onFocus={(e) => e.target.select()}
+              style={{
+                fontFamily: 'var(--cth-font-mono)', fontSize: 11,
+                padding: '6px 8px', background: 'var(--cth-cream-50)',
+                border: '1px solid var(--cth-ink-300)', color: 'var(--cth-ink-900)',
+                width: '100%', boxSizing: 'border-box'
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <PixelButton variant="secondary" size="sm" onClick={copyQrLink} disabled={!mobileUrl}>
+                copy link
+              </PixelButton>
+              {qrCopyNote && (
+                <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{qrCopyNote}</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab bar — ONE row, tabs at their natural width, scrolling only if the
           panel is genuinely too narrow for all of them.
