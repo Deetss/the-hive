@@ -383,6 +383,7 @@ export function useHive(config: HarnessConfig | null): void {
     const t = setTimeout(async () => {
       if (cancelled) return;
       const live = await window.cth.listPtys().catch(() => []);
+      console.log('[god bootstrap] listPtys:', live.map((p: { id: string }) => p.id), 'looking for', GOD_PTY);
       if (live.some((p) => p.id === GOD_PTY)) { // already running — re-seat if missing
         if (!cancelled) {
           // After a full restart the store is empty but the PTY is still alive.
@@ -444,6 +445,7 @@ export function useHive(config: HarnessConfig | null): void {
         return;
       }
       if (cancelled) { godSpawning.current = false; return; }
+      console.log('[god bootstrap] spawnPty result:', res);
       if (!res.ok) { godSpawning.current = false; useStore.getState().setGodStatus('failed'); return; }
       const god: Agent = {
         id: GOD_ID,
