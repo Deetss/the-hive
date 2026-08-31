@@ -18,6 +18,14 @@ export interface HumanQA {
   approved?: boolean;
 }
 
+export interface OpenHumanQAItem {
+  taskId: string;
+  taskTitle: string;
+  assignee: string | null;
+  question: string;
+  askedAt: string;
+}
+
 export interface HiveTask {
   id: string;
   title: string;

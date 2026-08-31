@@ -159,6 +159,14 @@ export interface HumanQA {
   approved?: boolean;
 }
 
+export interface OpenHumanQAItem {
+  taskId: string;
+  taskTitle: string;
+  assignee: string | null;
+  question: string;
+  askedAt: string;
+}
+
 /** A card on the task kanban, persisted to hive/tasks.json. */
 export interface HiveTask {
   id: string;
@@ -831,6 +839,21 @@ const api = {
     ipcRenderer.invoke('hive:setAgentHold', id, hold),
   hiveBoard: (): Promise<string> => ipcRenderer.invoke('hive:board'),
   hiveTasks: (): Promise<unknown> => ipcRenderer.invoke('hive:tasks'),
+  openHumanQA: (): Promise<OpenHumanQAItem[]> => ipcRenderer.invoke('tasks:openHumanQA'),
+  answerHumanQA: (
+    taskId: string,
+    question: string,
+    verdict: 'PASS' | 'FAIL',
+    note?: string
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('tasks:answerHumanQA', taskId, question, verdict, note),
+  onHumanQAChanged: (cb: () => void): (() => void) => {
+    const handler = () => cb();
+    ipcRenderer.on('hive:humanQAChanged', handler);
+    return () => {
+      ipcRenderer.off('hive:humanQAChanged', handler);
+    };
+  },
   hiveLog: (n?: number): Promise<unknown[]> => ipcRenderer.invoke('hive:log', n ?? 200),
   hiveMemory: (id: string): Promise<string> => ipcRenderer.invoke('hive:memory', id),
   hiveInbox: (id: string): Promise<HiveMessage[]> => ipcRenderer.invoke('hive:inbox', id),

@@ -5416,7 +5416,139 @@ ipcMain.handle('hive:patchTask', (_evt, id: unknown, patch: unknown) => {
 ipcMain.handle('hive:deleteTask', (_evt, id: unknown) => {
   if (typeof id !== 'string' || !id) return { ok: false, error: 'invalid task id' };
   if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
-  return { ok: hive.deleteTask(id) };
+  const res = hive.deleteTask(id);
+  broadcastHumanQAChanged();
+  return { ok: res };
+});
+
+function broadcastHumanQAChanged(): void {
+  try {
+    liveWebContents()?.send('hive:humanQAChanged');
+    broadcastBrowserEvent('hive:humanQAChanged', []);
+  } catch { /* best effort */ }
+}
+
+let tasksJsonWatchPath: string | null = null;
+function setupTasksJsonWatcher(): void {
+  const root = hive.root();
+  if (!root) return;
+  const target = join(root, 'tasks.json');
+  if (tasksJsonWatchPath === target) return;
+  if (tasksJsonWatchPath) {
+    try { unwatchFile(tasksJsonWatchPath); } catch { /* best effort */ }
+  }
+  tasksJsonWatchPath = target;
+  try {
+    watchFile(target, { interval: 1000 }, () => {
+      broadcastHumanQAChanged();
+    });
+  } catch (e) {
+    console.error('[tasksWatcher] error watching tasks.json:', e);
+  }
+}
+
+ipcMain.handle('tasks:openHumanQA', () => {
+  setupTasksJsonWatcher();
+  if (!hive.enabled()) return [];
+  const ledger = hive.tasks() as { tasks?: HiveTask[] };
+  const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+  const openItems: Array<{
+    taskId: string;
+    taskTitle: string;
+    assignee: string | null;
+    question: string;
+    askedAt: string;
+  }> = [];
+
+  for (const t of tasks) {
+    if (!t) continue;
+    const qaList = Array.isArray(t.humanQA) ? t.humanQA : [];
+    for (const qa of qaList) {
+      if (qa && qa.q && !qa.a) {
+        openItems.push({
+          taskId: t.id,
+          taskTitle: t.title || t.id,
+          assignee: t.assignee ?? null,
+          question: qa.q,
+          askedAt: qa.askedAt || t.createdAt || new Date().toISOString()
+        });
+      }
+    }
+  }
+  return openItems;
+});
+
+ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: unknown, verdict: unknown, note?: unknown) => {
+  if (typeof taskId !== 'string' || !taskId) return { ok: false, error: 'invalid taskId' };
+  if (typeof question !== 'string' || !question) return { ok: false, error: 'invalid question' };
+  const v = verdict === 'FAIL' ? 'FAIL' : 'PASS';
+  const n = typeof note === 'string' && note.trim() ? note.trim() : undefined;
+  if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
+
+  const ledger = hive.tasks() as { tasks?: HiveTask[] };
+  const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+  const taskIndex = tasks.findIndex((t) => t?.id === taskId);
+  if (taskIndex < 0) return { ok: false, error: `task ${taskId} not found` };
+
+  const task = { ...tasks[taskIndex] };
+  const qaList = Array.isArray(task.humanQA) ? [...task.humanQA] : [];
+  let qaIndex = qaList.findIndex((qa) => qa.q === question && !qa.a);
+  if (qaIndex < 0) {
+    qaIndex = qaList.findIndex((qa) => qa.q === question);
+  }
+  const answerText = n ? `${v}: ${n}` : v;
+  const nowIso = new Date().toISOString();
+
+  if (qaIndex >= 0) {
+    qaList[qaIndex] = {
+      ...qaList[qaIndex],
+      a: answerText,
+      answeredAt: nowIso
+    };
+  } else {
+    qaList.push({
+      q: question,
+      a: answerText,
+      askedAt: nowIso,
+      answeredAt: nowIso
+    });
+  }
+
+  task.humanQA = qaList;
+  if (v === 'PASS') {
+    task.status = 'done';
+  } else {
+    task.status = 'doing';
+  }
+
+  const updatedTasks = [...tasks];
+  updatedTasks[taskIndex] = task;
+  hive.writeTasks(updatedTasks);
+
+  if (task.assignee) {
+    try {
+      if (v === 'PASS') {
+        hive.send({
+          to: task.assignee,
+          act: 'inform',
+          subject: 'UAT passed',
+          body: `Your task "${task.title}" passed UAT. Task is closed.`
+        }, 'human');
+      } else {
+        hive.send({
+          to: task.assignee,
+          act: 'warn',
+          subject: 'UAT failed',
+          body: `Your task "${task.title}" failed UAT: ${n || 'No details provided'}. Fix and report done again.`
+        }, 'human');
+      }
+    } catch (e) {
+      console.error('[humanQA] failed to send notification to assignee:', e);
+    }
+  }
+
+  broadcastHumanQAChanged();
+  return { ok: true };
 });
 ipcMain.handle('hive:setArchived', (_evt, id: unknown, archived: unknown) => {
   if (typeof id !== 'string') return { ok: false, error: 'invalid id' };
