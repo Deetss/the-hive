@@ -6,6 +6,7 @@ import { Icon } from './Icon';
 import { ProviderLogo } from './ProviderLogo';
 import { useStore, type Agent } from '@/store/store';
 import { OFFICE_CAST, getDefaultCharacter, type OfficeCharacterName } from '@/scene/office/cast';
+import { HIVE_CAST } from '@/scene/office/hiveCast';
 import { type AccentColorName } from '@/design/tokens';
 import type { HireManifest } from '@shared/hire';
 import { hireQueueProgress } from '@shared/hireQueue';
@@ -181,6 +182,10 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   // unless the user reconfigured it); the model only carries over for Claude.
   const initialProvider = inferAgentProvider(config.defaultCommand);
   const initialModel = isClaudeProvider(initialProvider) ? config.defaultModel : undefined;
+
+  const officeTheme = useStore(s => s.officeTheme);
+  const activeCast: Array<{ name: string; displayName: string; blurb?: string }> =
+    officeTheme === 'hive' ? HIVE_CAST : OFFICE_CAST;
 
   const [name, setName] = useState(pendingHire?.name ?? 'Jim');
   const [character, setCharacter] = useState<OfficeCharacterName>(knownCharacter(pendingHire?.character));
@@ -758,10 +763,10 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
 
                     <Row label="Character">
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {OFFICE_CAST.map(c => (
+                        {activeCast.map(c => (
                           <button
                             key={c.name}
-                            onClick={() => { setCharacter(c.name); setName(c.displayName); }}
+                            onClick={() => { setCharacter(c.name as OfficeCharacterName); setName(c.displayName); }}
                             title={c.blurb}
                             style={{
                               padding: 4,
