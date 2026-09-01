@@ -88,7 +88,7 @@ export function AppChromeControls() {
   };
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
       <UpdateBadge placement="up" />
       {autoMode !== null && (
         <span

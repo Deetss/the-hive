@@ -335,13 +335,15 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         overflow: 'hidden'
       }}
     >
-      {/* Header — one dense row: identity + status + controls all inline, so the
-          panel spends its height on content, not chrome. */}
+      {/* Header + tab strip are ONE chrome block: same cream ground, no divider
+          between them, only a single border under the tabs. The identity row and
+          the tab row each shed 1px of the padding that used to sit either side of
+          that removed hairline. */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: mobile ? 6 : 5,
         flexWrap: mobile ? 'wrap' : 'nowrap',
-        padding: '5px 6px', background: 'var(--cth-cream-100)',
-        borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
+        padding: '5px 6px 4px', background: 'var(--cth-cream-100)',
+        flexShrink: 0
       }}>
         <div style={{
           width: 24, height: 24, background: `var(--cth-${agent.accent}-light)`,
@@ -378,6 +380,10 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
           flexShrink: 0,
           flexWrap: mobile ? 'wrap' : 'nowrap',
           justifyContent: mobile ? 'flex-start' : 'flex-end',
+          // Docked: hug the identity cluster (no dead gap mid-bar). Fullscreen:
+          // the header is far wider than its content, so claim the empty right
+          // side instead of leaving the controls floating mid-row.
+          marginLeft: !mobile && fullscreen ? 'auto' : undefined,
           width: mobile ? '100%' : 'auto',
           order: mobile ? 2 : 0
         }}>
@@ -519,7 +525,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         display: 'flex', gap: 3,
         flexWrap: mobile ? 'nowrap' : (fullscreen ? 'nowrap' : 'wrap'),
         overflowX: mobile || fullscreen ? 'auto' : 'visible',
-        padding: '5px 6px', background: 'var(--cth-cream-100)',
+        padding: '4px 6px 5px', background: 'var(--cth-cream-100)',
         borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
       }}>
         {visibleTabs.map((t) => (
