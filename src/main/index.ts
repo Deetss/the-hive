@@ -843,6 +843,45 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     return true;
   }
 
+  // GET /api/settings — governor + budget + KB config for the mobile settings screen
+  if (pathname === '/api/settings' && method === 'GET') {
+    const cfg = readConfig();
+    const profiles = listRuntimeProfiles().map((p) => ({ id: p.id, name: p.name, model: p.model ?? null }));
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      ok: true,
+      costCapTokens: cfg.costCapTokens ?? null,
+      knowledgeBasePath: cfg.knowledgeBasePath ?? '',
+      governorOverride: cfg.governorPolicy?.manualOverride === 'force-green',
+      defaultModel: cfg.defaultModel ?? null,
+      profiles
+    }));
+    return true;
+  }
+
+  // POST /api/settings — patch a small, safe subset of config from mobile
+  if (pathname === '/api/settings' && method === 'POST') {
+    let sBody: { costCapTokens?: number; knowledgeBasePath?: string; governorOverride?: boolean; defaultModel?: string };
+    try {
+      sBody = await readJsonBody(req);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      return true;
+    }
+    const patch: Partial<HarnessConfig> = {};
+    if (typeof sBody.costCapTokens === 'number' && Number.isFinite(sBody.costCapTokens) && sBody.costCapTokens >= 0) {
+      patch.costCapTokens = Math.round(sBody.costCapTokens);
+    }
+    if (typeof sBody.knowledgeBasePath === 'string') patch.knowledgeBasePath = sBody.knowledgeBasePath.trim();
+    if (typeof sBody.defaultModel === 'string' && sBody.defaultModel.trim()) patch.defaultModel = sBody.defaultModel.trim();
+    if (Object.keys(patch).length) writeConfig(patch);
+    if (typeof sBody.governorOverride === 'boolean') applyGovernorOverride(sBody.governorOverride ? 'force-green' : undefined);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true }));
+    return true;
+  }
+
   // GET /api/tasks
   if (pathname === '/api/tasks') {
     if (method !== 'GET') {
@@ -5641,9 +5680,9 @@ ipcMain.handle('fleet:governorSnapshot', () => {
     pausedAgents: [...governorPausedAgents]
   };
 });
-// Manual override: 'force-green' bypasses pace triggers; null clears the override.
-ipcMain.handle('governor:setOverride', (_evt, override: unknown) => {
-  const v = override === 'force-green' ? 'force-green' : undefined;
+// Manual override: 'force-green' bypasses pace triggers; undefined clears it.
+// Shared by the governor:setOverride IPC (desktop) and the mobile settings route.
+function applyGovernorOverride(v: 'force-green' | undefined): void {
   const cfg = readConfig();
   writeConfig({ governorPolicy: { ...(cfg.governorPolicy ?? {}), manualOverride: v } });
   if (v === 'force-green') {
@@ -5675,6 +5714,9 @@ ipcMain.handle('governor:setOverride', (_evt, override: unknown) => {
       try { liveWebContents()?.send('hive:governorMode', governorLastPayload); } catch { /* */ }
     }
   }
+}
+ipcMain.handle('governor:setOverride', (_evt, override: unknown) => {
+  applyGovernorOverride(override === 'force-green' ? 'force-green' : undefined);
   return { ok: true };
 });
 ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
