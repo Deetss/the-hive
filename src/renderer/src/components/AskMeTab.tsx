@@ -274,21 +274,32 @@ export function AskMeTab() {
             const isBusy = !!busyTasks[item.taskId];
             const isFailing = !!failOpen[item.taskId];
             const noteVal = failNotes[item.taskId] ?? '';
+            const isUrgent = item.priority === 'urgent';
 
             return (
               <div
                 key={`${item.taskId}-${item.question}`}
                 style={{
                   background: 'var(--cth-paper-100)',
-                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                  boxShadow: isUrgent ? 'inset 0 0 0 2px var(--cth-coral), 0 0 8px rgba(235, 87, 87, 0.2)' : 'inset 0 0 0 1px var(--cth-ink-300)',
                   display: 'flex', flexDirection: 'column'
                 }}
               >
                 {/* Header info row */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-                  background: 'var(--cth-cream-100)', borderBottom: '1px solid var(--cth-ink-100)'
+                  background: isUrgent ? 'var(--cth-coral-light, #fee2e2)' : 'var(--cth-cream-100)',
+                  borderBottom: isUrgent ? '1px solid var(--cth-coral)' : '1px solid var(--cth-ink-100)'
                 }}>
+                  {isUrgent && (
+                    <span style={{
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 11, fontWeight: 700,
+                      background: 'var(--cth-coral)', color: '#fff',
+                      padding: '1px 6px', textTransform: 'uppercase', flexShrink: 0
+                    }}>
+                      🚨 URGENT
+                    </span>
+                  )}
                   <span style={{
                     fontFamily: 'var(--cth-font-ui)', fontSize: 11, fontWeight: 600,
                     background: 'var(--cth-lemon-light)', color: 'var(--cth-ink-900)',

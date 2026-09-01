@@ -164,6 +164,7 @@ export interface OpenHumanQAItem {
   taskTitle: string;
   assignee: string | null;
   question: string;
+  priority?: 'urgent' | 'normal' | 'backlog';
   askedAt: string;
 }
 

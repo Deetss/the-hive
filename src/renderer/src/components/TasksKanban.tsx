@@ -824,6 +824,11 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
   const [isDispatchOpen, setIsDispatchOpen] = useState(false);
   const [dispatchRecipient, setDispatchRecipient] = useState(() => agents.find((a) => a.isOvermind)?.id ?? (agents[0]?.id ?? 'god'));
   const [dispatchMessage, setDispatchMessage] = useState(() => `Task: ${task.title}\nContext: ${task.notes || task.description || ''}`);
+  const [dispatchPriority, setDispatchPriority] = useState<'urgent' | 'normal' | 'backlog'>(() => {
+    if (task.priority === 1 || (task.priority as unknown) === 'urgent' || (task as any).isUrgent) return 'urgent';
+    if (task.priority === 3 || (task.priority as unknown) === 'backlog') return 'backlog';
+    return 'normal';
+  });
   const [dispatchFeedback, setDispatchFeedback] = useState<string | null>(null);
   const [dispatchBusy, setDispatchBusy] = useState(false);
 
@@ -833,7 +838,10 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
     setResultDraft(task.result || '');
     setProgressDraft(task.progress ?? 0);
     setDispatchMessage(`Task: ${task.title}\nContext: ${task.notes || task.description || ''}`);
-  }, [task.title, task.notes, task.description, task.result, task.progress]);
+    if (task.priority === 1 || (task.priority as unknown) === 'urgent' || (task as any).isUrgent) setDispatchPriority('urgent');
+    else if (task.priority === 3 || (task.priority as unknown) === 'backlog') setDispatchPriority('backlog');
+    else setDispatchPriority('normal');
+  }, [task.title, task.notes, task.description, task.result, task.progress, task.priority]);
 
   const saveTitle = async () => {
     setIsEditingTitle(false);
@@ -1179,49 +1187,81 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
                   }}
                 />
 
-                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-                  <PixelButton variant="ghost" size="sm" onClick={() => setIsDispatchOpen(false)}>
-                    cancel
-                  </PixelButton>
-                  <PixelButton
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      requestDispatchSeed(dispatchMessage);
-                      setDispatchFeedback('✓ Queued in dispatch box');
-                      setTimeout(() => setDispatchFeedback(null), 3000);
-                    }}
-                  >
-                    queue in dispatch box
-                  </PixelButton>
-                  <PixelButton
-                    variant="primary"
-                    size="sm"
-                    disabled={dispatchBusy || !dispatchMessage.trim()}
-                    onClick={async () => {
-                      setDispatchBusy(true);
-                      try {
-                        await window.cth.hiveSend({
-                          to: dispatchRecipient,
-                          act: 'request',
-                          subject: task.title,
-                          body: dispatchMessage
-                        }, 'human');
-                        await onPatch?.({ assignee: dispatchRecipient, status: 'doing' });
-                        setDispatchFeedback(`✓ Dispatched to ${agents.find(a => a.id === dispatchRecipient)?.name || dispatchRecipient}`);
-                        setTimeout(() => {
-                          setDispatchFeedback(null);
-                          setIsDispatchOpen(false);
-                        }, 1800);
-                      } catch {
-                        setDispatchFeedback('✗ Send failed');
-                      } finally {
-                        setDispatchBusy(false);
-                      }
-                    }}
-                  >
-                    {dispatchBusy ? 'dispatching…' : 'dispatch now'}
-                  </PixelButton>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                    <span style={{ color: 'var(--cth-ink-500)', fontWeight: 600 }}>Priority:</span>
+                    {(['urgent', 'normal', 'backlog'] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setDispatchPriority(p)}
+                        style={{
+                          padding: '2px 8px',
+                          border: 'none',
+                          borderRadius: 3,
+                          cursor: 'pointer',
+                          fontFamily: 'var(--cth-font-ui)',
+                          fontSize: 11,
+                          fontWeight: dispatchPriority === p ? 700 : 400,
+                          background: dispatchPriority === p
+                            ? (p === 'urgent' ? 'var(--cth-coral)' : p === 'backlog' ? 'var(--cth-sky)' : 'var(--cth-lemon)')
+                            : 'var(--cth-paper-200)',
+                          color: dispatchPriority === p
+                            ? (p === 'urgent' ? '#fff' : 'var(--cth-ink-900)')
+                            : 'var(--cth-ink-700)'
+                        }}
+                      >
+                        {p === 'urgent' ? '🚨 Urgent' : p === 'backlog' ? 'Backlog' : 'Normal'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <PixelButton variant="ghost" size="sm" onClick={() => setIsDispatchOpen(false)}>
+                      cancel
+                    </PixelButton>
+                    <PixelButton
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        requestDispatchSeed(dispatchMessage);
+                        setDispatchFeedback('✓ Queued in dispatch box');
+                        setTimeout(() => setDispatchFeedback(null), 3000);
+                      }}
+                    >
+                      queue in dispatch box
+                    </PixelButton>
+                    <PixelButton
+                      variant="primary"
+                      size="sm"
+                      disabled={dispatchBusy || !dispatchMessage.trim()}
+                      onClick={async () => {
+                        setDispatchBusy(true);
+                        try {
+                          await window.cth.hiveSend({
+                            to: dispatchRecipient,
+                            act: 'request',
+                            subject: task.title,
+                            body: dispatchMessage,
+                            priority: dispatchPriority
+                          }, 'human');
+                          const priorityNum = dispatchPriority === 'urgent' ? 1 : dispatchPriority === 'backlog' ? 3 : 2;
+                          await onPatch?.({ assignee: dispatchRecipient, status: 'doing', priority: priorityNum });
+                          setDispatchFeedback(`✓ Dispatched to ${agents.find(a => a.id === dispatchRecipient)?.name || dispatchRecipient}`);
+                          setTimeout(() => {
+                            setDispatchFeedback(null);
+                            setIsDispatchOpen(false);
+                          }, 1800);
+                        } catch {
+                          setDispatchFeedback('✗ Send failed');
+                        } finally {
+                          setDispatchBusy(false);
+                        }
+                      }}
+                    >
+                      {dispatchBusy ? 'dispatching…' : 'dispatch now'}
+                    </PixelButton>
+                  </div>
                 </div>
               </div>
             )}

@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format is based on
 - Add Respawn (↺) button to agent fleet cards in UI (archives session & resumes fresh from memory.md)
 - Surface open UAT checklist and humanQA items in UI via For You and tasks badge counts and actionable top alert banner
 - Wire Bee-casso animated worker bee entity sprites into the Hive office floor desks
+- Implement 3-tier priority (urgent/normal/backlog) across hive router delivery, PROTOCOL.md schema, mobile and desktop dispatch UI, mobile and desktop Ask Me lists, and God inbox scan order
 
 ### Changed
 

@@ -5964,24 +5964,36 @@ ipcMain.handle('tasks:openHumanQA', () => {
     taskTitle: string;
     assignee: string | null;
     question: string;
+    priority?: 'urgent' | 'normal' | 'backlog';
     askedAt: string;
   }> = [];
 
   for (const t of tasks) {
     if (!t) continue;
+    const taskPriority: 'urgent' | 'normal' | 'backlog' =
+      (t.priority === 1 || t.priority === 'urgent' || (t as any).isUrgent) ? 'urgent' :
+      (t.priority === 3 || t.priority === 'backlog') ? 'backlog' : 'normal';
+
     const qaList = Array.isArray(t.humanQA) ? t.humanQA : [];
     for (const qa of qaList) {
       if (qa && qa.q && !qa.a) {
+        const itemPriority = qa.priority === 'urgent' ? 'urgent' : qa.priority === 'backlog' ? 'backlog' : taskPriority;
         openItems.push({
           taskId: t.id,
           taskTitle: t.title || t.id,
           assignee: t.assignee ?? null,
           question: qa.q,
+          priority: itemPriority,
           askedAt: qa.askedAt || t.createdAt || new Date().toISOString()
         });
       }
     }
   }
+  openItems.sort((a, b) => {
+    if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+    if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+    return 0;
+  });
   return openItems;
 });
 
