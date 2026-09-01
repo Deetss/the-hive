@@ -275,7 +275,10 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
   // endpoints (Outline / custom). Agents fan out across all of them.
   type KbSourceType = 'folder' | 'outline-mcp' | 'custom-mcp';
   type KbSourceEntry = { type: KbSourceType; value: string };
-  const OUTLINE_DEFAULT_URL = 'https://docs.bloomfieldhomes.org';
+  // No hardcoded instance URL. An empty Outline row prefills from another MCP
+  // endpoint the user has already entered in this list; otherwise it stays
+  // blank behind a generic placeholder.
+  const OUTLINE_URL_PLACEHOLDER = 'https://your-outline-instance.com';
   const cfgKb = cfgX as {
     knowledgeBaseSources?: KbSourceEntry[];
     knowledgeBasePath?: string;
@@ -324,9 +327,13 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
     if (res.ok) updateKbSource(idx, { value: res.path });
   };
   const changeKbSourceType = (idx: number, type: KbSourceType) => {
-    // When switching an empty row to Outline, prefill the instance URL.
+    // Prefill an empty Outline row from another MCP endpoint already configured
+    // in this list — never a hardcoded instance URL. Blank if there is none.
     const cur = kbSources[idx];
-    const value = type === 'outline-mcp' && !cur.value.trim() ? OUTLINE_DEFAULT_URL : cur.value;
+    const configuredMcpUrl = kbSources.find(
+      (s, i) => i !== idx && (s.type === 'outline-mcp' || s.type === 'custom-mcp') && s.value.trim(),
+    )?.value.trim() ?? '';
+    const value = type === 'outline-mcp' && !cur.value.trim() ? configuredMcpUrl : cur.value;
     updateKbSource(idx, { type, value });
   };
 
@@ -1815,7 +1822,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                 <input
                                   type="url"
                                   value={src.value}
-                                  placeholder={src.type === 'outline-mcp' ? OUTLINE_DEFAULT_URL : 'https://…'}
+                                  placeholder={src.type === 'outline-mcp' ? OUTLINE_URL_PLACEHOLDER : 'https://…'}
                                   onChange={(e) => updateKbSource(idx, { value: e.target.value }, false)}
                                   onBlur={() => updateKbSource(idx, {}, true)}
                                   style={{ ...slackInputStyle, flex: 1 }}
