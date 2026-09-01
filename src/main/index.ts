@@ -1477,6 +1477,51 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     return true;
   }
 
+  // POST /api/agents/:id/respawn — archive the session and start fresh from memory.md
+  const respawnMatch = /^\/api\/agents\/([^/]+)\/respawn\/?$/.exec(pathname);
+  if (respawnMatch && method === 'POST') {
+    const agentId = decodeURIComponent(respawnMatch[1]);
+    let result: { ok: boolean; error?: string };
+    try {
+      result = await respawnAgentById(agentId);
+    } catch (err) {
+      result = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+    res.writeHead(result.ok ? 200 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result.ok ? { ok: true, agentId, status: 'respawn-requested' } : { error: result.error || 'respawn failed' }));
+    return true;
+  }
+
+  // POST /api/agents/:id/input — write raw keystrokes straight to the agent's PTY
+  const inputMatch = /^\/api\/agents\/([^/]+)\/input\/?$/.exec(pathname);
+  if (inputMatch && method === 'POST') {
+    const agentId = decodeURIComponent(inputMatch[1]);
+    let inBody: { data?: string };
+    try {
+      inBody = await readJsonBody<{ data?: string }>(req);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      return true;
+    }
+    const data = typeof inBody?.data === 'string' ? inBody.data : '';
+    if (!data) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'input data is required' }));
+      return true;
+    }
+    const ptyId = ptyForAgent(agentId);
+    if (!ptyId) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'agent has no live terminal' }));
+      return true;
+    }
+    const wrote = ptyManager.write(ptyId, data);
+    res.writeHead(wrote.ok ? 200 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(wrote.ok ? { ok: true } : { error: wrote.error || 'write failed' }));
+    return true;
+  }
+
   // GET /api/agents/:id/pty-stream (SSE)
   const agentPtyStreamMatch = /^\/api\/agents\/([^/]+)\/pty-stream\/?$/.exec(pathname);
   if (agentPtyStreamMatch && method === 'GET') {
@@ -5212,9 +5257,9 @@ ipcMain.handle('pty:list', () => ptyManager.list());
 // resumes from the agent's memory.md. Treats the Overmind like any other agent
 // (no special-casing). The reconstructed config comes from the registry entry,
 // so the new session keeps the same name, cwd, provider, and runtime profile.
-ipcMain.handle('agent:respawn', async (evt, agentId: unknown) => {
-  if (typeof agentId !== 'string' || !agentId.trim()) return { ok: false, error: 'invalid agentId' };
-  const id = agentId.trim();
+// Shared respawn: archive the outgoing session and start a fresh one that resumes
+// from memory.md. Called by the agent:respawn IPC (desktop) and the mobile route.
+async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Promise<{ ok: boolean; error?: string }> {
   const root = hive.root();
   if (!root) return { ok: false, error: 'hive root unavailable' };
   try {
@@ -5261,7 +5306,7 @@ ipcMain.handle('agent:respawn', async (evt, agentId: unknown) => {
         defaultCommand: cfg.defaultCommand,
         autoMode: !!cfg.autoMode
       });
-      const webContents = (evt.sender ? BrowserWindow.fromWebContents(evt.sender)?.webContents : null) ?? liveWebContents();
+      const webContents = senderWc ?? liveWebContents();
       const spawnOpts: AgentSpawnOptions = {
         id,
         cwd: spawnCwd,
@@ -5314,6 +5359,11 @@ ipcMain.handle('agent:respawn', async (evt, agentId: unknown) => {
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+ipcMain.handle('agent:respawn', async (evt, agentId: unknown) => {
+  if (typeof agentId !== 'string' || !agentId.trim()) return { ok: false, error: 'invalid agentId' };
+  const senderWc = evt.sender ? BrowserWindow.fromWebContents(evt.sender)?.webContents ?? undefined : undefined;
+  return respawnAgentById(agentId.trim(), senderWc);
 });
 
 // Resolve a pasted Claude session id to the cwd it originally ran in, so the Add

@@ -981,6 +981,35 @@
     padding: 8px;
     border: 1px solid var(--cth-ink-300);
   }
+  .agent-terminal-input {
+    margin-top: 4px;
+    padding: 6px;
+    background: var(--cth-ink-900);
+    border: 1px solid var(--cth-ink-700);
+    border-top: none;
+  }
+  .term-key-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .term-key {
+    flex: 1 0 auto; min-width: 34px;
+    padding: 5px 6px;
+    background: var(--cth-ink-700);
+    color: var(--cth-paper-100);
+    border: 1px solid var(--cth-ink-500);
+    font-family: var(--cth-font-mono);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .term-key:active { background: var(--cth-lemon); color: var(--cth-ink-900); }
+  .term-input-row { display: flex; gap: 4px; }
+  .term-input {
+    flex: 1; min-width: 0;
+    padding: 5px 6px;
+    background: var(--cth-ink-900);
+    color: var(--cth-paper-100);
+    border: 1px solid var(--cth-ink-500);
+    font-family: var(--cth-font-mono);
+    font-size: 12px;
+  }
 </style>
 </head>
 <body>
@@ -1465,6 +1494,8 @@ function renderFleet() {
       const toggleText = toggleBtn?.querySelector('.terminal-toggle-text');
       if (terminalEl && toggleText) {
         terminalEl.hidden = false;
+        const inputEl = document.querySelector(`.agent-terminal-input[data-agent-id="${CSS.escape(agentId)}"]`);
+        if (inputEl) inputEl.hidden = false;
         toggleText.textContent = 'Hide';
         terminalEl.textContent = state.lastContent || '(no output)';
         if (state.scrollAtBottom) {
@@ -1561,12 +1592,31 @@ function agentCard(a) {
     <button class="btn btn-secondary agent-message-btn" style="flex:1;font-size:10px;padding:4px 6px;" data-agent-id="${esc(a.id)}">
       Message
     </button>
+    <button class="btn btn-secondary agent-respawn-btn" style="font-size:10px;padding:4px 8px;" data-agent-id="${esc(a.id)}" data-agent-name="${esc(a.name || a.id)}" title="Respawn — archive session &amp; restart from memory.md">
+      ↺
+    </button>
     <button class="btn btn-danger agent-stop-btn" style="font-size:10px;padding:4px 8px;" data-agent-id="${esc(a.id)}">
       Stop
     </button>
   </div>
   <div class="agent-terminal" data-agent-id="${esc(a.id)}" hidden>
     <div class="spinner" style="padding:12px;text-align:center;">⟳ loading…</div>
+  </div>
+  <div class="agent-terminal-input" data-agent-id="${esc(a.id)}" hidden>
+    <div class="term-key-row">
+      <button class="term-key" data-agent-id="${esc(a.id)}" data-key="ctrlc" title="Ctrl+C">^C</button>
+      <button class="term-key" data-agent-id="${esc(a.id)}" data-key="esc" title="Escape">Esc</button>
+      <button class="term-key" data-agent-id="${esc(a.id)}" data-key="tab" title="Tab">Tab</button>
+      <button class="term-key" data-agent-id="${esc(a.id)}" data-key="up" title="Up">↑</button>
+      <button class="term-key" data-agent-id="${esc(a.id)}" data-key="down" title="Down">↓</button>
+      <button class="term-key" data-agent-id="${esc(a.id)}" data-key="left" title="Left">←</button>
+      <button class="term-key" data-agent-id="${esc(a.id)}" data-key="right" title="Right">→</button>
+      <button class="term-key" data-agent-id="${esc(a.id)}" data-key="enter" title="Enter">⏎</button>
+    </div>
+    <div class="term-input-row">
+      <input type="text" class="term-input" data-agent-id="${esc(a.id)}" placeholder="Type into terminal…" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="btn btn-primary term-send" data-agent-id="${esc(a.id)}" style="font-size:10px;padding:4px 8px;">Send</button>
+    </div>
   </div>
   <div class="agent-message-form" data-agent-id="${esc(a.id)}" hidden style="margin-top:8px;">
     <textarea class="ask-input" placeholder="Type message…" style="width:100%;margin-bottom:4px;"></textarea>
@@ -1597,9 +1647,11 @@ async function toggleAgentTerminal(agentId) {
   if (!terminalEl || !toggleText) return;
 
   const state = agentTerminalState.get(agentId) || { expanded: false, interval: null, userScrolling: false, lastLineCount: 0 };
+  const inputEl = document.querySelector(`.agent-terminal-input[data-agent-id="${CSS.escape(agentId)}"]`);
 
   if (state.expanded) {
     terminalEl.hidden = true;
+    if (inputEl) inputEl.hidden = true;
     toggleText.textContent = 'Terminal';
     if (state.interval) {
       clearInterval(state.interval);
@@ -1612,6 +1664,7 @@ async function toggleAgentTerminal(agentId) {
     state.expanded = false;
   } else {
     terminalEl.hidden = false;
+    if (inputEl) inputEl.hidden = false;
     toggleText.textContent = 'Hide';
     state.expanded = true;
     await loadAgentTerminal(agentId, terminalEl);
@@ -1748,6 +1801,59 @@ document.getElementById('fleet-list').addEventListener('click', async (e) => {
   } finally {
     btn.disabled = false;
   }
+});
+
+// Event delegation for agent respawn button
+document.getElementById('fleet-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.agent-respawn-btn');
+  if (!btn) return;
+  const agentId = btn.dataset.agentId;
+  if (!agentId) return;
+  const name = btn.dataset.agentName || agentId;
+  if (!confirm(`Respawn ${name}? Archives the current session and starts fresh from memory.md.`)) return;
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = '…';
+  try {
+    const res = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}/respawn`, { method: 'POST', body: JSON.stringify({}) });
+    if (res.ok) { btn.textContent = '✓'; setTimeout(loadFleet, 1500); }
+    else { btn.textContent = '✗'; setTimeout(() => { btn.textContent = prev; }, 2000); }
+  } catch (e) {
+    btn.textContent = '✗'; setTimeout(() => { btn.textContent = prev; }, 2000);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Raw terminal input — write keystrokes straight to the agent's PTY ──
+const TERM_KEYS = { ctrlc: '\x03', esc: '\x1b', tab: '\t', enter: '\r', up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C' };
+async function sendPtyInput(agentId, data) {
+  if (!agentId || !data) return;
+  try { await apiFetch(`/api/agents/${encodeURIComponent(agentId)}/input`, { method: 'POST', body: JSON.stringify({ data }) }); }
+  catch (e) { /* transient */ }
+}
+// Control-key buttons (Ctrl+C, Esc, Tab, arrows, Enter)
+document.getElementById('fleet-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('.term-key');
+  if (!btn) return;
+  const seq = TERM_KEYS[btn.dataset.key];
+  if (btn.dataset.agentId && seq != null) sendPtyInput(btn.dataset.agentId, seq);
+});
+// Send button — types the field text (no newline; use ⏎ to submit), then clears
+document.getElementById('fleet-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('.term-send');
+  if (!btn) return;
+  const agentId = btn.dataset.agentId;
+  const input = document.querySelector(`.term-input[data-agent-id="${CSS.escape(agentId)}"]`);
+  if (input && input.value) { sendPtyInput(agentId, input.value); input.value = ''; }
+});
+// Enter inside the text field submits the whole line (text + carriage return)
+document.getElementById('fleet-list').addEventListener('keydown', (e) => {
+  const input = e.target.closest('.term-input');
+  if (!input || e.key !== 'Enter') return;
+  e.preventDefault();
+  sendPtyInput(input.dataset.agentId, input.value + '\r');
+  input.value = '';
 });
 
 // ── Workers (ephemeral Slack-triggered workers) ───────────────────
