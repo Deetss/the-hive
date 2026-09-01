@@ -242,7 +242,18 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
   // overwrites promptOverrides, so we always send BOTH fields on save.
   const cfgPrompts = (config as HarnessConfig & { promptOverrides?: { workerOrientation?: string; protocolTemplate?: string } }).promptOverrides ?? {};
   const [promptDefaults, setPromptDefaults] = useState<{ workerOrientation: string; protocolTemplate: string } | null>(null);
-  useEffect(() => { window.cth.getPromptDefaults().then(setPromptDefaults).catch(() => { /* main not ready */ }); }, []);
+  useEffect(() => {
+    // Guard the call itself, not just the promise: if this newer IPC bridge is
+    // absent at runtime (e.g. a dev main/preload that hasn't restarted since the
+    // renderer hot-reloaded), `window.cth.getPromptDefaults` is undefined and
+    // calling it throws SYNCHRONOUSLY — before any promise exists, so `.catch`
+    // never runs and the thrown error unmounts the whole Settings tree (crash).
+    // Optional-chain + try/catch keeps it graceful: defaults stay null and the
+    // Prompts textareas show "Loading defaults…" until main is rebuilt.
+    try {
+      window.cth.getPromptDefaults?.().then(setPromptDefaults).catch(() => { /* main not ready */ });
+    } catch { /* bridge unavailable — leave defaults null */ }
+  }, []);
   const [woOverride, setWoOverride] = useState<string | null>(cfgPrompts.workerOrientation ?? null);
   const [ptOverride, setPtOverride] = useState<string | null>(cfgPrompts.protocolTemplate ?? null);
   const [promptSaveNote, setPromptSaveNote] = useState('');
