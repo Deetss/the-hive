@@ -557,13 +557,32 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
                 <strong>{askMePending} open UAT checklist item{askMePending === 1 ? '' : 's'}</strong> awaiting your verification
               </span>
             </span>
-            <PixelButton
-              variant="primary"
-              size="sm"
-              onClick={() => setTab('human')}
-            >
-              Review in For You →
-            </PixelButton>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                title="Dismiss all open UAT checklist items"
+                onClick={async () => {
+                  if (!window.confirm('Dismiss all open UAT checklist items?')) return;
+                  const openItems = useStore.getState().openHumanQAItems;
+                  await Promise.all(openItems.map((item) => window.cth?.dismissHumanQA?.(item.taskId, item.question)));
+                  useStore.getState().setOpenHumanQA([]);
+                }}
+                style={{
+                  border: 'none', background: 'transparent', cursor: 'pointer',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)',
+                  textDecoration: 'underline', padding: '2px 4px'
+                }}
+              >
+                Clear all
+              </button>
+              <PixelButton
+                variant="primary"
+                size="sm"
+                onClick={() => setTab('human')}
+              >
+                Review in For You →
+              </PixelButton>
+            </div>
           </div>
         )}
         {tab === 'terminal' && (

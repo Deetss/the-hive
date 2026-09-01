@@ -105,6 +105,26 @@ export function AskMeTab() {
     }
   };
 
+  const handleDismiss = async (taskId: string, question: string) => {
+    if (busyTasks[taskId]) return;
+    setBusyTasks((prev) => ({ ...prev, [taskId]: true }));
+    try {
+      if (window.cth?.dismissHumanQA) {
+        await window.cth.dismissHumanQA(taskId, question);
+      }
+      setOpenHumanQA(openQA.filter((q) => !(q.taskId === taskId && q.question === question)));
+      await loadQA();
+    } catch (e) {
+      console.error('[AskMeTab] failed to dismiss humanQA:', e);
+    } finally {
+      setBusyTasks((prev) => {
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+    }
+  };
+
   const isQueryThread = (m: { act?: string; subject?: string; conversation?: string }) => {
     if (m.act === 'query' || m.act === 'reply') return true;
     if (m.subject && /quick\s*ask/i.test(m.subject)) return true;
@@ -286,6 +306,19 @@ export function AskMeTab() {
                   <span style={{ fontSize: 12, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
                     {formatAgo(item.askedAt, now)}
                   </span>
+                  <button
+                    type="button"
+                    title="Dismiss question without changing task status"
+                    disabled={isBusy}
+                    onClick={() => void handleDismiss(item.taskId, item.question)}
+                    style={{
+                      border: 'none', background: 'transparent', cursor: 'pointer',
+                      fontSize: 12, color: 'var(--cth-ink-500)', padding: '2px 6px',
+                      display: 'inline-flex', alignItems: 'center', gap: 3
+                    }}
+                  >
+                    ✕ clear
+                  </button>
                 </div>
 
                 {/* Question body & actions */}
@@ -342,6 +375,17 @@ export function AskMeTab() {
                         >
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--cth-coral)' }}>
                             <Icon name="x" /> FAIL ✗
+                          </span>
+                        </PixelButton>
+
+                        <PixelButton
+                          variant="secondary"
+                          size="sm"
+                          disabled={isBusy}
+                          onClick={() => void handleDismiss(item.taskId, item.question)}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            clear / dismiss
                           </span>
                         </PixelButton>
                       </>

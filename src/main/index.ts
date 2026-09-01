@@ -6057,6 +6057,52 @@ ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: un
   broadcastHumanQAChanged();
   return { ok: true };
 });
+
+ipcMain.handle('tasks:dismissHumanQA', async (_evt, taskId: unknown, question: unknown) => {
+  if (typeof taskId !== 'string' || !taskId) return { ok: false, error: 'invalid taskId' };
+  if (typeof question !== 'string' || !question) return { ok: false, error: 'invalid question' };
+  if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
+
+  const ledger = hive.tasks() as { tasks?: HiveTask[] };
+  const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+  const taskIndex = tasks.findIndex((t) => t?.id === taskId);
+  if (taskIndex < 0) return { ok: false, error: `task ${taskId} not found` };
+
+  const task = { ...tasks[taskIndex] };
+  const qaList = Array.isArray(task.humanQA) ? [...task.humanQA] : [];
+  let qaIndex = qaList.findIndex((qa) => qa.q === question && !qa.a);
+  if (qaIndex < 0) {
+    qaIndex = qaList.findIndex((qa) => qa.q === question);
+  }
+  const nowIso = new Date().toISOString();
+
+  if (qaIndex >= 0) {
+    qaList[qaIndex] = {
+      ...qaList[qaIndex],
+      a: 'dismissed by user',
+      dismissedAt: nowIso,
+      answeredAt: nowIso
+    };
+  } else {
+    qaList.push({
+      q: question,
+      a: 'dismissed by user',
+      askedAt: nowIso,
+      dismissedAt: nowIso,
+      answeredAt: nowIso
+    });
+  }
+
+  task.humanQA = qaList;
+  const updatedTasks = [...tasks];
+  updatedTasks[taskIndex] = task;
+  hive.writeTasks(updatedTasks);
+
+  broadcastHumanQAChanged();
+  liveWebContents()?.send('hive:tasksChanged');
+  broadcastBrowserEvent('hive:tasksChanged', []);
+  return { ok: true };
+});
 ipcMain.handle('hive:setArchived', (_evt, id: unknown, archived: unknown) => {
   if (typeof id !== 'string') return { ok: false, error: 'invalid id' };
   if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };

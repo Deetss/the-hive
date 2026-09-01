@@ -856,6 +856,11 @@ const api = {
     note?: string
   ): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('tasks:answerHumanQA', taskId, question, verdict, note),
+  dismissHumanQA: (
+    taskId: string,
+    question: string
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('tasks:dismissHumanQA', taskId, question),
   onHumanQAChanged: (cb: () => void): (() => void) => {
     const handler = () => cb();
     ipcRenderer.on('hive:humanQAChanged', handler);
