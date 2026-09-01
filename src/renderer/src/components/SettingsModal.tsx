@@ -242,17 +242,22 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
   // overwrites promptOverrides, so we always send BOTH fields on save.
   const cfgPrompts = (config as HarnessConfig & { promptOverrides?: { workerOrientation?: string; protocolTemplate?: string } }).promptOverrides ?? {};
   const [promptDefaults, setPromptDefaults] = useState<{ workerOrientation: string; protocolTemplate: string } | null>(null);
+  // Distinguish "still loading" from "the defaults IPC is unavailable" so the
+  // Prompts panel shows an actionable message instead of an eternal spinner.
+  const [promptDefaultsErr, setPromptDefaultsErr] = useState(false);
   useEffect(() => {
     // Guard the call itself, not just the promise: if this newer IPC bridge is
     // absent at runtime (e.g. a dev main/preload that hasn't restarted since the
     // renderer hot-reloaded), `window.cth.getPromptDefaults` is undefined and
     // calling it throws SYNCHRONOUSLY — before any promise exists, so `.catch`
     // never runs and the thrown error unmounts the whole Settings tree (crash).
-    // Optional-chain + try/catch keeps it graceful: defaults stay null and the
-    // Prompts textareas show "Loading defaults…" until main is rebuilt.
+    // Optional-chain + try/catch keeps it graceful; a missing bridge or a
+    // rejected invoke flips to the error state (not a perpetual "Loading…").
     try {
-      window.cth.getPromptDefaults?.().then(setPromptDefaults).catch(() => { /* main not ready */ });
-    } catch { /* bridge unavailable — leave defaults null */ }
+      const pending = window.cth.getPromptDefaults?.();
+      if (!pending) { setPromptDefaultsErr(true); return; } // bridge not exposed yet
+      pending.then(setPromptDefaults).catch(() => setPromptDefaultsErr(true));
+    } catch { setPromptDefaultsErr(true); }
   }, []);
   const [woOverride, setWoOverride] = useState<string | null>(cfgPrompts.workerOrientation ?? null);
   const [ptOverride, setPtOverride] = useState<string | null>(cfgPrompts.protocolTemplate ?? null);
@@ -1753,7 +1758,11 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                         leave a field on its default (or use Revert) to always track the shipped version.
                       </div>
                       {!promptDefaults ? (
-                        <div style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Loading defaults…</div>
+                        <div style={{ fontSize: 13, color: 'var(--cth-ink-500)', lineHeight: '18px' }}>
+                          {promptDefaultsErr
+                            ? 'Prompt defaults are unavailable in this session — restart The Hive to edit prompts. (The shipped defaults load from the main process; a newer build needs a full app restart, not just a window refresh.)'
+                            : 'Loading defaults…'}
+                        </div>
                       ) : (
                         <>
                           <div>
