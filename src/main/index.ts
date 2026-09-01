@@ -4871,6 +4871,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
           // expands to nothing, so every knowledge-graph instruction was dead on a
           // Windows floor. Empty when the KG is off (the line isn't emitted then).
           kgCliPath: knowledge.env().KG_CLI,
+          knowledgeBasePath: readConfig().knowledgeBasePath,
           theme: readConfig().terminalTheme ?? 'light',
           // W3 — default-MCP consent state + the bundled skills source dir.
           mcpDefaults: readConfig().mcpDefaults,
@@ -5405,6 +5406,76 @@ ipcMain.handle('dialog:chooseFolder', async (evt) => {
   });
   if (res.canceled || res.filePaths.length === 0) return { ok: false as const, error: 'cancelled' };
   return { ok: true as const, path: res.filePaths[0] };
+});
+
+// ─── IPC: Knowledge base (shared local folder of .md/.txt) ───────────────────
+// Read-only window into config.knowledgeBasePath. list/read/search let the app
+// browse the KB; agents get the folder PATH in their orientation and use their
+// own file tools on it (see PROTOCOL.md). Every read is contained to the KB root.
+const KB_EXTS = new Set(['.md', '.txt', '.markdown']);
+function kbRoot(): string | null {
+  const p = readConfig().knowledgeBasePath;
+  return typeof p === 'string' && p.trim() && existsSync(p) ? resolve(p) : null;
+}
+function kbList(root: string): string[] {
+  const out: string[] = [];
+  const walk = (dir: string, depth: number): void => {
+    if (depth > 6) return;
+    let ents: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
+    try { ents = readdirSync(dir, { withFileTypes: true }) as unknown as typeof ents; } catch { return; }
+    for (const e of ents) {
+      if (e.name.startsWith('.')) continue;
+      const full = join(dir, e.name);
+      if (e.isDirectory()) walk(full, depth + 1);
+      else if (e.isFile() && KB_EXTS.has(extname(e.name).toLowerCase())) {
+        out.push(full.slice(root.length + 1).replace(/\\/g, '/'));
+      }
+    }
+  };
+  walk(root, 0);
+  return out.sort();
+}
+/** Resolve a caller-supplied relative path INSIDE the KB root (blocks ../ escape). */
+function kbResolve(root: string, rel: string): string | null {
+  const full = resolve(root, rel);
+  return (full === root || full.startsWith(root + sep)) ? full : null;
+}
+
+ipcMain.handle('kb:list', () => {
+  const root = kbRoot();
+  if (!root) return { ok: false as const, error: 'no knowledge base configured' };
+  return { ok: true as const, root, files: kbList(root) };
+});
+ipcMain.handle('kb:read', (_evt, rel: unknown) => {
+  const root = kbRoot();
+  if (!root) return { ok: false as const, error: 'no knowledge base configured' };
+  if (typeof rel !== 'string' || !rel.trim()) return { ok: false as const, error: 'invalid path' };
+  const full = kbResolve(root, rel);
+  if (!full || !existsSync(full) || !statSync(full).isFile()) return { ok: false as const, error: 'not found' };
+  if (!KB_EXTS.has(extname(full).toLowerCase())) return { ok: false as const, error: 'unsupported file type' };
+  try { return { ok: true as const, path: rel, content: readFileSync(full, 'utf8') }; }
+  catch (e) { return { ok: false as const, error: String(e) }; }
+});
+ipcMain.handle('kb:search', (_evt, query: unknown) => {
+  const root = kbRoot();
+  if (!root) return { ok: false as const, error: 'no knowledge base configured' };
+  if (typeof query !== 'string' || !query.trim()) return { ok: false as const, error: 'empty query' };
+  const q = query.toLowerCase();
+  const hits: Array<{ file: string; line: number; text: string }> = [];
+  for (const rel of kbList(root)) {
+    const full = kbResolve(root, rel);
+    if (!full) continue;
+    let text: string;
+    try { text = readFileSync(full, 'utf8'); } catch { continue; }
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].toLowerCase().includes(q)) {
+        hits.push({ file: rel, line: i + 1, text: lines[i].trim().slice(0, 240) });
+        if (hits.length >= 100) return { ok: true as const, hits };
+      }
+    }
+  }
+  return { ok: true as const, hits };
 });
 
 // ─── IPC: Open system terminal at a folder ───────────────────────────────────

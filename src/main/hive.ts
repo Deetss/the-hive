@@ -709,6 +709,9 @@ export class HiveManager {
        *  instructions were unusable on Windows. Optional: undefined degrades to the
        *  old env-var spelling. */
       kgCliPath?: string;
+      /** Optional shared knowledge-base folder (config.knowledgeBasePath). When set,
+       *  the agent's prompt tells it to read/grep this folder for team knowledge. */
+      knowledgeBasePath?: string;
       theme?: 'light' | 'dark';
       /** Consent state for the default-MCP bundle (W3). Threaded from the live
        *  HarnessConfig by the caller; undefined → catalog defaults apply. */
@@ -840,7 +843,7 @@ export class HiveManager {
     if (!isHiveAwareProvider(meta.provider)) {
       const preset = providerPreset(meta.provider ?? 'claude');
       const flag = preset.initialPromptFlag;
-      const prompt = this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false, opts.knowledgeGraph ?? false, opts.kgCliPath);
+      const prompt = this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false, opts.knowledgeGraph ?? false, opts.kgCliPath, opts.knowledgeBasePath);
       // agy, codex, and grok expose a Claude-style lifecycle-hook surface, so each
       // gets the SAME live status + Stop→inbox-drain Claude does — selected by the
       // preset's `hookBridge`. agy needs a translating shim (its hook stdin/stdout
@@ -988,7 +991,7 @@ export class HiveManager {
     const args: string[] = [];
     if (!claudeProvider) return { args, env };
 
-    args.push('--append-system-prompt', this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false, opts.knowledgeGraph ?? false, opts.kgCliPath));
+    args.push('--append-system-prompt', this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false, opts.knowledgeGraph ?? false, opts.kgCliPath, opts.knowledgeBasePath));
 
     // Phase 1 — autonomy: attach lifecycle hooks via --settings (no edits to the
     // user's repo) so the agent reports activity and drains its inbox on Stop.
@@ -1488,7 +1491,8 @@ export class HiveManager {
     root: string,
     semanticMemory: boolean,
     knowledgeGraph: boolean,
-    kgCliPath?: string
+    kgCliPath?: string,
+    knowledgeBasePath?: string
   ): string {
     // Native-separator path helpers — see the 🪟 note above.
     const inDir = (...parts: string[]): string => join(dir, ...parts);
@@ -1515,6 +1519,9 @@ export class HiveManager {
     const kgCli = kgCliPath || (process.platform === 'win32' ? '%KG_CLI%' : '$KG_CLI');
     const knowledgeLine = knowledgeGraph
       ? `Knowledge Graph: run \`"${hiveNode}" "${kgCli}" search "<query>"\` for organisation context before guessing.`
+      : '';
+    const knowledgeBaseLine = knowledgeBasePath
+      ? `Shared knowledge base: a folder of .md/.txt notes lives at ${knowledgeBasePath}. Grep/Read it for team knowledge (conventions, decisions, how-tos) BEFORE guessing; treat it as read-only reference, not a place to write.`
       : '';
     // Item 13: state the build. Agents had no way to tell which version, or even
     // which KIND of build, they were running inside, so anything that varies
@@ -1559,6 +1566,7 @@ export class HiveManager {
       decisionGateLine,
       memoryLine,
       knowledgeLine,
+      knowledgeBaseLine,
       godLine,
       spawnQueueLine,
       runtimeLine,
@@ -2958,6 +2966,14 @@ searchable MemPalace and you have the \`mempalace\` CLI:
 
 Your \`memory.md\` is mined into the palace automatically, so the durable facts you
 write there become searchable by every agent. You don't run \`mine\` yourself.
+
+## Shared knowledge base (optional — when the operator sets one)
+The operator can point the hive at a shared knowledge-base folder (Settings, a folder
+of \`.md\`/\`.txt\` notes: conventions, decisions, how-tos). When one is configured its
+absolute path is named in your orientation prompt. Use your normal file tools on it:
+\`Grep\`/\`Glob\` to find the right note, \`Read\` to open it. Consult it BEFORE guessing on
+anything it might cover. It is read-only reference — never write into it; durable notes
+still go in your own \`memory.md\`.
 `;
 
 // ─── cth-hook shim (written to <hive>/bin/cth-hook.cjs) ──────────────────────

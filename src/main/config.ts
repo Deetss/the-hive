@@ -353,6 +353,9 @@ export interface HarnessConfig {
   recentHives?: string[];
   /** Folders the user registered during onboarding (used as quick-picks). */
   registeredRepos: string[];
+  /** Optional shared knowledge-base folder (.md/.txt) agents can read/grep and the
+   *  app can browse via the kb:* IPC. Unset = no KB. */
+  knowledgeBasePath?: string;
   /** Skip the launch-time harness config picker and open the last-used home directly. */
   skipHarnessPickerOnLaunch?: boolean;
   /** When true, new agents are spawned with --permission-mode bypassPermissions. */
@@ -1122,6 +1125,9 @@ export function resolveHarnessHome(): string | null {
 function normalizeStoredHomes(cfg: HarnessConfig): HarnessConfig {
   if (typeof cfg.harnessHome === 'string' && cfg.harnessHome.trim()) {
     cfg.harnessHome = expandTilde(cfg.harnessHome);
+  }
+  if (typeof cfg.knowledgeBasePath === 'string' && cfg.knowledgeBasePath.trim()) {
+    cfg.knowledgeBasePath = expandTilde(cfg.knowledgeBasePath);
   }
   if (Array.isArray(cfg.recentHives)) {
     const seen = new Set<string>();

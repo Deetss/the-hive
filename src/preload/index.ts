@@ -702,6 +702,14 @@ const api = {
   chooseFolder: (): Promise<{ ok: true; path: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('dialog:chooseFolder'),
 
+  // ─── Knowledge base (shared local folder) ────────────────────────────────
+  kbList: (): Promise<{ ok: true; root: string; files: string[] } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('kb:list'),
+  kbRead: (rel: string): Promise<{ ok: true; path: string; content: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('kb:read', rel),
+  kbSearch: (query: string): Promise<{ ok: true; hits: Array<{ file: string; line: number; text: string }> } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('kb:search', query),
+
   // ─── Terminal.app ────────────────────────────────────────────────────────
   openTerminalAt: (cwd: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('terminal:openAtFolder', cwd),

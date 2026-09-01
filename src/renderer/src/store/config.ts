@@ -63,6 +63,8 @@ export interface HarnessConfig {
    *  Mirrors src/main/config.ts. */
   recentHives?: string[];
   registeredRepos: string[];
+  /** Optional shared knowledge-base folder (.md/.txt) agents read/grep. */
+  knowledgeBasePath?: string;
   /** Skip the launch-time harness config picker and open the last-used home directly. */
   skipHarnessPickerOnLaunch?: boolean;
   autoMode: boolean;
