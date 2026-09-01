@@ -8,7 +8,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
-- Settings → Memory & Knowledge: the knowledge base now has a source selector — "Local Folder" (existing `.md`/`.txt` folder agents grep/read), "Outline MCP" (defaults to the team Outline URL, editable), or "Custom MCP URL". An MCP source is named in every agent's orientation and, for Claude agents, wired into the per-session `mcpServers` as an `hive-kb` HTTP server so they can query it directly; the choice and URL persist in config and over `/api/settings`
+- Settings → Memory & Knowledge: the knowledge base is now a LIST of sources you can add to freely, each a "Local Folder" (`.md`/`.txt` agents grep/read), "Outline MCP" (defaults to the team Outline URL, editable), or "Custom MCP URL". Agents fan out across every source; each https MCP entry is named in the orientation and, for Claude agents, wired into the per-session `mcpServers` as `hive-kb-1`, `hive-kb-2`, …. Persisted as `knowledgeBaseSources` in config and over `/api/settings`; the old single-folder setting is migrated on read
 - Add Linux .deb build target
 - Add Respawn (↺) button to agent fleet cards in UI (archives session & resumes fresh from memory.md)
 - Surface open UAT checklist and humanQA items in UI via For You and tasks badge counts and actionable top alert banner

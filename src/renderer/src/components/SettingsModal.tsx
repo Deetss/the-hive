@@ -271,39 +271,63 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
     catch { setSemMemOn(!next); }
   };
 
-  // Shared knowledge base: a local folder of .md/.txt notes, or an MCP endpoint.
-  type KbSource = 'folder' | 'outline-mcp' | 'custom-mcp';
-  const cfgKb = cfgX as { knowledgeBasePath?: string; knowledgeBaseSource?: KbSource; knowledgeBaseMcpUrl?: string };
+  // Shared knowledge base: a LIST of sources — local .md/.txt folders and/or MCP
+  // endpoints (Outline / custom). Agents fan out across all of them.
+  type KbSourceType = 'folder' | 'outline-mcp' | 'custom-mcp';
+  type KbSourceEntry = { type: KbSourceType; value: string };
   const OUTLINE_DEFAULT_URL = 'https://docs.bloomfieldhomes.org';
-  const [kbPath, setKbPath] = useState<string>(cfgKb.knowledgeBasePath ?? '');
-  const [kbSource, setKbSource] = useState<KbSource>(cfgKb.knowledgeBaseSource ?? 'folder');
-  const [kbMcpUrl, setKbMcpUrl] = useState<string>(cfgKb.knowledgeBaseMcpUrl ?? '');
-  const pickKbFolder = async () => {
-    const res = await window.cth.chooseFolder();
-    if (res.ok) {
-      setKbPath(res.path);
-      try { await window.cth.updateConfig({ knowledgeBasePath: res.path } as Partial<HarnessConfig>); } catch { /* noop */ }
+  const cfgKb = cfgX as {
+    knowledgeBaseSources?: KbSourceEntry[];
+    knowledgeBasePath?: string;
+    knowledgeBaseSource?: KbSourceType;
+    knowledgeBaseMcpUrl?: string;
+  };
+  // Seed from the array, else migrate the deprecated single-source fields.
+  const initialKbSources = (): KbSourceEntry[] => {
+    if (Array.isArray(cfgKb.knowledgeBaseSources) && cfgKb.knowledgeBaseSources.length) {
+      return cfgKb.knowledgeBaseSources.map((s) => ({ type: s.type, value: s.value ?? '' }));
     }
+    if ((cfgKb.knowledgeBaseSource === 'outline-mcp' || cfgKb.knowledgeBaseSource === 'custom-mcp') && cfgKb.knowledgeBaseMcpUrl?.trim()) {
+      return [{ type: cfgKb.knowledgeBaseSource, value: cfgKb.knowledgeBaseMcpUrl.trim() }];
+    }
+    if (cfgKb.knowledgeBasePath?.trim()) return [{ type: 'folder', value: cfgKb.knowledgeBasePath.trim() }];
+    return [];
   };
-  const clearKbPath = async () => {
-    setKbPath('');
-    try { await window.cth.updateConfig({ knowledgeBasePath: '' } as Partial<HarnessConfig>); } catch { /* noop */ }
+  const [kbSources, setKbSources] = useState<KbSourceEntry[]>(initialKbSources);
+  // Persist the whole array; drop blank-valued rows so a half-filled entry never
+  // reaches an agent, but keep them in local state so the user can finish typing.
+  const persistKbSources = async (next: KbSourceEntry[]) => {
+    const clean = next
+      .filter((s) => s.value.trim())
+      .map((s) => ({ type: s.type, value: s.value.trim() }));
+    try { await window.cth.updateConfig({ knowledgeBaseSources: clean } as Partial<HarnessConfig>); } catch { /* noop */ }
   };
-  const changeKbSource = async (next: KbSource) => {
-    setKbSource(next);
-    // Prefill the Outline instance URL the first time that source is chosen; leave
-    // an existing value (or a blank custom URL) alone.
-    const url = next === 'outline-mcp' && !kbMcpUrl.trim() ? OUTLINE_DEFAULT_URL : kbMcpUrl;
-    if (url !== kbMcpUrl) setKbMcpUrl(url);
-    try {
-      await window.cth.updateConfig({
-        knowledgeBaseSource: next,
-        knowledgeBaseMcpUrl: url
-      } as Partial<HarnessConfig>);
-    } catch { /* noop */ }
+  const updateKbSource = (idx: number, patch: Partial<KbSourceEntry>, persist = true) => {
+    setKbSources((prev) => {
+      const next = prev.map((s, i) => (i === idx ? { ...s, ...patch } : s));
+      if (persist) void persistKbSources(next);
+      return next;
+    });
   };
-  const saveKbMcpUrl = async () => {
-    try { await window.cth.updateConfig({ knowledgeBaseMcpUrl: kbMcpUrl.trim() } as Partial<HarnessConfig>); } catch { /* noop */ }
+  const addKbSource = () => {
+    setKbSources((prev) => [...prev, { type: 'folder', value: '' }]);
+  };
+  const removeKbSource = (idx: number) => {
+    setKbSources((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      void persistKbSources(next);
+      return next;
+    });
+  };
+  const pickKbFolder = async (idx: number) => {
+    const res = await window.cth.chooseFolder();
+    if (res.ok) updateKbSource(idx, { value: res.path });
+  };
+  const changeKbSourceType = (idx: number, type: KbSourceType) => {
+    // When switching an empty row to Outline, prefill the instance URL.
+    const cur = kbSources[idx];
+    const value = type === 'outline-mcp' && !cur.value.trim() ? OUTLINE_DEFAULT_URL : cur.value;
+    updateKbSource(idx, { type, value });
   };
 
   // --- circuit-breaker config (Lane A #6 canonical fields, widened view) ---
@@ -1742,76 +1766,73 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
 
                       <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
 
-                      {/* Knowledge base — a local folder of .md/.txt notes agents
-                          grep/read, OR an MCP endpoint (Outline / custom) they query
-                          for team knowledge. */}
+                      {/* Knowledge base — a list of sources agents fan out across:
+                          local .md/.txt folders they grep/read, and/or MCP
+                          endpoints (Outline / custom) they query. */}
                       <div>
                         <div style={{
                           fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
-                          color: 'var(--cth-ink-700)', textTransform: 'uppercase', marginBottom: 10
+                          color: 'var(--cth-ink-700)', textTransform: 'uppercase', marginBottom: 4
                         }}>
                           Knowledge base
                         </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                          <span style={{ fontSize: 13, color: 'var(--cth-ink-900)', flexShrink: 0 }}>Source</span>
-                          <select
-                            value={kbSource}
-                            onChange={(e) => void changeKbSource(e.target.value as KbSource)}
-                            style={{ ...slackInputStyle, width: 'auto', flex: 1, maxWidth: 260 }}
-                          >
-                            <option value="folder">Local Folder</option>
-                            <option value="outline-mcp">Outline MCP</option>
-                            <option value="custom-mcp">Custom MCP URL</option>
-                          </select>
+                        <div style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', marginBottom: 10 }}>
+                          Add as many sources as you like. Agents grep/read every folder and query every
+                          MCP server for team knowledge. https only for MCP; an OAuth-gated server needs a
+                          one-time <code>/mcp</code> auth per agent.
                         </div>
 
-                        {kbSource === 'folder' ? (
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                              <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
-                                Shared notes folder
-                              </span>
-                              <span style={{
-                                fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)',
-                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                              }} title={kbPath || undefined}>
-                                {kbPath
-                                  ? kbPath
-                                  : 'Point at a folder of .md/.txt notes; agents grep/read it for conventions, decisions & how-tos.'}
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                              <PixelButton variant="secondary" size="sm" onClick={pickKbFolder}>
-                                {kbPath ? 'change…' : 'choose…'}
-                              </PixelButton>
-                              {kbPath && (
-                                <PixelButton variant="secondary" size="sm" onClick={clearKbPath}>
-                                  clear
-                                </PixelButton>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {kbSources.length === 0 && (
+                            <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>
+                              No sources yet — agents have no shared knowledge base.
+                            </span>
+                          )}
+                          {kbSources.map((src, idx) => (
+                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <select
+                                value={src.type}
+                                onChange={(e) => changeKbSourceType(idx, e.target.value as KbSourceType)}
+                                style={{ ...slackInputStyle, width: 'auto', flexShrink: 0, maxWidth: 150 }}
+                              >
+                                <option value="folder">Local Folder</option>
+                                <option value="outline-mcp">Outline MCP</option>
+                                <option value="custom-mcp">Custom MCP URL</option>
+                              </select>
+                              {src.type === 'folder' ? (
+                                <>
+                                  <span style={{
+                                    flex: 1, minWidth: 0, fontSize: 12, color: 'var(--cth-ink-700)',
+                                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                                  }} title={src.value || undefined}>
+                                    {src.value || 'No folder chosen'}
+                                  </span>
+                                  <PixelButton variant="secondary" size="sm" onClick={() => void pickKbFolder(idx)}>
+                                    {src.value ? 'change…' : 'choose…'}
+                                  </PixelButton>
+                                </>
+                              ) : (
+                                <input
+                                  type="url"
+                                  value={src.value}
+                                  placeholder={src.type === 'outline-mcp' ? OUTLINE_DEFAULT_URL : 'https://…'}
+                                  onChange={(e) => updateKbSource(idx, { value: e.target.value }, false)}
+                                  onBlur={() => updateKbSource(idx, {}, true)}
+                                  style={{ ...slackInputStyle, flex: 1 }}
+                                />
                               )}
+                              <PixelButton variant="secondary" size="sm" onClick={() => removeKbSource(idx)}>
+                                remove
+                              </PixelButton>
                             </div>
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
-                              MCP endpoint URL
-                            </span>
-                            <input
-                              type="url"
-                              value={kbMcpUrl}
-                              placeholder={kbSource === 'outline-mcp' ? OUTLINE_DEFAULT_URL : 'https://…'}
-                              onChange={(e) => setKbMcpUrl(e.target.value)}
-                              onBlur={() => void saveKbMcpUrl()}
-                              style={slackInputStyle}
-                            />
-                            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
-                              {kbSource === 'outline-mcp'
-                                ? 'Agents query this Outline workspace over MCP for team knowledge. https only; an OAuth-gated server needs a one-time /mcp auth per agent.'
-                                : 'Agents query this MCP server for team knowledge. https only; an OAuth-gated server needs a one-time /mcp auth per agent.'}
-                            </span>
-                          </div>
-                        )}
+                          ))}
+                        </div>
+
+                        <div style={{ marginTop: 10 }}>
+                          <PixelButton variant="secondary" size="sm" onClick={addKbSource}>
+                            + add source
+                          </PixelButton>
+                        </div>
                       </div>
                     </>
                   )}

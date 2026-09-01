@@ -63,13 +63,16 @@ export interface HarnessConfig {
    *  Mirrors src/main/config.ts. */
   recentHives?: string[];
   registeredRepos: string[];
-  /** Optional shared knowledge-base folder (.md/.txt) agents read/grep. */
+  /** @deprecated pre-multi-source single KB folder. Read for back-compat; the UI
+   *  writes knowledgeBaseSources. Mirrors src/main/config.ts. */
   knowledgeBasePath?: string;
-  /** Where the shared KB lives: 'folder' (knowledgeBasePath) or an MCP endpoint
-   *  (knowledgeBaseMcpUrl). Unset = 'folder'. Mirrors src/main/config.ts. */
+  /** @deprecated pre-multi-source single KB source type. */
   knowledgeBaseSource?: 'folder' | 'outline-mcp' | 'custom-mcp';
-  /** MCP endpoint URL for the KB when knowledgeBaseSource is an MCP type (https). */
+  /** @deprecated pre-multi-source single KB MCP URL. */
   knowledgeBaseMcpUrl?: string;
+  /** Shared KB sources agents fan out across: local `.md`/`.txt` folders and/or
+   *  https MCP endpoints. Mirrors src/main/config.ts KnowledgeBaseSource[]. */
+  knowledgeBaseSources?: Array<{ type: 'folder' | 'outline-mcp' | 'custom-mcp'; value: string }>;
   /** Skip the launch-time harness config picker and open the last-used home directly. */
   skipHarnessPickerOnLaunch?: boolean;
   autoMode: boolean;

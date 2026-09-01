@@ -36,8 +36,8 @@ import {
   modelForRole, OPS_STANDUP_MISSION, HEARTBEAT_MISSION, COMPACT_MAINTENANCE_MISSION,
   DEFAULT_GOVERNOR_PACE_MARGIN, DEFAULT_GOVERNOR_YELLOW_MARGIN, DEFAULT_GOVERNOR_EARLY_FLOOR,
   DEFAULT_GOVERNOR_ABSOLUTE_BACKSTOP, DEFAULT_GOVERNOR_RECENT_MS,
-  resolveGovernorPolicy, type ResolvedGovernorProfileSettings, type ResolvedGovernorWindowSettings,
-  type HarnessConfig, type ScheduledMission, type GovernorPolicy, type GovernorProfilePolicy, type GovernorWindowThreshold, type GovernorWindowTripMode, type AutoOffloadConfig
+  resolveGovernorPolicy, resolveKnowledgeBaseSources, type ResolvedGovernorProfileSettings, type ResolvedGovernorWindowSettings,
+  type HarnessConfig, type KnowledgeBaseSource, type ScheduledMission, type GovernorPolicy, type GovernorProfilePolicy, type GovernorWindowThreshold, type GovernorWindowTripMode, type AutoOffloadConfig
 } from './config';
 import { attemptGovernorOffloads, releaseOffloadSlot, requeueOffloadObjective, queueOffloadObjective, type OffloadWorkSpec } from './governor-offload';
 import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde } from './fs';
@@ -851,9 +851,9 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     res.end(JSON.stringify({
       ok: true,
       costCapTokens: cfg.costCapTokens ?? null,
+      knowledgeBaseSources: resolveKnowledgeBaseSources(cfg),
+      // Legacy single-folder field, still sent so an older mobile build keeps working.
       knowledgeBasePath: cfg.knowledgeBasePath ?? '',
-      knowledgeBaseSource: cfg.knowledgeBaseSource ?? 'folder',
-      knowledgeBaseMcpUrl: cfg.knowledgeBaseMcpUrl ?? '',
       governorOverride: cfg.governorPolicy?.manualOverride === 'force-green',
       defaultModel: cfg.defaultModel ?? null,
       profiles
@@ -863,7 +863,7 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
 
   // POST /api/settings — patch a small, safe subset of config from mobile
   if (pathname === '/api/settings' && method === 'POST') {
-    let sBody: { costCapTokens?: number; knowledgeBasePath?: string; knowledgeBaseSource?: string; knowledgeBaseMcpUrl?: string; governorOverride?: boolean; defaultModel?: string };
+    let sBody: { costCapTokens?: number; knowledgeBasePath?: string; knowledgeBaseSources?: unknown; governorOverride?: boolean; defaultModel?: string };
     try {
       sBody = await readJsonBody(req);
     } catch {
@@ -876,10 +876,14 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       patch.costCapTokens = Math.round(sBody.costCapTokens);
     }
     if (typeof sBody.knowledgeBasePath === 'string') patch.knowledgeBasePath = sBody.knowledgeBasePath.trim();
-    if (sBody.knowledgeBaseSource === 'folder' || sBody.knowledgeBaseSource === 'outline-mcp' || sBody.knowledgeBaseSource === 'custom-mcp') {
-      patch.knowledgeBaseSource = sBody.knowledgeBaseSource;
+    if (Array.isArray(sBody.knowledgeBaseSources)) {
+      patch.knowledgeBaseSources = (sBody.knowledgeBaseSources as unknown[])
+        .filter((s): s is KnowledgeBaseSource =>
+          !!s && typeof s === 'object'
+          && ((s as KnowledgeBaseSource).type === 'folder' || (s as KnowledgeBaseSource).type === 'outline-mcp' || (s as KnowledgeBaseSource).type === 'custom-mcp')
+          && typeof (s as KnowledgeBaseSource).value === 'string')
+        .map((s) => ({ type: s.type, value: s.value.trim() }));
     }
-    if (typeof sBody.knowledgeBaseMcpUrl === 'string') patch.knowledgeBaseMcpUrl = sBody.knowledgeBaseMcpUrl.trim();
     if (typeof sBody.defaultModel === 'string' && sBody.defaultModel.trim()) patch.defaultModel = sBody.defaultModel.trim();
     if (Object.keys(patch).length) writeConfig(patch);
     if (typeof sBody.governorOverride === 'boolean') applyGovernorOverride(sBody.governorOverride ? 'force-green' : undefined);
@@ -5046,9 +5050,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
           // expands to nothing, so every knowledge-graph instruction was dead on a
           // Windows floor. Empty when the KG is off (the line isn't emitted then).
           kgCliPath: knowledge.env().KG_CLI,
-          knowledgeBasePath: readConfig().knowledgeBasePath,
-          knowledgeBaseSource: readConfig().knowledgeBaseSource,
-          knowledgeBaseMcpUrl: readConfig().knowledgeBaseMcpUrl,
+          knowledgeBaseSources: resolveKnowledgeBaseSources(readConfig()),
           theme: readConfig().terminalTheme ?? 'light',
           // W3 — default-MCP consent state + the bundled skills source dir.
           mcpDefaults: readConfig().mcpDefaults,
@@ -5590,27 +5592,30 @@ ipcMain.handle('dialog:chooseFolder', async (evt) => {
   return { ok: true as const, path: res.filePaths[0] };
 });
 
-// ─── IPC: Knowledge base (shared local folder of .md/.txt) ───────────────────
-// Read-only window into config.knowledgeBasePath. list/read/search let the app
-// browse the KB; agents get the folder PATH in their orientation and use their
-// own file tools on it (see PROTOCOL.md). Every read is contained to the KB root.
+// ─── IPC: Knowledge base (shared .md/.txt folders) ──────────────────────────
+// Read-only window into the folder-type entries of config.knowledgeBaseSources.
+// list/read/search let the app browse them; agents get the folder PATHS in their
+// orientation and use their own file tools (see PROTOCOL.md). Files are keyed
+// `<sourceIndex>/<relpath>` so multiple folders can be browsed as one. MCP-type
+// sources have no local folder — the app cannot browse them, only agents query
+// them via the `hive-kb-<n>` MCP servers. Every read is contained to its root.
 const KB_EXTS = new Set(['.md', '.txt', '.markdown']);
-function kbRoot(): string | null {
-  const cfg = readConfig();
-  if (cfg.knowledgeBaseSource === 'outline-mcp' || cfg.knowledgeBaseSource === 'custom-mcp') return null;
-  const p = cfg.knowledgeBasePath;
-  return typeof p === 'string' && p.trim() && existsSync(p) ? resolve(p) : null;
+/** Folder-source roots that exist on disk, in config order. */
+function kbFolderRoots(): string[] {
+  return resolveKnowledgeBaseSources(readConfig())
+    .filter((s) => s.type === 'folder' && s.value.trim() && existsSync(s.value))
+    .map((s) => resolve(s.value));
 }
 /** The message kb:* handlers return when there is no browsable local folder — it
- *  distinguishes an unconfigured KB from an MCP-source KB the app cannot list. */
+ *  distinguishes an unconfigured KB from an MCP-only KB the app cannot list. */
 function kbUnavailableError(): string {
-  const cfg = readConfig();
-  if (cfg.knowledgeBaseSource === 'outline-mcp' || cfg.knowledgeBaseSource === 'custom-mcp') {
-    return `knowledge base is an MCP source (${cfg.knowledgeBaseMcpUrl || 'no URL set'}); agents query it via the hive-kb MCP server`;
+  const mcp = resolveKnowledgeBaseSources(readConfig()).filter((s) => s.type !== 'folder');
+  if (mcp.length) {
+    return `knowledge base has only MCP source(s) (${mcp.map((s) => s.value).join(', ')}); agents query them via the hive-kb-* MCP servers`;
   }
   return 'no knowledge base configured';
 }
-function kbList(root: string): string[] {
+function kbListOne(root: string, idx: number): string[] {
   const out: string[] = [];
   const walk = (dir: string, depth: number): void => {
     if (depth > 6) return;
@@ -5621,49 +5626,57 @@ function kbList(root: string): string[] {
       const full = join(dir, e.name);
       if (e.isDirectory()) walk(full, depth + 1);
       else if (e.isFile() && KB_EXTS.has(extname(e.name).toLowerCase())) {
-        out.push(full.slice(root.length + 1).replace(/\\/g, '/'));
+        out.push(`${idx}/${full.slice(root.length + 1).replace(/\\/g, '/')}`);
       }
     }
   };
   walk(root, 0);
   return out.sort();
 }
-/** Resolve a caller-supplied relative path INSIDE the KB root (blocks ../ escape). */
-function kbResolve(root: string, rel: string): string | null {
-  const full = resolve(root, rel);
+function kbListAll(roots: string[]): string[] {
+  return roots.flatMap((root, idx) => kbListOne(root, idx));
+}
+/** Resolve a caller-supplied `<idx>/<rel>` key to an absolute path INSIDE the
+ *  matching root (blocks ../ escape and an out-of-range index). */
+function kbResolveKey(roots: string[], key: string): string | null {
+  const m = /^(\d+)\/(.*)$/.exec(key);
+  if (!m) return null;
+  const root = roots[Number(m[1])];
+  if (!root) return null;
+  const full = resolve(root, m[2]);
   return (full === root || full.startsWith(root + sep)) ? full : null;
 }
 
 ipcMain.handle('kb:list', () => {
-  const root = kbRoot();
-  if (!root) return { ok: false as const, error: kbUnavailableError() };
-  return { ok: true as const, root, files: kbList(root) };
+  const roots = kbFolderRoots();
+  if (!roots.length) return { ok: false as const, error: kbUnavailableError() };
+  return { ok: true as const, roots, files: kbListAll(roots) };
 });
 ipcMain.handle('kb:read', (_evt, rel: unknown) => {
-  const root = kbRoot();
-  if (!root) return { ok: false as const, error: kbUnavailableError() };
+  const roots = kbFolderRoots();
+  if (!roots.length) return { ok: false as const, error: kbUnavailableError() };
   if (typeof rel !== 'string' || !rel.trim()) return { ok: false as const, error: 'invalid path' };
-  const full = kbResolve(root, rel);
+  const full = kbResolveKey(roots, rel);
   if (!full || !existsSync(full) || !statSync(full).isFile()) return { ok: false as const, error: 'not found' };
   if (!KB_EXTS.has(extname(full).toLowerCase())) return { ok: false as const, error: 'unsupported file type' };
   try { return { ok: true as const, path: rel, content: readFileSync(full, 'utf8') }; }
   catch (e) { return { ok: false as const, error: String(e) }; }
 });
 ipcMain.handle('kb:search', (_evt, query: unknown) => {
-  const root = kbRoot();
-  if (!root) return { ok: false as const, error: kbUnavailableError() };
+  const roots = kbFolderRoots();
+  if (!roots.length) return { ok: false as const, error: kbUnavailableError() };
   if (typeof query !== 'string' || !query.trim()) return { ok: false as const, error: 'empty query' };
   const q = query.toLowerCase();
   const hits: Array<{ file: string; line: number; text: string }> = [];
-  for (const rel of kbList(root)) {
-    const full = kbResolve(root, rel);
+  for (const key of kbListAll(roots)) {
+    const full = kbResolveKey(roots, key);
     if (!full) continue;
     let text: string;
     try { text = readFileSync(full, 'utf8'); } catch { continue; }
     const lines = text.split('\n');
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].toLowerCase().includes(q)) {
-        hits.push({ file: rel, line: i + 1, text: lines[i].trim().slice(0, 240) });
+        hits.push({ file: key, line: i + 1, text: lines[i].trim().slice(0, 240) });
         if (hits.length >= 100) return { ok: true as const, hits };
       }
     }

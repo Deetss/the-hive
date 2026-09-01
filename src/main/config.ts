@@ -337,6 +337,40 @@ export interface KnowledgeGraphConfig {
   rootPath?: string;
 }
 
+/** One shared knowledge-base source. `value` is a local folder path for
+ *  `folder`, or an https MCP endpoint URL for `outline-mcp` / `custom-mcp`. */
+export interface KnowledgeBaseSource {
+  type: 'folder' | 'outline-mcp' | 'custom-mcp';
+  value: string;
+}
+
+/** The KB sources to use, newest schema first. Falls back to migrating the
+ *  deprecated single-source fields so a pre-multi-source config.json still
+ *  works. Blank-valued entries are dropped. */
+export function resolveKnowledgeBaseSources(cfg: {
+  knowledgeBaseSources?: KnowledgeBaseSource[];
+  knowledgeBaseSource?: 'folder' | 'outline-mcp' | 'custom-mcp';
+  knowledgeBasePath?: string;
+  knowledgeBaseMcpUrl?: string;
+}): KnowledgeBaseSource[] {
+  const clean = (arr: KnowledgeBaseSource[]): KnowledgeBaseSource[] =>
+    arr.filter((s): s is KnowledgeBaseSource =>
+      !!s && (s.type === 'folder' || s.type === 'outline-mcp' || s.type === 'custom-mcp')
+      && typeof s.value === 'string' && s.value.trim().length > 0)
+      .map((s) => ({ type: s.type, value: s.value.trim() }));
+
+  if (Array.isArray(cfg.knowledgeBaseSources) && cfg.knowledgeBaseSources.length) {
+    return clean(cfg.knowledgeBaseSources);
+  }
+  if ((cfg.knowledgeBaseSource === 'outline-mcp' || cfg.knowledgeBaseSource === 'custom-mcp') && cfg.knowledgeBaseMcpUrl?.trim()) {
+    return [{ type: cfg.knowledgeBaseSource, value: cfg.knowledgeBaseMcpUrl.trim() }];
+  }
+  if (cfg.knowledgeBasePath?.trim()) {
+    return [{ type: 'folder', value: cfg.knowledgeBasePath.trim() }];
+  }
+  return [];
+}
+
 export interface HarnessConfig {
   /** Has the user completed the first-run onboarding? */
   onboardingComplete: boolean;
@@ -353,17 +387,18 @@ export interface HarnessConfig {
   recentHives?: string[];
   /** Folders the user registered during onboarding (used as quick-picks). */
   registeredRepos: string[];
-  /** Optional shared knowledge-base folder (.md/.txt) agents can read/grep and the
-   *  app can browse via the kb:* IPC. Unset = no KB. */
+  /** @deprecated pre-multi-source single KB folder. Still READ (migrated into
+   *  knowledgeBaseSources on the fly) so old config.json keeps working; the UI
+   *  only writes knowledgeBaseSources now. */
   knowledgeBasePath?: string;
-  /** Where the shared knowledge base lives. Unset/'folder' keeps the local-folder
-   *  behavior (knowledgeBasePath). 'outline-mcp' / 'custom-mcp' point agents at an
-   *  MCP endpoint (knowledgeBaseMcpUrl) instead. */
+  /** @deprecated pre-multi-source single KB source type. See knowledgeBaseSources. */
   knowledgeBaseSource?: 'folder' | 'outline-mcp' | 'custom-mcp';
-  /** MCP endpoint URL for the knowledge base when knowledgeBaseSource is an MCP
-   *  type. https only; wired into each Claude agent's per-session mcpServers as an
-   *  `hive-kb` HTTP server and named in every agent's orientation. */
+  /** @deprecated pre-multi-source single KB MCP URL. See knowledgeBaseSources. */
   knowledgeBaseMcpUrl?: string;
+  /** Shared knowledge-base sources agents consult for team knowledge. Each entry
+   *  is a local `.md`/`.txt` folder (grep/Read) or an MCP endpoint (Outline /
+   *  custom, https). Agents fan out across ALL entries. Empty/unset = no KB. */
+  knowledgeBaseSources?: KnowledgeBaseSource[];
   /** Skip the launch-time harness config picker and open the last-used home directly. */
   skipHarnessPickerOnLaunch?: boolean;
   /** When true, new agents are spawned with --permission-mode bypassPermissions. */
@@ -1136,6 +1171,13 @@ function normalizeStoredHomes(cfg: HarnessConfig): HarnessConfig {
   }
   if (typeof cfg.knowledgeBasePath === 'string' && cfg.knowledgeBasePath.trim()) {
     cfg.knowledgeBasePath = expandTilde(cfg.knowledgeBasePath);
+  }
+  if (Array.isArray(cfg.knowledgeBaseSources)) {
+    cfg.knowledgeBaseSources = cfg.knowledgeBaseSources.map((s) =>
+      s && s.type === 'folder' && typeof s.value === 'string' && s.value.trim()
+        ? { ...s, value: expandTilde(s.value) }
+        : s
+    );
   }
   if (Array.isArray(cfg.recentHives)) {
     const seen = new Set<string>();

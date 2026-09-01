@@ -702,8 +702,10 @@ const api = {
   chooseFolder: (): Promise<{ ok: true; path: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('dialog:chooseFolder'),
 
-  // ─── Knowledge base (shared local folder) ────────────────────────────────
-  kbList: (): Promise<{ ok: true; root: string; files: string[] } | { ok: false; error: string }> =>
+  // ─── Knowledge base (shared .md/.txt folders) ────────────────────────────
+  // `files` are `<sourceIndex>/<relpath>` keys spanning every folder source;
+  // pass one back verbatim to kbRead. `roots` is the folder list, same order.
+  kbList: (): Promise<{ ok: true; roots: string[]; files: string[] } | { ok: false; error: string }> =>
     ipcRenderer.invoke('kb:list'),
   kbRead: (rel: string): Promise<{ ok: true; path: string; content: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('kb:read', rel),

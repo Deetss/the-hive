@@ -49,6 +49,10 @@ import { expandTilde } from './fs';
  *  module just for a type. */
 type McpDefaultsMap = { [id: string]: { enabled: boolean } } | undefined;
 
+/** One shared knowledge-base source (mirrors config.ts KnowledgeBaseSource;
+ *  kept local so hive.ts never imports the config module just for a type). */
+type KbSource = { type: 'folder' | 'outline-mcp' | 'custom-mcp'; value: string };
+
 /** A per-session `mcpServers` entry: a stdio server (catalog) or an HTTP-transport
  *  remote server (the shared-KB MCP source). */
 type McpServerSpec =
@@ -715,16 +719,11 @@ export class HiveManager {
        *  instructions were unusable on Windows. Optional: undefined degrades to the
        *  old env-var spelling. */
       kgCliPath?: string;
-      /** Optional shared knowledge-base folder (config.knowledgeBasePath). When set,
-       *  the agent's prompt tells it to read/grep this folder for team knowledge. */
-      knowledgeBasePath?: string;
-      /** Where the shared KB lives (config.knowledgeBaseSource). Unset/'folder' uses
-       *  knowledgeBasePath; an MCP type points the agent at knowledgeBaseMcpUrl. */
-      knowledgeBaseSource?: 'folder' | 'outline-mcp' | 'custom-mcp';
-      /** MCP endpoint URL for the KB when knowledgeBaseSource is an MCP type. Named
-       *  in the agent's orientation and, for Claude agents, wired into the
-       *  per-session mcpServers as an `hive-kb` HTTP server. */
-      knowledgeBaseMcpUrl?: string;
+      /** Shared knowledge-base sources (config, migrated). Each is a local
+       *  `.md`/`.txt` folder or an https MCP endpoint. The agent's orientation
+       *  names ALL of them; for Claude agents every https MCP entry is also wired
+       *  into the per-session mcpServers as `hive-kb-<n>`. */
+      knowledgeBaseSources?: KbSource[];
       theme?: 'light' | 'dark';
       /** Consent state for the default-MCP bundle (W3). Threaded from the live
        *  HarnessConfig by the caller; undefined → catalog defaults apply. */
@@ -856,7 +855,7 @@ export class HiveManager {
     if (!isHiveAwareProvider(meta.provider)) {
       const preset = providerPreset(meta.provider ?? 'claude');
       const flag = preset.initialPromptFlag;
-      const prompt = this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false, opts.knowledgeGraph ?? false, opts.kgCliPath, opts.knowledgeBasePath, opts.knowledgeBaseSource, opts.knowledgeBaseMcpUrl);
+      const prompt = this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false, opts.knowledgeGraph ?? false, opts.kgCliPath, opts.knowledgeBaseSources);
       // agy, codex, and grok expose a Claude-style lifecycle-hook surface, so each
       // gets the SAME live status + Stop→inbox-drain Claude does — selected by the
       // preset's `hookBridge`. agy needs a translating shim (its hook stdin/stdout
@@ -1004,7 +1003,7 @@ export class HiveManager {
     const args: string[] = [];
     if (!claudeProvider) return { args, env };
 
-    args.push('--append-system-prompt', this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false, opts.knowledgeGraph ?? false, opts.kgCliPath, opts.knowledgeBasePath, opts.knowledgeBaseSource, opts.knowledgeBaseMcpUrl));
+    args.push('--append-system-prompt', this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false, opts.knowledgeGraph ?? false, opts.kgCliPath, opts.knowledgeBaseSources));
 
     // Phase 1 — autonomy: attach lifecycle hooks via --settings (no edits to the
     // user's repo) so the agent reports activity and drains its inbox on Stop.
@@ -1021,9 +1020,7 @@ export class HiveManager {
           opts.mcpDefaults,
           opts.theme,
           this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs),
-          (opts.knowledgeBaseSource === 'outline-mcp' || opts.knowledgeBaseSource === 'custom-mcp')
-            ? opts.knowledgeBaseMcpUrl
-            : undefined
+          (opts.knowledgeBaseSources ?? []).filter((s) => s.type !== 'folder').map((s) => s.value)
         )
       );
       args.push('--settings', settingsPath);
@@ -1227,7 +1224,7 @@ export class HiveManager {
     cfg: McpDefaultsMap,
     theme?: 'light' | 'dark',
     writableDirs: string[] = [],
-    kbMcpUrl?: string
+    kbMcpUrls: string[] = []
   ): unknown {
     const hookCommand = this.hookShimCommand(shim);
     const statusCommand = this.hookShimCommand(shim, { withStatus: true });
@@ -1235,7 +1232,7 @@ export class HiveManager {
       ...(matcher ? { matcher } : {}),
       hooks: [{ type: 'command', command: hookCommand }]
     });
-    const mcpServers = this.buildDefaultMcpServers(cwd, cfg, kbMcpUrl);
+    const mcpServers = this.buildDefaultMcpServers(cwd, cfg, kbMcpUrls);
     return {
       // Match the TUI's truecolor palette to the harness terminal theme —
       // PER SESSION, so the user's global Claude theme (their own terminals
@@ -1287,7 +1284,7 @@ export class HiveManager {
   private buildDefaultMcpServers(
     cwd: string,
     cfg: McpDefaultsMap,
-    kbMcpUrl?: string
+    kbMcpUrls: string[] = []
   ): Record<string, McpServerSpec> {
     const out: Record<string, McpServerSpec> = {};
     for (const e of MCP_CATALOG) {
@@ -1307,13 +1304,16 @@ export class HiveManager {
         ...(e.spec.env ? { env: e.spec.env } : {})
       };
     }
-    // Shared-knowledge-base MCP source (config.knowledgeBaseSource = outline-mcp /
-    // custom-mcp). Wired as an HTTP-transport server so the agent has a real tool;
-    // https only. An OAuth-gated endpoint (e.g. Outline) still needs a one-time
-    // `/mcp` auth in the agent session — this makes the server available, not
-    // pre-authenticated.
-    const kb = (kbMcpUrl ?? '').trim();
-    if (/^https:\/\//i.test(kb)) out['hive-kb'] = { type: 'http', url: kb };
+    // Shared-knowledge-base MCP sources (config.knowledgeBaseSources entries of
+    // type outline-mcp / custom-mcp, in order). Each https URL becomes an
+    // HTTP-transport server `hive-kb-<n>` so the agent has a real tool; the
+    // orientation line uses the same numbering. An OAuth-gated endpoint (e.g.
+    // Outline) still needs a one-time `/mcp` auth in the agent session — this
+    // makes the server available, not pre-authenticated.
+    kbMcpUrls.forEach((raw, i) => {
+      const url = (raw ?? '').trim();
+      if (/^https:\/\//i.test(url)) out[`hive-kb-${i + 1}`] = { type: 'http', url };
+    });
     return out;
   }
 
@@ -1517,9 +1517,7 @@ export class HiveManager {
     semanticMemory: boolean,
     knowledgeGraph: boolean,
     kgCliPath?: string,
-    knowledgeBasePath?: string,
-    knowledgeBaseSource?: 'folder' | 'outline-mcp' | 'custom-mcp',
-    knowledgeBaseMcpUrl?: string
+    knowledgeBaseSources?: KbSource[]
   ): string {
     // Native-separator path helpers — see the 🪟 note above.
     const inDir = (...parts: string[]): string => join(dir, ...parts);
@@ -1547,19 +1545,32 @@ export class HiveManager {
     const knowledgeLine = knowledgeGraph
       ? `Knowledge Graph: run \`"${hiveNode}" "${kgCli}" search "<query>"\` for organisation context before guessing.`
       : '';
-    // The shared KB is either a local folder (grep/read) or an MCP endpoint the
-    // agent queries via a tool. 'outline-mcp' names the Outline `search_documents`/
-    // `get_document` verbs; 'custom-mcp' stays generic. An MCP source with no URL,
-    // or a folder source with no path, emits nothing.
-    const mcpKbUrl = (knowledgeBaseMcpUrl ?? '').trim();
-    const knowledgeBaseLine =
-      (knowledgeBaseSource === 'outline-mcp' || knowledgeBaseSource === 'custom-mcp') && mcpKbUrl
-        ? knowledgeBaseSource === 'outline-mcp'
-          ? `Shared knowledge base: the team's Outline workspace at ${mcpKbUrl}, reachable over MCP as the \`hive-kb\` server. Search it (\`search_documents\`, then \`get_document\`) for team knowledge (conventions, decisions, how-tos) BEFORE guessing; read-only reference. If \`hive-kb\` is not connected, tell the Overmind rather than guessing.`
-          : `Shared knowledge base: an MCP server at ${mcpKbUrl}, reachable as the \`hive-kb\` server. Use its search/query tools for team knowledge (conventions, decisions, how-tos) BEFORE guessing; read-only reference. If \`hive-kb\` is not connected, tell the Overmind rather than guessing.`
-        : knowledgeBasePath
-        ? `Shared knowledge base: a folder of .md/.txt notes lives at ${knowledgeBasePath}. Grep/Read it for team knowledge (conventions, decisions, how-tos) BEFORE guessing; treat it as read-only reference, not a place to write.`
-        : '';
+    // The shared KB is any number of sources: local `.md`/`.txt` folders the agent
+    // greps/reads, and/or MCP endpoints it queries via a tool. The agent consults
+    // ALL of them. Outline gets its `search_documents`/`get_document` verbs named;
+    // a custom MCP stays generic. Each https MCP entry is wired (Claude agents)
+    // as `hive-kb-<n>`, numbered by its position among the MCP entries.
+    const kbFolders = (knowledgeBaseSources ?? []).filter((s) => s.type === 'folder').map((s) => s.value);
+    const kbMcps = (knowledgeBaseSources ?? []).filter((s) => s.type === 'outline-mcp' || s.type === 'custom-mcp');
+    const kbParts: string[] = [];
+    if (kbFolders.length) {
+      kbParts.push(
+        kbFolders.length === 1
+          ? `grep/Read the folder ${kbFolders[0]}`
+          : `grep/Read these folders: ${kbFolders.join(', ')}`
+      );
+    }
+    kbMcps.forEach((s, i) => {
+      const server = `hive-kb-${i + 1}`;
+      kbParts.push(
+        s.type === 'outline-mcp'
+          ? `query the Outline workspace at ${s.value} via the \`${server}\` MCP server (\`search_documents\`, then \`get_document\`)`
+          : `query the MCP server at ${s.value} via \`${server}\``
+      );
+    });
+    const knowledgeBaseLine = kbParts.length
+      ? `Shared knowledge base — consult ALL of these for team knowledge (conventions, decisions, how-tos) BEFORE guessing; read-only reference, never a place to write: ${kbParts.join('; ')}. If an \`hive-kb-*\` MCP server is not connected, tell the Overmind rather than guessing.`
+      : '';
     // Item 13: state the build. Agents had no way to tell which version, or even
     // which KIND of build, they were running inside, so anything that varies
     // between a packaged app and a local dev run (umask being the one that bit
