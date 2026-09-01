@@ -274,7 +274,15 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       }}
       onDrop={onDrop}
       style={{
-        flexShrink: 0,
+        // Dispatch mode adds the TO / act / priority / subject rows, which can
+        // push the composer past the terminal pane's height. It sits in a
+        // column flex next to a `flex:1` xterm (basis 0), so the xterm yields
+        // its space first; only if the composer STILL can't fit does it cap at
+        // the pane height and scroll — instead of the old `flexShrink:0` that
+        // let an `overflow:hidden` ancestor clip the extra fields.
+        flexShrink: 1,
+        minHeight: 0,
+        overflowY: 'auto',
         borderTop: '1px solid var(--cth-ink-700)',
         background: 'var(--cth-cream-100)',
         display: 'flex',
