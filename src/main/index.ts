@@ -4364,6 +4364,20 @@ function createWindow(opts: { floor?: boolean } = {}): BrowserWindow {
   // reference stays valid as the per-PTY ownership key.
   const wc = win.webContents;
 
+  // Hot-reload the RENDERER without restarting the app: Ctrl/Cmd+Shift+R reloads
+  // just this window's web contents, so CSS/renderer changes apply while the
+  // main-process PTYs (and every live agent session) keep running. Registered
+  // here so it works regardless of the app menu (that menu, with its Force Reload
+  // role, only installs when multiWindow is on).
+  wc.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const mod = process.platform === 'darwin' ? input.meta : input.control;
+    if (mod && input.shift && input.key.toLowerCase() === 'r') {
+      event.preventDefault();
+      wc.reload();
+    }
+  });
+
   allWindows.add(win);
   // Global timer events follow the user — the most-recently-focused window is
   // primary. The primary is also seeded synchronously so boot events route now.
