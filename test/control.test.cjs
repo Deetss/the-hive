@@ -55,3 +55,18 @@ test('whitespace-only steers are ignored and never fill the queue', () => {
   assert.equal(control.snapshot('dev9').pendingSteers, 1);
   assert.equal(control.takeSteer('dev9'), 'real guidance');
 });
+
+test('closing time exempts a governor pause but not an explicit tool gate', () => {
+  const control = new ControlRegistry();
+  control.pause('dev1', true);            // governor RED pace pause
+  control.gateTool('dev1', 'Bash', true); // explicit operator gate
+
+  assert.equal(control.toolDecision('dev1', 'Write').deny, true, 'paused: denied normally');
+
+  control.setClosingTime(true);
+  assert.equal(control.toolDecision('dev1', 'Write').deny, false, 'closing time: governor pause is ignored');
+  assert.equal(control.toolDecision('dev1', 'Bash').deny, true, 'closing time: an explicit tool gate still denies');
+
+  control.setClosingTime(false);
+  assert.equal(control.toolDecision('dev1', 'Write').deny, true, 'pause authority restored after closing time');
+});

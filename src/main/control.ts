@@ -43,6 +43,14 @@ interface AgentControl {
 export class ControlRegistry {
   private readonly map = new Map<string, AgentControl>();
 
+  /** While closing time is running, the usage governor's pause (RED pace) must
+   *  NOT block tool calls: a governor-paused worker still has to commit/park its
+   *  WIP and write memory.md to ACK the shutdown. Set by ClosingTimeController
+   *  for the duration of the protocol. Only the governor's `pause` is exempted —
+   *  an explicit operator `gateTool` still denies. */
+  private closingTime = false;
+  setClosingTime(on: boolean): void { this.closingTime = on; }
+
   private ensure(id: string): AgentControl {
     let c = this.map.get(id);
     if (!c) {
@@ -103,11 +111,15 @@ export class ControlRegistry {
     return this.map.get(id)?.autoDeliveryPaused ?? false;
   }
 
-  /** Whether a tool call should be denied (paused agent, or this tool gated). */
+  /** Whether a tool call should be denied (paused agent, or this tool gated).
+   *  A governor pause is ignored while closing time is running so workers can
+   *  save their state and ACK; an explicit tool gate still denies. */
   toolDecision(id: string, tool: string): { deny: boolean; reason?: string } {
     const c = this.map.get(id);
     if (!c) return { deny: false };
-    if (c.paused) return { deny: true, reason: 'Paused by operator — resume from the floor to continue.' };
+    if (c.paused && !this.closingTime) {
+      return { deny: true, reason: 'Paused by operator — resume from the floor to continue.' };
+    }
     if (tool && c.gatedTools.has(tool)) return { deny: true, reason: `Tool ${tool} is gated by the operator.` };
     return { deny: false };
   }

@@ -83,6 +83,7 @@ export class ClosingTimeController {
   start(): { ok: boolean; error?: string } {
     if (this.active) {
       // Re-pressed while running (e.g. from the timeout view): keep waiting.
+      this.control?.setClosingTime(true);
       this.armTimeout();
       this.emitState('progress');
       return { ok: true };
@@ -141,6 +142,12 @@ export class ClosingTimeController {
       this.control?.steer(id,
         'CLOSING TIME — the office is shutting down. Finish your current step but do NOT start new work. Park or commit your work-in-progress safely, append your current state + concrete next steps to your memory.md, then reply to Abathur with a message whose subject is exactly "CLOSING-TIME-ACK".');
     }
+
+    // The usage governor pauses Claude workers when it trips RED — a paused
+    // worker's PreToolUse hook denies every call, so it could never commit its
+    // WIP or ACK. Exempt tool calls from the governor pause for the duration of
+    // the shutdown (cleared in cleanup()). Explicit operator tool-gates still apply.
+    this.control?.setClosingTime(true);
 
     this.armTimeout();
     this.emitState('started');
@@ -228,6 +235,9 @@ export class ClosingTimeController {
     if (this.timeoutTimer) { clearTimeout(this.timeoutTimer); this.timeoutTimer = null; }
     if (this.teardownTimer) { clearTimeout(this.teardownTimer); this.teardownTimer = null; }
     this.active = false;
+    // Restore the governor's normal authority — closing time is over (cancelled
+    // or concluded). If the app is quitting anyway this is harmless.
+    this.control?.setClosingTime(false);
   }
 
   private emitState(phase: ClosingTimePhase): void {
