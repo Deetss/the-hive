@@ -1606,7 +1606,9 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                   <div key={profile.id} style={{
                                     padding: 10, marginBottom: 8,
                                     background: 'var(--cth-paper-100)',
-                                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)',
+                                    // --cth-ink-200 is not a defined token, so the hairline
+                                    // never rendered and adjacent profile cards bled together.
+                                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
                                     display: 'flex', flexDirection: 'column', gap: 8
                                   }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
