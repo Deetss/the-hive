@@ -19,6 +19,7 @@ All notable changes to this project are documented here. The format is based on
 - `Ctrl`/`Cmd`+`Shift`+`R` now hot-reloads the renderer (UI) without restarting the app, so CSS/renderer changes apply while main-process agent PTY sessions keep running
 - Mobile PWA agent cards now carry a compact status strip (tokens, session cost, real context %, engine/model) mirroring the desktop StatusBar; `fleet.json` gained per-agent `provider` and `model`, and the context gauge is driven by the real `ctxPct` instead of a placeholder
 - PROTOCOL.md and agent orientation now require UAT / verification questions to state WHERE to look, WHAT to do, and WHAT to expect (pass criteria + fail signal), one check per question, so ASK ME items are actionable without a follow-up
+- Add `npm run test:smoke` — a framework-free renderer smoke suite (`node --test` + esbuild + `react-dom/server`, no jsdom/Playwright) that bundle-checks key panels (PixelBadge, PixelButton, TasksKanban, SettingsModal, CommandCenterPanel) and server-renders the light ones, so a worker can self-check a renderer change before calling it done
 - Wire Bee-casso animated worker bee entity sprites into the Hive office floor desks
 - Implement 3-tier priority (urgent/normal/backlog) across hive router delivery, PROTOCOL.md schema, mobile and desktop dispatch UI, mobile and desktop Ask Me lists, and God inbox scan order
 
