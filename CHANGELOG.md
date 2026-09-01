@@ -22,6 +22,7 @@ All notable changes to this project are documented here. The format is based on
 - PROTOCOL.md and agent orientation now require UAT / verification questions to state WHERE to look, WHAT to do, and WHAT to expect (pass criteria + fail signal), one check per question, so ASK ME items are actionable without a follow-up
 - Add `npm run test:smoke` — a framework-free renderer smoke suite (`node --test` + esbuild + `react-dom/server`, no jsdom/Playwright) that bundle-checks key panels (PixelBadge, PixelButton, TasksKanban, SettingsModal, CommandCenterPanel) and server-renders the light ones, so a worker can self-check a renderer change before calling it done
 - Wire Bee-casso animated worker bee entity sprites into the Hive office floor desks
+- Wire Bee-casso's hand-authored Abathur sprites into the Zerg cast: `abathur.png` (32×32 still) is the card portrait and `abathur-anim.png` (32×192, 6-frame vertical strip) is the continuous slither loop; `loadSlitherFrames` now auto-detects a vertical vs horizontal strip
 - Implement 3-tier priority (urgent/normal/backlog) across hive router delivery, PROTOCOL.md schema, mobile and desktop dispatch UI, mobile and desktop Ask Me lists, and God inbox scan order
 
 ### Changed

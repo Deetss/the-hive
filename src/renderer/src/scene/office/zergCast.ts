@@ -5,23 +5,31 @@
 // god/orchestrator seat and is the default character. See ZERG-RESKIN.md.
 
 import { Texture } from 'pixi.js';
-import { SCENE_W, SCENE_H } from './portraitArt';
+import { SCENE_W, SCENE_H, PORTRAIT_W, PORTRAIT_H } from './portraitArt';
 import {
   paintZergPortrait,
   zergSceneFrameBufs,
   type ZergRecipe,
 } from './zergPortraitArt';
 
-// Authored sprite assets (FLUX-generated from the official refs, background keyed
-// out, downscaled). A unit with an asset uses it instead of the procedural
+// Authored sprite assets. A unit with an asset uses it instead of the procedural
 // drawing; the rest fall back to procedural until their asset lands.
-import abathurUrl from '@/assets/zerg/abathur-slither.png?url';
+//   ASSET_URLS   — the static 32×32 still (scene idle frame + card portrait).
+//   SLITHER_URLS — the animation strip for serpentine units (see SLITHER below).
+// Abathur ships hand-authored in the cast style: abathur.png (32×32) plus
+// abathur-anim.png, a 32×192 vertical strip of 6 idle-loop frames.
+import abathurUrl from '@/assets/hive/abathur.png?url';
+import abathurAnimUrl from '@/assets/hive/abathur-anim.png?url';
 const ASSET_URLS: Partial<Record<ZergCharacterName, string>> = {
   abathur: abathurUrl,
 };
 
-// Serpentine units animate as a continuous loop sliced from an authored
-// horizontal sprite sheet (N frames), instead of the walk cycle.
+// Serpentine units animate as a continuous loop sliced from an authored sprite
+// strip (loadSlitherFrames auto-detects a horizontal vs vertical strip), instead
+// of the walk cycle.
+const SLITHER_URLS: Partial<Record<ZergCharacterName, string>> = {
+  abathur: abathurAnimUrl,
+};
 const SLITHER: ReadonlySet<ZergCharacterName> = new Set<ZergCharacterName>(['abathur']);
 export function zergIsSlither(name: string): boolean {
   return SLITHER.has(name as ZergCharacterName);
@@ -148,22 +156,29 @@ async function loadAssetFrames(url: string): Promise<Texture[][]> {
   return [row, row, row]; // the front pose serves every direction
 }
 
-/** A continuous slither sliced from a horizontal sprite sheet of `frameCount`
- *  equal-width frames (each frameW × H). The frames are the authored animation,
- *  so the loop plays them in order. */
-async function loadSlitherFrames(url: string, frameCount = 8): Promise<Texture[][]> {
+/** A continuous slither sliced from an authored sprite strip of equal-size
+ *  square-ish frames. Orientation is auto-detected: a strip taller than it is
+ *  wide is read as a VERTICAL stack (abathur-anim.png — 32×192, 6 frames), a
+ *  wider one as a HORIZONTAL row. `frameCount` overrides the guess. The loop
+ *  plays the frames in authored order. */
+async function loadSlitherFrames(url: string, frameCount?: number): Promise<Texture[][]> {
   const img = new Image();
   img.src = url;
   await img.decode();
-  const H = img.height;
-  const frameW = Math.floor(img.width / frameCount);
+  const vertical = img.height > img.width;
+  const frameLong = vertical ? img.width : img.height; // frame size along the short axis
+  const n = frameCount ?? Math.max(1, Math.round((vertical ? img.height : img.width) / frameLong));
+  const fw = vertical ? img.width : Math.floor(img.width / n);
+  const fh = vertical ? Math.floor(img.height / n) : img.height;
   const seq: Texture[] = [];
-  for (let f = 0; f < frameCount; f++) {
+  for (let f = 0; f < n; f++) {
     const c = document.createElement('canvas');
-    c.width = frameW; c.height = H;
+    c.width = fw; c.height = fh;
     const ctx = c.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, f * frameW, 0, frameW, H, 0, 0, frameW, H);
+    const sx = vertical ? 0 : f * fw;
+    const sy = vertical ? f * fh : 0;
+    ctx.drawImage(img, sx, sy, fw, fh, 0, 0, fw, fh);
     const tex = Texture.from(c);
     tex.source.scaleMode = 'nearest';
     seq.push(tex);
@@ -174,12 +189,13 @@ async function loadSlitherFrames(url: string, frameCount = 8): Promise<Texture[]
 export async function getZergCastFrames(name: ZergCharacterName): Promise<Texture[][]> {
   const cached = frameCache.get(name);
   if (cached) return cached;
-  const assetUrl = ASSET_URLS[name];
-  if (assetUrl && SLITHER.has(name)) {
-    const frames = await loadSlitherFrames(assetUrl);
+  const slitherUrl = SLITHER_URLS[name];
+  if (slitherUrl && SLITHER.has(name)) {
+    const frames = await loadSlitherFrames(slitherUrl);
     frameCache.set(name, frames);
     return frames;
   }
+  const assetUrl = ASSET_URLS[name];
   if (assetUrl) {
     const frames = await loadAssetFrames(assetUrl);
     frameCache.set(name, frames);
@@ -197,11 +213,27 @@ export async function getZergCastFrames(name: ZergCharacterName): Promise<Textur
   return frames;
 }
 
-/** Paint a brood's static portrait for cards / the picker. */
+/** Paint a brood's static portrait for cards / the picker. A unit with an
+ *  authored still (Abathur) draws that PNG, scaled to fill the portrait box by
+ *  height and centered (nearest-neighbour, so the pixel art stays crisp); the
+ *  rest paint procedurally from their recipe. */
 export async function paintZergCastPortrait(
   ctx: CanvasRenderingContext2D,
   name: ZergCharacterName,
   scale = 2,
 ): Promise<void> {
+  const assetUrl = ASSET_URLS[name];
+  if (assetUrl) {
+    const img = new Image();
+    img.src = assetUrl;
+    await img.decode();
+    ctx.imageSmoothingEnabled = false;
+    const boxW = PORTRAIT_W * scale, boxH = PORTRAIT_H * scale;
+    ctx.clearRect(0, 0, boxW, boxH);
+    const size = boxH; // square sprite, fill the box height
+    const dx = Math.round((boxW - size) / 2); // center (negative → sides crop)
+    ctx.drawImage(img, dx, 0, size, size);
+    return;
+  }
   paintZergPortrait(ctx, name, RECIPES[name] ?? RECIPES.abathur, scale);
 }
