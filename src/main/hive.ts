@@ -2883,6 +2883,14 @@ with an \`idle Xh\` badge on the fleet card. Send it a wrap-up (\`act:"inform"\`
 memory.md and stop) or, if it holds no in-flight work, archive it. Spawn fresh when the next task
 needs it rather than keeping bodies idle on the floor.
 
+### Agent status values
+Each agent's \`status\` in \`fleet.json\` is one of: \`idle\`, \`working\`, \`blocked\` (waiting on a human),
+\`gone\` (PTY closed), or \`compacting\`. \`compacting\` is transient and set automatically from the
+\`PreCompact\` lifecycle hook while an agent runs \`/compact\` (cleared on \`PostCompact\`, on the next
+\`SessionStart\`, or after a 5-minute ceiling) so a mid-compaction agent reads as busy rather than
+frozen. It lives only in the live \`fleet.json\` snapshot: it is never written to \`registry.json\`, and
+agents do not set it by hand.
+
 ## Spawning a worker (orchestrator)
 You can start an ephemeral worker yourself. Write ONE JSON file into \`spawn-requests/<id>.json\` in
 the hive root:

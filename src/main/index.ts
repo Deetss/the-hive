@@ -1880,6 +1880,19 @@ const lastAgentPtyActivityMs = new Map<string, number>();
 const lastAgentTool = new Map<string, string>();
 /** Derived working/idle status per agent. */
 const lastAgentStatus = new Map<string, 'working' | 'idle'>();
+/** Epoch-ms ceiling until which an agent counts as `compacting` (PreCompact hook
+ *  set it; PostCompact / SessionStart / Stop clear it). The ceiling is a safety
+ *  net so a compaction that never reports its end can't wedge the badge forever. */
+const agentCompactingUntil = new Map<string, number>();
+/** Longest a `compacting` badge may persist without a PostCompact — a /compact
+ *  that finishes cleanly clears it immediately; this only bounds the stuck case. */
+const COMPACTING_STATUS_MAX_MS = 5 * 60_000;
+function isAgentCompacting(agentId: string): boolean {
+  const until = agentCompactingUntil.get(agentId) ?? 0;
+  if (until === 0) return false;
+  if (Date.now() >= until) { agentCompactingUntil.delete(agentId); return false; }
+  return true;
+}
 /** Debounce timers to transition agent to idle after 3s of silence. */
 const agentIdleTimers = new Map<string, NodeJS.Timeout>();
 /** Token counts parsed from PTY stdout for non-Claude agents. */
@@ -2241,7 +2254,21 @@ const hookServer = new HookServer(
   control,
   breaker,
   standingGoalFromRoster,
-  (agentId, event, message) => workerWake.noteHook(agentId, event, message)
+  (agentId, event, message) => {
+    workerWake.noteHook(agentId, event, message);
+    // #5C — reflect mid-`/compact` in fleet.json so god's roster and the mobile
+    // API read 'compacting' instead of a frozen-looking 'working'/'idle'. The
+    // renderer floor already flips its badge off the live hookEvent stream; this
+    // is the snapshot half. PreCompact opens the window; PostCompact — or any
+    // fresh session, which makes an in-flight compaction moot — closes it.
+    if (!agentId) return;
+    if (event === 'PreCompact') {
+      agentCompactingUntil.set(agentId, Date.now() + COMPACTING_STATUS_MAX_MS);
+      writeFleetSnapshot();
+    } else if (event === 'PostCompact' || event === 'SessionStart' || event === 'Stop') {
+      if (agentCompactingUntil.delete(agentId)) writeFleetSnapshot();
+    }
+  }
 );
 const memory = new MemoryManager(
   () => resolveHarnessHome(),
@@ -3260,7 +3287,9 @@ function writeFleetSnapshot(): void {
         const lastPty = Math.max(ptyLastOutput ?? 0, lastAgentPtyActivityMs.get(id) ?? 0);
         const lastActiveMs = Math.max(u?.ts ?? 0, lastPty);
         const isWorking = lastActiveMs > 0 && (now - lastActiveMs) <= 3000;
-        const agentStatus = isWorking ? 'working' : (lastAgentStatus.get(id) ?? (a.status || 'idle'));
+        const agentStatus = isAgentCompacting(id)
+          ? 'compacting'
+          : isWorking ? 'working' : (lastAgentStatus.get(id) ?? (a.status || 'idle'));
         const agentLastTool = lastAgentTool.get(id) ?? (spans.length ? spans[spans.length - 1].tool : null);
         const ptyCtx = lastAgentPtyCtx.get(id);
         const quotaLimited = lastAgentQuotaLimited.get(id) ?? false;
@@ -6564,7 +6593,9 @@ ipcMain.handle('hive:agentDirectory', () => {
     const lastPty = Math.max(ptyLastOutput ?? 0, lastAgentPtyActivityMs.get(id) ?? 0);
     const lastActiveMs = Math.max(u?.ts ?? 0, lastPty);
     const isWorking = lastActiveMs > 0 && (now - lastActiveMs) <= 3000;
-    const agentStatus = isWorking ? 'working' : (lastAgentStatus.get(id) ?? (a.status || 'idle'));
+    const agentStatus = isAgentCompacting(id)
+      ? 'compacting'
+      : isWorking ? 'working' : (lastAgentStatus.get(id) ?? (a.status || 'idle'));
     const agentLastTool = lastAgentTool.get(id) ?? (spans.length ? spans[spans.length - 1].tool : null);
     return {
       id,
