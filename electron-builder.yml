@@ -170,3 +170,12 @@ linux:
     - target: AppImage
       arch: [x64]
   artifactName: The-Hive-${version}-linux-${arch}.${ext}
+
+deb:
+  priority: optional
+  packageCategory: utils
+  artifactName: The-Hive-${version}-linux-${arch}.deb
+
+appImage:
+  artifactName: The-Hive-${version}-linux-${arch}.AppImage
+

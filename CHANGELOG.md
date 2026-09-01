@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Add Linux .deb build target
+
 ### Changed
 
 - Default office theme is now **The Hive**, and TV-show themes ship enabled so new installs open straight into BeeYoncé's honeycomb floor.
