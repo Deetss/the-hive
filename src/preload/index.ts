@@ -27,6 +27,18 @@ export type {
  *  write-only secret contract (spec §2): a secret value is NEVER returned over IPC. */
 export type IntegrationRecordView = Omit<IntegrationRecord, 'secretRef'> & { hasSecret: boolean };
 
+/** A The Hive instance discovered on the local network (see main/hiveDiscovery). */
+export interface DiscoveredHive {
+  hiveId: string;
+  name: string;
+  home: string;
+  apiPort: number;
+  agentCount: number;
+  version: string;
+  address: string;
+  lastSeen: number;
+}
+
 // Injected at build time from package.json (see electron.vite.config.ts).
 declare const __APP_VERSION__: string;
 
@@ -1667,6 +1679,17 @@ const api = {
   /** Open the project's releases page for a notify-only update. */
   updateOpenRelease: (url?: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('update:openRelease', url),
+
+  // ─── Nearby hives (LAN discovery) ────────────────────────────────────────
+  /** Other The Hive instances heard on the local network. Presence only. */
+  discoveryPeers: (): Promise<DiscoveredHive[]> => ipcRenderer.invoke('hive:discovery:list'),
+  /** Live updates to the nearby-hives table. Returns an unsubscribe fn. */
+  onDiscoveryPeers: (cb: (peers: DiscoveredHive[]) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: DiscoveredHive[]) => cb(payload);
+    ipcRenderer.on('hive:discovery:peers', listener);
+    return () => ipcRenderer.removeListener('hive:discovery:peers', listener);
+  },
+
   /** Which OS this window runs on, for platform-specific copy. */
   platform: process.platform as string,
   arch: process.arch as string,

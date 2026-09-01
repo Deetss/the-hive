@@ -96,6 +96,7 @@ import { inboxNudgeText } from '../shared/hiveNudge';
 import { fetchHireManifest, readHireManifestFiles } from './hire';
 import { parseHireDeepLink, type HireManifest } from '../shared/hire';
 import { ClosingTimeController } from './closingTime';
+import { HiveDiscovery, type HivePresence } from './hiveDiscovery';
 import {
   argsWithAutoModeFlag,
   inferAgentProvider,
@@ -6755,6 +6756,7 @@ function teardownAndQuit(): void {
   try { reflector.stop(); } catch (e) { console.error('[quit] reflector.stop:', e); }
   try { persist.close(); } catch (e) { console.error('[quit] persist.close:', e); }
   try { hive.stopAllProxyBridges(); } catch (e) { console.error('[quit] stopAllProxyBridges:', e); }
+  try { hiveDiscovery.stop(); } catch (e) { console.error('[quit] hiveDiscovery.stop:', e); }
   try { if (browserServer) browserServer.close(); } catch (e) { console.error('[quit] browserServer.close:', e); }
   try { ptyManager.killAll(); } catch (e) { console.error('[quit] killAll:', e); }
   // Release the cross-device advisory lock, then (best-effort) push the released
@@ -6827,6 +6829,33 @@ hive.setRoutedObserver((msg, targets) => {
 });
 ipcMain.handle('app:startClosingTime', () => closingTime.start());
 ipcMain.handle('app:cancelClosingTime', () => closingTime.cancel());
+
+// ─── Nearby-hive discovery (LAN multicast presence) ─────────────────────────
+// Every running instance beacons { hiveId, host, apiPort, agentCount, version }
+// so co-located hives can list each other. Presence only — no agent transfer.
+// hiveId is derived from the hive-home path: two hives on one machine MUST have
+// distinct HARNESS_HOME (else they corrupt each other anyway), so the path is a
+// stable per-install key that also stays distinct for co-located instances.
+const hiveDiscoverySelf = (): HivePresence => {
+  const home = hive.root() ?? '';
+  const agentCount = (() => {
+    try { return Object.values(hive.registry().agents).filter((a) => !a.archived).length; }
+    catch { return 0; }
+  })();
+  return {
+    hiveId: createHash('sha1').update(`${hostname()}:${home}`).digest('hex').slice(0, 16),
+    name: hostname(),
+    home,
+    apiPort: BROWSER_SERVER_PORT,
+    agentCount,
+    version: app.getVersion()
+  };
+};
+const hiveDiscovery = new HiveDiscovery(hiveDiscoverySelf);
+hiveDiscovery.onChange((peers) => {
+  try { liveWebContents()?.send('hive:discovery:peers', peers); } catch { /* window gone */ }
+});
+ipcMain.handle('hive:discovery:list', () => hiveDiscovery.list());
 
 // ─── IPC: full reset (wipe data + config, relaunch into onboarding) ──────────
 ipcMain.handle('app:resetAll', () => {
@@ -9117,6 +9146,7 @@ function armAlwaysOnBeats(): void {
   lockHeartbeatTimer = setInterval(() => {
     try { const r = hive.root(); if (r) syncLock.heartbeat(r, app.getVersion()); } catch (e) { console.error('[sync-lock beat]', e); }
   }, 60_000);
+  try { hiveDiscovery.start(); } catch (e) { console.error('[hive-discovery] start', e); }
 }
 
 /** Wall-clock instant we last observed the machine suspend or lock, so a resume

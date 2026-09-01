@@ -20,6 +20,7 @@ import { OfficeThemePicker } from './OfficeThemePicker';
 import { McpDefaultsSettings } from './McpDefaultsSettings';
 import { IntegrationsRegistry } from './IntegrationsRegistry';
 import { LocalDelegateSettings } from './LocalDelegateSettings';
+import { NearbyHivesPanel } from './NearbyHivesPanel';
 import { AiEnginesSettings } from './AiEnginesSettings';
 import { REALTIME_MODEL } from '@shared/realtimePricing';
 import { RealtimeDevicePicker } from '@/realtime/DevicePicker';
@@ -1850,6 +1851,8 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                       <McpDefaultsSettings config={config} />
                       <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
                       <LocalDelegateSettings />
+                      <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
+                      <NearbyHivesPanel />
                       <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
                     </>
                   )}
