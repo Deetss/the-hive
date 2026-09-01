@@ -46,13 +46,16 @@ function groupThreads(msgs: HiveMessage[]): Thread[] {
     });
 }
 
+import { getAgentDisplayName } from '@/lib/agentNames';
+
 export function ThreadsPanel({ agentId }: ThreadsPanelProps) {
   const [messages, setMessages] = useState<HiveMessage[]>([]);
   const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const agents = useStore((s) => s.agents);
-  const nameFor = (id: string) => agents.find((a) => a.id === id)?.name ?? id;
+  const restorableAgents = useStore((s) => s.restorableAgents);
+  const nameFor = (id: string) => getAgentDisplayName(id, agents, restorableAgents);
 
   useEffect(() => {
     let alive = true;

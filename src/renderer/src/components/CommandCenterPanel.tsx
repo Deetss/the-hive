@@ -23,6 +23,7 @@ import { Icon } from './Icon';
 import QRCode from '@/lib/qrcodejs';
 import { MemoryGraphPanel } from './MemoryGraphPanel';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
+import { getAgentDisplayName } from '@/lib/agentNames';
 import { COMMAND_GROUPS } from '@shared/claudeCommands';
 import { roleForHiveSpawn } from '@shared/agentRole';
 import { useStore, triggerHistoryVisible, type Agent } from '@/store/store';
@@ -1820,12 +1821,13 @@ interface LogEntry { ts?: number; kind?: string; [k: string]: unknown }
 function ActivityTab() {
   const feed = useStore((s) => s.activityFeed);
   const agents = useStore((s) => s.agents);
+  const restorableAgents = useStore((s) => s.restorableAgents);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showRaw, setShowRaw] = useState(false);
   const [log, setLog] = useState<LogEntry[]>([]);
   const clearActivityUnread = useStore((s) => s.clearActivityUnread);
 
-  const nameFor = (id: string) => agents.find((a) => a.id === id)?.name ?? id;
+  const nameFor = (id: string) => getAgentDisplayName(id, agents, restorableAgents);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Clear unread badge when this tab mounts.

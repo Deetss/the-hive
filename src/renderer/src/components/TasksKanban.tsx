@@ -7,6 +7,7 @@ import { UatPanel } from './UatPanel';
 import { useStore } from '@/store/store';
 import { HumanQA, HiveTask } from '@/types/tasks';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { getAgentDisplayName } from '@/lib/agentNames';
 
 /** The card's currently open question for the human, if any. An entry the human
  *  dismissed (dismissedAt) counts as resolved, same as an answered one.
@@ -306,12 +307,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
   /** Resolve an assignee id to a display name — falls back to the restorable
    *  roster so a done card keeps its author's name even after that worker's
    *  terminal is gone, then to the raw id. */
-  const nameFor = (id?: string): string | undefined =>
-    id
-      ? (agents.find((a) => a.id === id)?.name
-        ?? restorableAgents.find((a) => a.id === id)?.name
-        ?? id)
-      : undefined;
+  const nameFor = (id?: string): string | undefined => (id ? getAgentDisplayName(id, agents, restorableAgents) : undefined);
 
   const baseToggleStyle = {
     fontFamily: 'var(--cth-font-ui)',

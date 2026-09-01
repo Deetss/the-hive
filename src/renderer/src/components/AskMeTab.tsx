@@ -25,11 +25,14 @@ function formatAgo(iso: string | null | undefined, now: number): string {
  * 1. Direct agent pings (act: query/request/inform with needs_human=true)
  * 2. Open humanQA acceptance tests from tasks.json (UAT checklist)
  */
+import { getAgentDisplayName } from '@/lib/agentNames';
+
 export function AskMeTab() {
   const messages = useStore((s) => s.humanMessages);
   const resolveHumanMessage = useStore((s) => s.resolveHumanMessage);
   const updateHumanMessageDraft = useStore((s) => s.updateHumanMessageDraft);
   const agents = useStore((s) => s.agents);
+  const restorableAgents = useStore((s) => s.restorableAgents);
 
   const openQA = useStore((s) => s.openHumanQAItems);
   const setOpenHumanQA = useStore((s) => s.setOpenHumanQA);
@@ -40,10 +43,7 @@ export function AskMeTab() {
   const [sendingMsg, setSendingMsg] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
-  const nameFor = (id: string | null | undefined) => {
-    if (!id) return 'unassigned';
-    return agents.find((a) => a.id === id)?.name ?? id;
-  };
+  const nameFor = (id: string | null | undefined) => getAgentDisplayName(id, agents, restorableAgents);
 
   const loadQA = useCallback(async () => {
     try {
@@ -163,15 +163,22 @@ export function AskMeTab() {
               }}>
                 <span style={{
                   fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 600,
-                  color: 'var(--cth-ink-900)', background: 'var(--cth-lemon)', padding: '1px 4px'
+                  color: 'var(--cth-ink-900)', background: 'var(--cth-lemon)', padding: '1px 4px', flexShrink: 0
                 }}>
                   {msg.act === 'prompt' ? 'PROMPT' : msg.act === 'request' ? 'REQUEST' : 'MESSAGE'}
+                </span>
+                <span style={{
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 600,
+                  color: 'var(--cth-ink-900)', background: 'var(--cth-cream-200)', padding: '1px 5px',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0
+                }}>
+                  {nameFor(msg.from)}
                 </span>
                 <span style={{
                   flex: 1, fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 600,
                   color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                 }}>
-                  {msg.subject || `from ${nameFor(msg.from)}`}
+                  {msg.subject || 'Direct message'}
                 </span>
                 <span style={{ fontSize: 12, color: 'var(--cth-ink-700)', flexShrink: 0 }}>
                   {new Date(msg.arrivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

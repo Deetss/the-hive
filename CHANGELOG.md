@@ -25,6 +25,7 @@ All notable changes to this project are documented here. The format is based on
 - Fix Overmind (Queen) respawn button flow to directly launch fresh session via `spawnAgentCore`
 - Fix macOS release workflow failure by disabling auto-discovered code signing when cert secrets are absent
 - Fix procedural honeycomb office floor hex geometry and alignment to eliminate visible seams between tiles
+- Fix raw agent IDs like "god" displaying across For You, Activity, and Tasks UI by resolving to registry display names
 
 ## [0.4.5] — 2026-08-22
 

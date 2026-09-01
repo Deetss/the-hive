@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@/store/store';
 import { TaskDetail, parseTasks } from './TasksKanban';
 import type { HiveTask } from '@/types/tasks';
+import { getAgentDisplayName } from '@/lib/agentNames';
 
 /**
  * App-wide host for the task detail: whoever calls store.openTaskDetail(id) —
@@ -23,23 +24,30 @@ export function TaskDetailOverlay() {
   const refresh = useCallback(async () => {
     // parseTasks NORMALIZES (the ledger is a hand-written file; cards may lack
     // dependsOn/priority/etc.) — a raw card without dependsOn crashed the
-    // detail once. Never feed TaskDetail unparsed ledger entries.
-    try { setTasks(parseTasks(await window.cth.hiveTasks())); } catch { /* keep last good */ }
+    // detail card's dependency picker on open).
+    try {
+      const raw = await window.cth.hiveTasks();
+      setTasks(parseTasks(raw));
+    } catch { /* keep last good state */ }
   }, []);
 
   useEffect(() => {
-    if (!taskDetailId) return;
-    void refresh();
-    timer.current = setInterval(() => { void refresh(); }, POLL_MS);
-    return () => { if (timer.current) clearInterval(timer.current); };
+    if (!taskDetailId) {
+      if (timer.current) { clearInterval(timer.current); timer.current = null; }
+      return;
+    }
+    refresh();
+    timer.current = setInterval(refresh, POLL_MS);
+    return () => {
+      if (timer.current) { clearInterval(timer.current); timer.current = null; }
+    };
   }, [taskDetailId, refresh]);
 
   if (!taskDetailId) return null;
   const task = tasks.find((t) => t.id === taskDetailId);
   if (!task) return null;
 
-  const nameFor = (id?: string): string | undefined =>
-    id ? (agents.find((a) => a.id === id)?.name ?? restorable.find((a) => a.id === id)?.name ?? id) : undefined;
+  const nameFor = (id?: string): string | undefined => (id ? getAgentDisplayName(id, agents, restorable) : undefined);
 
   // Moving a card writes ONE field. Operate on the RAW ledger (the same pattern
   // as TasksKanban.dismissTask), never on the display-parsed state: parseTasks
