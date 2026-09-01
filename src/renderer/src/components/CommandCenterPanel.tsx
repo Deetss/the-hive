@@ -372,14 +372,14 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
             Short labels — the tooltips carry the full explanation. */}
         <div style={{
           display: 'flex',
-          gap: 5,
+          columnGap: 5,
+          rowGap: mobile ? 4 : 5,
           alignItems: 'center',
           flexShrink: 0,
           flexWrap: mobile ? 'wrap' : 'nowrap',
           justifyContent: mobile ? 'flex-start' : 'flex-end',
           width: mobile ? '100%' : 'auto',
-          order: mobile ? 2 : 0,
-          rowGap: mobile ? 4 : undefined
+          order: mobile ? 2 : 0
         }}>
           <PixelButton
             variant={floorDeliveryPaused ? 'primary' : 'secondary'}
