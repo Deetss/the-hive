@@ -35,9 +35,9 @@ if command -v pgrep >/dev/null 2>&1 && pgrep --help 2>&1 | grep -q '\-f'; then
 else
   # Windows / Git Bash: use PowerShell Get-CimInstance to filter by BOTH exe name
   # AND CommandLine containing this repo's root path. This matches the scoping
-  # guarantee of pkill -f — it will NOT kill the packaged app ('Munder Difflin',
-  # a different image name), a packaged 'The Hive.exe' that launched from a
-  # different path, or any unrelated Electron app.
+  # guarantee of pkill -f — it will NOT kill the packaged app ('The Hive',
+  # which runs a binary named 'the-hive' with no npm / electron-vite in the path),
+  # a packaged app launched from a different path, or any unrelated Electron app.
   # Escape any single-quotes in the path (e.g. username O'Brien) before
   # interpolating into the PowerShell single-quoted string literal.
   ps_root="${win_root//\'/\'\'}"

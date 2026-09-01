@@ -158,8 +158,7 @@ linux:
   synopsis: A swarm of CLI coding agents, orchestrated by Abathur
   description: >-
     The Hive runs a self-organizing team of CLI coding agents on your machine,
-    visualized as a Zerg swarm on a pixel floor and orchestrated by Abathur.
-    A Zerg-themed fork of Munder Difflin.
+    visualized on a pixel office floor and orchestrated by Abathur.
   desktop:
     Name: The Hive
     Comment: A swarm of CLI coding agents, orchestrated by Abathur
