@@ -235,7 +235,7 @@ export function DelegationsTab() {
                       {entry.tool}
                     </span>
                     <span style={{
-                      fontFamily: 'var(--cth-font-mono)',
+                      fontFamily: 'var(--cth-font-ui)',
                       fontSize: 11,
                       color: 'var(--cth-ink-700)',
                       overflow: 'hidden',

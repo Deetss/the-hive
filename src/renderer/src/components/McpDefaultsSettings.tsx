@@ -96,7 +96,7 @@ export function McpDefaultsSettings({ config }: McpDefaultsSettingsProps) {
                         {entry.label}
                         <code style={{
                           marginLeft: 6,
-                          fontFamily: 'var(--cth-font-mono)',
+                          fontFamily: 'var(--cth-font-ui)',
                           fontSize: 13,
                           color: 'var(--cth-ink-500)',
                           fontWeight: 400

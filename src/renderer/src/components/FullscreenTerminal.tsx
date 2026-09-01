@@ -864,7 +864,7 @@ function SidebarRow({
             <span
               title={agent.action}
               style={{
-                fontFamily: 'var(--cth-font-mono)',
+                fontFamily: 'var(--cth-font-ui)',
                 fontSize: Math.max(8, scale.name - 4), lineHeight: 1.35,
                 color: 'var(--cth-ink-400, var(--cth-ink-500))',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',

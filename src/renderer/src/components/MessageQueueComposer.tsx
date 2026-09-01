@@ -481,7 +481,7 @@ function QueuedMessageRow(
                 minHeight: 60, width: '100%', boxSizing: 'border-box',
                 border: '1px solid var(--cth-sky)', borderRadius: 2,
                 background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
-                fontFamily: 'var(--cth-font-mono)', padding: 4
+                fontFamily: 'var(--cth-font-ui)', padding: 4
               }}
             />
             <div style={{ display: 'flex', gap: 6 }}>

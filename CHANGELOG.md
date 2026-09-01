@@ -13,6 +13,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Replace non-semantic monospace font usage with proportional UI typography across FullscreenTerminal, MessageQueueComposer, McpDefaultsSettings, and DelegationsTab
 - Default office theme is now **The Hive**, and TV-show themes ship enabled so new installs open straight into BeeYoncé's honeycomb floor.
 - Hive theme now ships a painted honeycomb floor, wax wall panels, and hex pod desks instead of the temporary overlay, while honey task boards keep the bursting pipe, honey vat, and comb-note visuals.
 - Hive theme textures reworked: reverted to handcrafted PixiJS honeycomb floor, wax wall panels, and desk pods with hive wall accents after removing low-quality AI sprites.
