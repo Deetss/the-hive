@@ -163,7 +163,7 @@
   }
   #spend-badge:empty { display: none; }
 
-  #settings-btn {
+  #insights-btn, #schedules-btn, #settings-btn {
     background: var(--cth-cream-200);
     border: none;
     box-shadow: inset 0 0 0 1px var(--cth-ink-300);
@@ -176,7 +176,28 @@
     flex-shrink: 0;
     -webkit-tap-highlight-color: transparent;
   }
-  #settings-btn:active { background: var(--cth-lemon); color: var(--cth-ink-900); }
+  #insights-btn:active, #schedules-btn:active, #settings-btn:active { background: var(--cth-lemon); color: var(--cth-ink-900); }
+
+  /* ── Insights screen (read-only: Memory / Activity / Skills) ── */
+  .ins-empty { font-family: var(--cth-font-mono); font-size: 11px; color: var(--cth-ink-500); padding: 12px 4px; }
+  .ins-meta { font-family: var(--cth-font-mono); font-size: 10px; color: var(--cth-ink-500); margin-bottom: 6px; word-break: break-all; }
+  .ins-pre {
+    font-family: var(--cth-font-mono); font-size: 11px; line-height: 1.5; color: var(--cth-ink-900);
+    white-space: pre-wrap; word-break: break-word; margin: 0; padding: 8px;
+    background: var(--cth-paper-100); box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+  }
+  .ins-row {
+    display: flex; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--cth-ink-100);
+    font-family: var(--cth-font-mono); font-size: 10.5px;
+  }
+  .ins-when { color: var(--cth-ink-500); flex-shrink: 0; }
+  .ins-who { color: var(--cth-lemon); flex-shrink: 0; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ins-what { color: var(--cth-ink-900); min-width: 0; word-break: break-word; }
+  .ins-skill { background: var(--cth-paper-100); box-shadow: inset 0 0 0 1px var(--cth-ink-300); padding: 8px; margin-bottom: 6px; }
+  .ins-skill-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .ins-skill-name { font-family: var(--cth-font-ui); font-size: 12px; font-weight: 600; color: var(--cth-ink-900); }
+  .ins-skill-scope { font-family: var(--cth-font-mono); font-size: 9px; color: var(--cth-ink-500); text-transform: uppercase; flex-shrink: 0; }
+  .ins-skill-desc { font-family: var(--cth-font-mono); font-size: 10.5px; line-height: 1.45; color: var(--cth-ink-700); margin-top: 4px; }
 
   #content {
     flex: 1;
@@ -1086,6 +1107,7 @@
     </div>
     <div id="header-title">TheHive</div>
     <span id="spend-badge"></span>
+    <button id="insights-btn" aria-label="Insights">🧠</button>
     <button id="schedules-btn" aria-label="Schedules">⏰</button>
     <button id="settings-btn" aria-label="Settings">⚙</button>
   </header>
@@ -1281,6 +1303,20 @@
       </div>
 
       <div id="schedules-result" style="margin-top:10px;font-family:var(--cth-font-mono);font-size:11px;color:var(--cth-mint);" hidden></div>
+    </section>
+
+    <!-- Insights Screen (read-only: Memory / Activity / Skills) -->
+    <section id="screen-insights" class="screen">
+      <div class="tab-bar" id="insights-tabs">
+        <button class="tab active" data-itab="memory" style="--tab-accent: var(--cth-lemon);">Memory</button>
+        <button class="tab" data-itab="activity" style="--tab-accent: var(--cth-sky);">Activity</button>
+        <button class="tab" data-itab="skills" style="--tab-accent: var(--cth-mint);">Skills</button>
+      </div>
+      <div id="insights-agent-row" style="display:flex;gap:6px;margin-bottom:8px;">
+        <select id="insights-agent" style="flex:1;min-width:0;padding:5px;background:var(--cth-paper-200);border:1px solid var(--cth-ink-300);color:var(--cth-ink-900);font-family:var(--cth-font-mono);font-size:11px;"></select>
+        <button class="fleet-refresh-btn" id="insights-refresh">↻</button>
+      </div>
+      <div id="insights-body"><div class="spinner">⟳ loading…</div></div>
     </section>
   </div>
 
@@ -2777,6 +2813,107 @@ function showSchedulesScreen() {
 document.getElementById('schedules-btn').addEventListener('click', showSchedulesScreen);
 document.getElementById('schedules-refresh').addEventListener('click', loadSchedules);
 
+// ── Insights (read-only context surfaces: Memory / Activity / Skills) ──────
+let insightsTab = 'memory';
+
+function showInsightsScreen() {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-insights').classList.add('active');
+  populateInsightsAgents();
+  loadInsights();
+}
+document.getElementById('insights-btn').addEventListener('click', showInsightsScreen);
+document.getElementById('insights-refresh').addEventListener('click', loadInsights);
+document.getElementById('insights-agent').addEventListener('change', () => {
+  if (insightsTab !== 'activity') loadInsights();
+});
+document.querySelectorAll('#insights-tabs .tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#insights-tabs .tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    insightsTab = btn.dataset.itab;
+    // Activity is hive-wide; Memory + Skills are per-agent.
+    document.getElementById('insights-agent-row').style.display = insightsTab === 'activity' ? 'none' : 'flex';
+    loadInsights();
+  });
+});
+
+function populateInsightsAgents() {
+  const sel = document.getElementById('insights-agent');
+  const cur = sel.value;
+  const agents = ((fleetData || {}).agents || []).filter(a => !a.archived);
+  sel.innerHTML = agents.map(a => `<option value="${esc(a.id)}">${esc(a.name || a.id)}</option>`).join('')
+    || '<option value="">(no agents)</option>';
+  if (cur && agents.some(a => a.id === cur)) sel.value = cur;
+}
+
+function insightsBody(html) { document.getElementById('insights-body').innerHTML = html; }
+
+function loadInsights() {
+  if (insightsTab === 'activity') return loadInsightActivity();
+  if (insightsTab === 'skills') return loadInsightSkills();
+  return loadInsightMemory();
+}
+
+async function loadInsightMemory() {
+  insightsBody('<div class="spinner">⟳ loading…</div>');
+  try {
+    const res = await apiFetch('/api/memory');
+    if (!res.ok) return insightsBody('<div class="ins-empty">Could not load memory.</div>');
+    const agents = (await res.json()).agents || [];
+    if (!agents.length) return insightsBody('<div class="ins-empty">No agent memory files.</div>');
+    const want = document.getElementById('insights-agent').value;
+    const pick = agents.find(a => a.id === want) || agents[0];
+    insightsBody(
+      `<div class="ins-meta">${esc(pick.name)} · ${pick.updatedAt ? new Date(pick.updatedAt).toLocaleString() : '—'}</div>` +
+      `<pre class="ins-pre">${esc(pick.content)}</pre>`
+    );
+  } catch (e) { insightsBody('<div class="ins-empty">Could not load memory.</div>'); }
+}
+
+async function loadInsightActivity() {
+  insightsBody('<div class="spinner">⟳ loading…</div>');
+  try {
+    const res = await apiFetch('/api/activity?limit=200');
+    if (!res.ok) return insightsBody('<div class="ins-empty">Could not load activity.</div>');
+    const entries = ((await res.json()).entries || []).slice().reverse();
+    if (!entries.length) return insightsBody('<div class="ins-empty">No recent activity.</div>');
+    insightsBody(entries.map(e => {
+      const ts = e.ts || e.time || e.at || e.timestamp;
+      const when = ts ? new Date(ts).toLocaleTimeString() : '';
+      const who = e.agent || e.agentId || e.from || e.actor || '';
+      let what = e.event || e.kind || e.type || e.msg || e.message || e.subject || e.action;
+      if (what == null) what = JSON.stringify(e);
+      return `<div class="ins-row"><span class="ins-when">${esc(when)}</span>` +
+        `<span class="ins-who">${esc(who)}</span>` +
+        `<span class="ins-what">${esc(typeof what === 'string' ? what : JSON.stringify(what))}</span></div>`;
+    }).join(''));
+  } catch (e) { insightsBody('<div class="ins-empty">Could not load activity.</div>'); }
+}
+
+async function loadInsightSkills() {
+  insightsBody('<div class="spinner">⟳ loading…</div>');
+  const agentId = document.getElementById('insights-agent').value;
+  if (!agentId) return insightsBody('<div class="ins-empty">Pick an agent.</div>');
+  try {
+    const res = await apiFetch('/api/skills?agentId=' + encodeURIComponent(agentId));
+    if (!res.ok) return insightsBody('<div class="ins-empty">Could not load skills.</div>');
+    const data = await res.json();
+    const skills = data.skills || [];
+    if (!skills.length) return insightsBody('<div class="ins-empty">No skills found for this agent.</div>');
+    insightsBody(
+      (data.cwd ? `<div class="ins-meta">${esc(data.cwd)}</div>` : '') +
+      skills.map(s =>
+        `<div class="ins-skill"><div class="ins-skill-head">` +
+        `<span class="ins-skill-name">${esc(s.name)}</span>` +
+        `<span class="ins-skill-scope">${esc(s.scope)}</span></div>` +
+        `<div class="ins-skill-desc">${esc(s.description || '')}</div></div>`
+      ).join('')
+    );
+  } catch (e) { insightsBody('<div class="ins-empty">Could not load skills.</div>'); }
+}
+
 function schedToast(msg, ok = true) {
   const el = document.getElementById('schedules-result');
   el.textContent = msg;
@@ -2918,6 +3055,7 @@ function refreshAll() {
   if (screen === 'workers') { loadWorkers(); loadProcesses(); loadSpawnProfiles(); }
   else if (screen === 'schedules') { populateScheduleTargets(); loadSchedules(); }
   else if (screen === 'settings') loadSettings();
+  else if (screen === 'insights') { populateInsightsAgents(); loadInsights(); }
   else if (screen === 'dispatch') populateDispatchRecipients();
 }
 

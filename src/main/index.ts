@@ -609,6 +609,76 @@ function buildAskMePayload(hiveRoot: string | null) {
   };
 }
 
+/** Raw agents array from fleet.json, or [] — shared by the memory + skills tabs
+ *  so an agent id can be resolved to a friendly name and a cwd. */
+function readFleetAgents(hiveRoot: string | null): any[] {
+  if (!hiveRoot) return [];
+  const p = join(hiveRoot, 'fleet.json');
+  if (!existsSync(p)) return [];
+  try {
+    const raw = JSON.parse(readFileSync(p, 'utf8'));
+    return Array.isArray(raw.agents) ? raw.agents : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Every agent's memory.md — the mobile "Memory" insight tab. Read-only. */
+function buildMemoryPayload(hiveRoot: string | null) {
+  const nameById = new Map<string, string>(
+    readFleetAgents(hiveRoot).map((a) => [String(a.id), String(a.name ?? a.id)])
+  );
+  const agents: Array<{ id: string; name: string; content: string; updatedAt: string | null }> = [];
+  if (hiveRoot) {
+    const agentsDir = join(hiveRoot, 'agents');
+    let ids: string[] = [];
+    try { ids = existsSync(agentsDir) ? readdirSync(agentsDir) : []; } catch { ids = []; }
+    for (const id of ids.sort()) {
+      const p = join(agentsDir, id, 'memory.md');
+      if (!existsSync(p)) continue;
+      try {
+        agents.push({
+          id,
+          name: nameById.get(id) ?? id,
+          content: readFileSync(p, 'utf8'),
+          updatedAt: statSync(p).mtime.toISOString()
+        });
+      } catch { /* one unreadable memory must not drop the rest */ }
+    }
+  }
+  return { agents };
+}
+
+/** Tail of the hive event log (log.jsonl) — the mobile "Activity" insight tab.
+ *  Read-only; `limit` is already clamped by the caller. */
+function buildActivityPayload(hiveRoot: string | null, limit: number) {
+  const entries: any[] = [];
+  if (hiveRoot) {
+    const p = join(hiveRoot, 'log.jsonl');
+    if (existsSync(p)) {
+      try {
+        const lines = readFileSync(p, 'utf8').split('\n').filter((l) => l.trim());
+        for (const line of lines.slice(-limit)) {
+          try { entries.push(JSON.parse(line)); } catch { /* skip a malformed line */ }
+        }
+      } catch { /* unreadable log → empty */ }
+    }
+  }
+  return { entries };
+}
+
+/** Installed skills for one agent's cwd — the mobile "Skills" insight tab.
+ *  Read-only; reuses the same scan the desktop `skills:local` IPC does. */
+function buildSkillsPayload(hiveRoot: string | null, agentId: string | null) {
+  const agent = readFleetAgents(hiveRoot).find((a) => String(a.id) === agentId);
+  const cwd = agent && typeof agent.cwd === 'string' ? agent.cwd : '';
+  const cfg = readConfig();
+  const cwds = [...(cwd ? [cwd] : []), ...(cfg.registeredRepos ?? [])];
+  let skills: LocalSkill[] = [];
+  try { skills = listLocalSkills({ cwds, bundledDir: skillsResourceDir() }); } catch { skills = []; }
+  return { agentId: agentId ?? null, cwd, skills };
+}
+
 const sseClients = new Set<ServerResponse>();
 let sseWatching = false;
 
@@ -843,6 +913,44 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     const payload = buildBoardPayload(hiveRoot);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(payload));
+    return true;
+  }
+
+  // GET /api/memory — every agent's memory.md (mobile insight tab, read-only)
+  if (pathname === '/api/memory') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(buildMemoryPayload(hiveRoot)));
+    return true;
+  }
+
+  // GET /api/activity?limit=N — tail of the hive event log (mobile insight tab, read-only)
+  if (pathname === '/api/activity') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    const n = Number(url.searchParams.get('limit'));
+    const limit = Number.isFinite(n) && n > 0 ? Math.min(1000, Math.floor(n)) : 200;
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(buildActivityPayload(hiveRoot, limit)));
+    return true;
+  }
+
+  // GET /api/skills?agentId= — installed skills for that agent's cwd (mobile insight tab, read-only)
+  if (pathname === '/api/skills') {
+    if (method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return true;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(buildSkillsPayload(hiveRoot, url.searchParams.get('agentId'))));
     return true;
   }
 
