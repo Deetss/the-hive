@@ -47,7 +47,7 @@ import * as sync from './sync';
 import * as profiles from './profiles';
 import { ldaRunner } from './lda';
 import type { LdaUsageMetrics } from '../shared/localDelegate';
-import { normalizeWeekly, weeklyDelayMs } from '../shared/weeklySchedule';
+import { normalizeWeekly, weeklyDelayMs, nextWeeklyFireMs, formatWeekly } from '../shared/weeklySchedule';
 import {
   getBranch, getStatus, getLog, getBranches, getAheadBehind, isRepo, getDiff, mainRepoRoot,
   addWorktree, removeWorktree, worktreeHasUnintegratedWork, worktreeIsGcSafe,
@@ -879,6 +879,80 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
     if (typeof sBody.governorOverride === 'boolean') applyGovernorOverride(sBody.governorOverride ? 'force-green' : undefined);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ ok: true }));
+    return true;
+  }
+
+  // GET /api/missions — scheduled auto-dispatch missions (the mobile Schedules tab)
+  if (pathname === '/api/missions' && method === 'GET') {
+    const now = Date.now();
+    const missions = (readConfig().missions ?? []).map((m) => {
+      const weekly = normalizeWeekly(m.weekly);
+      const nextFireAt = weekly
+        ? nextWeeklyFireMs(weekly, now)
+        : m.lastFiredAt ? m.lastFiredAt + m.intervalMs : null;
+      const whenLabel = m.kind === 'heartbeat'
+        ? 'adaptive beat'
+        : weekly ? formatWeekly(weekly) : fmtMissionInterval(m.intervalMs);
+      return {
+        id: m.id, label: m.label, to: m.to, body: m.body,
+        enabled: !!m.enabled, kind: m.kind ?? 'dispatch',
+        lastFiredAt: m.lastFiredAt ?? null, whenLabel, nextFireAt
+      };
+    });
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, missions }));
+    return true;
+  }
+
+  // POST /api/missions/:id/toggle — flip (or set) a mission's enabled flag
+  const missionToggleMatch = /^\/api\/missions\/([^/]+)\/toggle\/?$/.exec(pathname);
+  if (missionToggleMatch && method === 'POST') {
+    const id = decodeURIComponent(missionToggleMatch[1]);
+    let tBody: { enabled?: boolean } = {};
+    try { tBody = await readJsonBody(req); } catch { /* empty body ⇒ flip */ }
+    const current = readConfig().missions ?? [];
+    const target = current.find((m) => m.id === id);
+    if (!target) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'No such mission' }));
+      return true;
+    }
+    const next = typeof tBody.enabled === 'boolean' ? tBody.enabled : !target.enabled;
+    writeConfig({ missions: current.map((m) => (m.id === id ? { ...m, enabled: next } : m)) });
+    syncMissions();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, id, enabled: next }));
+    return true;
+  }
+
+  // POST /api/missions — create a new interval-based scheduled mission
+  if (pathname === '/api/missions' && method === 'POST') {
+    let cBody: { label?: string; to?: string; intervalMs?: number; body?: string };
+    try {
+      cBody = await readJsonBody(req);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      return true;
+    }
+    const label = typeof cBody.label === 'string' ? cBody.label.trim() : '';
+    const body = typeof cBody.body === 'string' ? cBody.body.trim() : '';
+    const to = typeof cBody.to === 'string' && cBody.to.trim() ? cBody.to.trim() : 'god';
+    const intervalMs = typeof cBody.intervalMs === 'number' && Number.isFinite(cBody.intervalMs) && cBody.intervalMs >= 60_000
+      ? Math.round(cBody.intervalMs)
+      : 3_600_000;
+    if (!label || !body) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'label and body are required' }));
+      return true;
+    }
+    const mission: ScheduledMission = {
+      id: `m_${Date.now().toString(36)}`, label, intervalMs, to, body, enabled: true
+    };
+    writeConfig({ missions: [...(readConfig().missions ?? []), mission] });
+    syncMissions();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true, id: mission.id }));
     return true;
   }
 
@@ -2800,6 +2874,15 @@ function clearMissionTimers(): void {
     if (t.interval) clearInterval(t.interval);
   }
   missionTimers.clear();
+}
+
+/** "every 30m" / "every 2h" / "every 3d" for an interval mission's mobile row. */
+function fmtMissionInterval(ms: number): string {
+  const mins = Math.round(ms / 60_000);
+  if (mins < 60) return `every ${mins}m`;
+  if (mins % 1440 === 0) return `every ${mins / 1440}d`;
+  if (mins % 60 === 0) return `every ${mins / 60}h`;
+  return `every ${(mins / 60).toFixed(1)}h`;
 }
 
 /** Rebuild the scheduler from persisted config: clear every existing timer,
