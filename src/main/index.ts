@@ -6434,14 +6434,23 @@ ipcMain.handle('dialog:attachFiles', async (evt) => {
   if (!win) return { ok: false as const, error: 'no window' };
   const res = await dialog.showOpenDialog(win, {
     properties: ['openFile', 'multiSelections'],
-    title: 'Attach images or files',
+    title: 'Attach files',
+    // Any file type — All Files is the default; the Images group is a convenience
+    // shortcut, not a restriction.
     filters: [
-      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic', 'tiff', 'avif'] },
-      { name: 'All Files', extensions: ['*'] }
+      { name: 'All Files', extensions: ['*'] },
+      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic', 'tiff', 'avif'] }
     ]
   });
   if (res.canceled || res.filePaths.length === 0) return { ok: false as const, error: 'cancelled' };
-  return { ok: true as const, files: res.filePaths.map((p) => ({ path: p, name: basename(p) })) };
+  return {
+    ok: true as const,
+    files: res.filePaths.map((p) => {
+      let size: number | undefined;
+      try { size = statSync(p).size; } catch { /* unreadable — omit size */ }
+      return { path: p, name: basename(p), size };
+    })
+  };
 });
 
 // Persist the current native clipboard image to a temp PNG so a pasted

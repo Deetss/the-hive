@@ -10,10 +10,24 @@ import { useTerminalFontSize } from './terminalFontSize';
 
 const EMPTY_QUEUE: QueuedMessage[] = [];
 
-/** A file/image attached to the draft. Travels to the agent as a PATH it Reads. */
+/** A file of ANY type attached to the draft. Travels to the agent as a PATH it
+ *  Reads (never inlined — the agent has a Read tool and inlining would bloat the
+ *  prompt). `size` is bytes when known, for the chip label. */
 interface Attachment {
   path: string;
   name: string;
+  size?: number;
+}
+
+/** Human-readable byte size for an attachment chip. */
+function formatBytes(n?: number): string | null {
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return null;
+  if (n < 1024) return `${n} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
 // Prepended (only to the enqueued value, never the visible draft) when the
@@ -137,7 +151,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     const dropped = Array.from(e.dataTransfer?.files ?? []);
     if (!dropped.length) return;
     const atts = dropped
-      .map((f) => ({ path: window.cth.pathForFile(f), name: f.name }))
+      .map((f) => ({ path: window.cth.pathForFile(f), name: f.name, size: f.size }))
       .filter((a) => a.path);
     if (atts.length) addAttachments(atts);
   };
@@ -156,7 +170,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     const files = Array.from(e.clipboardData?.files ?? []);
     if (files.length) {
       const atts = files
-        .map((f) => ({ path: window.cth.pathForFile(f), name: f.name }))
+        .map((f) => ({ path: window.cth.pathForFile(f), name: f.name, size: f.size }))
         .filter((a) => a.path);
       if (atts.length) {
         e.preventDefault();
@@ -440,6 +454,9 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
               <span style={{
                 overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: 180
               }}>{a.name}</span>
+              {formatBytes(a.size) && (
+                <span style={{ flexShrink: 0, color: 'var(--cth-ink-500)', fontSize: 11 }}>{formatBytes(a.size)}</span>
+              )}
               <button
                 onClick={() => removeAttachment(a.path)}
                 title="Remove attachment"

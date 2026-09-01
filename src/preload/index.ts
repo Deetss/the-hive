@@ -974,9 +974,10 @@ const api = {
     ipcRenderer.invoke('kg:ingestFiles', { paths, tags }),
 
   // ─── Composer attachments (images + files, sent to agents by PATH) ─────────
-  /** Open an OS picker for images/files; returns chosen absolute paths + names. */
+  /** Open an OS picker for any file type; returns chosen absolute paths, names,
+   *  and byte sizes (size omitted if the file could not be stat'd). */
   attachFiles: (): Promise<
-    { ok: true; files: { path: string; name: string }[] } | { ok: false; error: string }
+    { ok: true; files: { path: string; name: string; size?: number }[] } | { ok: false; error: string }
   > => ipcRenderer.invoke('dialog:attachFiles'),
   /** Resolve a dropped File's absolute path (Electron 32 removed File.path). */
   pathForFile: (file: File): string => webUtils.getPathForFile(file),
