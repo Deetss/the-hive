@@ -3,6 +3,7 @@ import { useStore } from '@/store/store';
 import { useFleetTelemetry, totalTokens, type BreakerState } from '@/hooks/useTelemetry';
 import { useRateLimits, ratePaceColor, fmtReset } from '@/hooks/useRateLimits';
 import { inferAgentProvider, providerPreset, type AgentProvider, type RuntimeProfile } from '@/store/config';
+import { AppChromeControls } from './AppChromeControls';
 
 /**
  * Persistent bottom status line: live hive+fleet state at a glance.
@@ -424,6 +425,14 @@ export function StatusBar() {
           <span style={{ color: 'var(--cth-ink-500)' }}>({armedCount})</span>
         )}
       </Chip>
+
+      {/* App chrome relocated from the old titlebar — version/update, theme,
+          settings, focus mode. This bar is always mounted (fullscreen mounts
+          its own copy), so nothing is view-gated. */}
+      <Sep />
+      <span style={{ display: 'inline-flex', alignItems: 'center', paddingLeft: 4 }}>
+        <AppChromeControls />
+      </span>
     </div>
   );
 }

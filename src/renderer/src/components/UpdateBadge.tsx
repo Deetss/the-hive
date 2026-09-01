@@ -18,7 +18,10 @@ import { PixelButton } from './PixelButton';
 
 declare const __APP_VERSION__: string;
 
-export function UpdateBadge() {
+/** `placement` decides which way the hover card / post-download dialog opens.
+ *  'down' (default) suits a top bar; 'up' is for the bottom StatusBar, where a
+ *  downward popover would fall off the window. */
+export function UpdateBadge({ placement = 'down' }: { placement?: 'up' | 'down' } = {}) {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(false);
@@ -112,7 +115,7 @@ export function UpdateBadge() {
         role="tooltip"
         className="cth-titlebar-nodrag"
         style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 400,
+          position: 'absolute', [placement === 'up' ? 'bottom' : 'top']: 'calc(100% + 6px)', left: 0, zIndex: 400,
           width: 340, padding: '10px 12px',
           background: 'var(--cth-paper-100)', color: INK,
           border: `2px solid ${INK}`, boxShadow: `4px 4px 0 ${INK}`,
@@ -142,7 +145,7 @@ export function UpdateBadge() {
         aria-label="Install the update"
         className="cth-titlebar-nodrag"
         style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 400,
+          position: 'absolute', [placement === 'up' ? 'bottom' : 'top']: 'calc(100% + 6px)', left: 0, zIndex: 400,
           width: 380, padding: '12px 14px',
           background: 'var(--cth-paper-100)', color: INK,
           border: `2px solid ${INK}`, boxShadow: `4px 4px 0 ${INK}`,
