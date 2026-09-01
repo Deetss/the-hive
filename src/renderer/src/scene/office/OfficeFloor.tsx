@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Application, Container, Graphics, Ticker, Texture, Sprite, TilingSprite } from 'pixi.js';
+import { Application, Container, Graphics, Ticker, Texture, Sprite, TilingSprite, Renderer } from 'pixi.js';
 // PixiJS uses new Function() internally, blocked by Electron CSP — this patches it.
 import 'pixi.js/unsafe-eval';
 import { useStore, type Agent } from '@/store/store';
@@ -14,9 +14,6 @@ import { colors } from '@/design/tokens';
 import { loadTheme, resolveThemeMap, themeTilesetUrls } from './themeLoader';
 import { installContextLossRecovery } from './glRecovery';
 import type { Tile, Facing, ErrandKind, ErrandSpot } from './themeRegistry';
-import honeycombFloorUrl from '@/assets/hive/honeycomb-floor.png?url';
-import waxWallUrl from '@/assets/hive/wax-wall.png?url';
-import hiveDeskUrl from '@/assets/hive/hive-desk.png?url';
 
 // The map, tileset atlases, desk-claim order, errand spots, coffee-economy
 // tiles, prop anchors, monitor gids and palette all come from the active
@@ -106,6 +103,14 @@ function mixColor(c1: number, c2: number, t: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
+function lighten(color: number, amount: number): number {
+  return mixColor(color, 0xffffff, amount);
+}
+
+function darken(color: number, amount: number): number {
+  return mixColor(color, 0x000000, amount);
+}
+
 function pseudoNoise(x: number, y: number): number {
   const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return v - Math.floor(v);
@@ -144,6 +149,290 @@ function drawHex(
     });
   }
   return g;
+}
+
+interface HiveFloorResources {
+  texture: Texture;
+  patternSize: number;
+}
+
+interface HiveDeskAsset {
+  texture: Texture;
+  anchorX: number;
+  anchorY: number;
+}
+
+interface HiveWallTextures {
+  body: Texture;
+  cap: Texture;
+  column: Texture;
+  corner: Texture;
+}
+
+function createHiveFloorTexture(renderer: Renderer, tile: number): HiveFloorResources {
+  const patternSize = tile * 4;
+  const g = new Graphics();
+  const base = mixColor(colors.accent.lemon, colors.cream[200], 0.18);
+  const waxBase = mixColor(base, colors.ink[500], 0.08);
+  g.rect(0, 0, patternSize, patternSize).fill({ color: waxBase, alpha: 1 });
+
+  const rx = tile * 1.2;
+  const ry = tile * 0.95;
+  const horizontalStep = rx * 1.5;
+  const verticalStep = ry * 1.3;
+  let row = 0;
+  for (let y = -verticalStep; y <= patternSize + verticalStep; y += verticalStep, row++) {
+    const offset = row % 2 === 0 ? 0 : horizontalStep / 2;
+    for (let x = -horizontalStep; x <= patternSize + horizontalStep; x += horizontalStep) {
+      const cx = x + offset;
+      const noise = pseudoNoise(cx * 0.015, y * 0.017);
+      const fill = mixColor(base, colors.accent.lemonLight, 0.28 + noise * 0.25);
+      const shell = mixColor(base, colors.ink[700], 0.12 + noise * 0.1);
+      drawHex(g, cx, y, rx, ry, fill, {
+        stroke: shell,
+        strokeAlpha: 0.85,
+        strokeWidth: tile * 0.12,
+      });
+      drawHex(g, cx, y - ry * 0.34, rx * 0.55, ry * 0.45, lighten(fill, 0.45), { alpha: 0.82 });
+      drawHex(g, cx, y + ry * 0.32, rx * 0.4, ry * 0.3, darken(fill, 0.28), { alpha: 0.28 });
+      g.moveTo(cx - rx * 0.75, y)
+        .lineTo(cx + rx * 0.75, y)
+        .stroke({ color: lighten(fill, 0.35), width: tile * 0.05, alpha: 0.18 });
+    }
+  }
+
+  const sheen = new Graphics();
+  sheen.moveTo(0, patternSize * 0.35)
+    .lineTo(patternSize, patternSize * 0.15)
+    .lineTo(patternSize, 0)
+    .lineTo(0, 0)
+    .closePath()
+    .fill({ color: 0xffffff, alpha: 0.04 });
+  g.addChild(sheen);
+
+  const texture = renderer.generateTexture(g, { resolution: 2 });
+  g.destroy(true);
+  return { texture, patternSize };
+}
+
+function createHiveWallTextures(renderer: Renderer, tile: number): HiveWallTextures {
+  const build = (draw: (g: Graphics) => void): Texture => {
+    const g = new Graphics();
+    draw(g);
+    const tex = renderer.generateTexture(g, { resolution: 2 });
+    g.destroy(true);
+    return tex;
+  };
+
+  const base = mixColor(colors.accent.lemon, colors.ink[500], 0.28);
+  const rib = mixColor(base, colors.ink[700], 0.25);
+
+  const body = build((g) => {
+    g.rect(0, 0, tile, tile).fill({ color: base, alpha: 1 });
+    g.rect(tile * 0.08, 0, tile * 0.12, tile)
+      .fill({ color: rib, alpha: 0.9 });
+    g.rect(tile * 0.8, 0, tile * 0.12, tile)
+      .fill({ color: rib, alpha: 0.9 });
+    g.rect(tile * 0.2, 0, tile * 0.6, tile)
+      .fill({ color: mixColor(base, colors.cream[100], 0.12), alpha: 0.85 });
+    g.moveTo(tile * 0.2, tile * 0.5)
+      .lineTo(tile * 0.8, tile * 0.5)
+      .stroke({ color: mixColor(base, colors.ink[900], 0.18), width: tile * 0.05, alpha: 0.4 });
+  });
+
+  const cap = build((g) => {
+    g.rect(0, 0, tile, tile).fill({ color: lighten(base, 0.18), alpha: 1 });
+    g.rect(0, tile * 0.45, tile, tile * 0.55)
+      .fill({ color: base, alpha: 0.95 });
+    g.rect(tile * 0.05, tile * 0.15, tile * 0.9, tile * 0.2)
+      .fill({ color: lighten(base, 0.35), alpha: 0.9 });
+    g.rect(tile * 0.08, tile * 0.7, tile * 0.84, tile * 0.1)
+      .fill({ color: mixColor(base, colors.ink[700], 0.22), alpha: 0.8 });
+  });
+
+  const column = build((g) => {
+    g.rect(0, 0, tile, tile).fill({ color: mixColor(base, colors.ink[700], 0.18), alpha: 1 });
+    g.rect(tile * 0.2, 0, tile * 0.6, tile)
+      .fill({ color: mixColor(base, colors.cream[100], 0.08), alpha: 0.85 });
+    g.rect(tile * 0.3, 0, tile * 0.4, tile)
+      .stroke({ color: mixColor(base, colors.ink[900], 0.25), width: tile * 0.04, alpha: 0.6 });
+  });
+
+  const corner = build((g) => {
+    g.rect(0, 0, tile, tile).fill({ color: mixColor(base, colors.ink[700], 0.3), alpha: 1 });
+    g.rect(tile * 0.12, 0, tile * 0.45, tile)
+      .fill({ color: mixColor(base, colors.ink[500], 0.15), alpha: 0.85 });
+    g.rect(tile * 0.55, 0, tile * 0.33, tile)
+      .fill({ color: mixColor(base, colors.cream[100], 0.1), alpha: 0.78 });
+    g.rect(tile * 0.12, tile * 0.12, tile * 0.76, tile * 0.76)
+      .stroke({ color: lighten(base, 0.25), width: tile * 0.06, alpha: 0.6 });
+  });
+
+  return { body, cap, column, corner };
+}
+
+function createHiveDeskAssets(renderer: Renderer, tile: number): HiveDeskAsset[] {
+  const width = tile * 2.4;
+  const height = tile * 2.1;
+
+  const build = (decorate: (g: Graphics, w: number, h: number) => void): HiveDeskAsset => {
+    const g = new Graphics();
+    const deck = mixColor(colors.accent.lemon, colors.cream[200], 0.16);
+    const edge = mixColor(deck, colors.ink[700], 0.32);
+    const glow = mixColor(deck, colors.cream[50], 0.38);
+
+    g.rect(width * 0.08, height * 0.88, width * 0.84, height * 0.18)
+      .fill({ color: darken(deck, 0.5), alpha: 0.32 });
+
+    drawHex(g, width / 2, height * 0.64, width * 0.5, height * 0.36, deck, {
+      stroke: edge,
+      strokeAlpha: 0.92,
+      strokeWidth: tile * 0.12,
+    });
+
+    drawHex(g, width / 2, height * 0.35, width * 0.3, height * 0.24, glow, { alpha: 0.95 });
+    drawHex(g, width / 2, height * 0.78, width * 0.34, height * 0.24, darken(deck, 0.35), { alpha: 0.28 });
+
+    g.moveTo(width * 0.12, height * 0.58)
+      .lineTo(width * 0.88, height * 0.58)
+      .lineTo(width * 0.8, height * 0.82)
+      .lineTo(width * 0.2, height * 0.82)
+      .closePath()
+      .fill({ color: darken(deck, 0.45), alpha: 0.22 });
+
+    g.ellipse(width / 2, height * 0.88, width * 0.48, height * 0.17)
+      .fill({ color: darken(deck, 0.52), alpha: 0.3 });
+
+    decorate(g, width, height);
+
+    const texture = renderer.generateTexture(g, { resolution: 2 });
+    g.destroy(true);
+    return {
+      texture,
+      anchorX: 0.5,
+      anchorY: (height * 0.86) / texture.height,
+    };
+  };
+
+  const addLamp = (g: Graphics, w: number, h: number) => {
+    const baseX = w * 0.32;
+    const baseY = h * 0.36;
+    g.ellipse(baseX, baseY + 8, 12, 4).fill({ color: darken(colors.accent.lemon, 0.45), alpha: 0.9 });
+    g.rect(baseX - 1.5, baseY - 4, 3, 12).fill({ color: darken(colors.accent.lemon, 0.4), alpha: 0.9 });
+    g.ellipse(baseX, baseY - 8, 18, 12).fill({ color: lighten(colors.accent.lemonLight, 0.25), alpha: 0.9 });
+    g.ellipse(baseX, baseY - 9, 12, 8).fill({ color: lighten(colors.accent.lemonLight, 0.4), alpha: 0.8 });
+  };
+
+  const addLedger = (g: Graphics, w: number, h: number) => {
+    const padX = w * 0.6;
+    const padY = h * 0.35;
+    drawHex(g, padX, padY, w * 0.16, h * 0.12, mixColor(colors.accent.lemonLight, colors.cream[100], 0.35), {
+      alpha: 0.95,
+      stroke: mixColor(colors.accent.lemon, colors.ink[500], 0.25),
+      strokeAlpha: 0.85,
+      strokeWidth: 1.2,
+    });
+    g.moveTo(padX - 6, padY)
+      .lineTo(padX + 6, padY)
+      .stroke({ color: mixColor(colors.accent.lemon, colors.ink[700], 0.25), width: 1, alpha: 0.6 });
+    g.moveTo(padX - 5, padY + 4)
+      .lineTo(padX + 5, padY + 4)
+      .stroke({ color: mixColor(colors.accent.lemon, colors.ink[700], 0.15), width: 0.8, alpha: 0.5 });
+  };
+
+  const addHoneyTools = (g: Graphics, w: number, h: number) => {
+    const jarX = w * 0.46;
+    const jarY = h * 0.28;
+    g.roundRect(jarX - 6, jarY - 9, 12, 16, 5)
+      .fill({ color: mixColor(colors.accent.lemonLight, colors.cream[200], 0.35), alpha: 0.94 });
+    g.roundRect(jarX - 5, jarY - 8, 10, 14, 4)
+      .fill({ color: mixColor(colors.accent.lemon, colors.accent.peachLight, 0.4), alpha: 0.96 });
+    g.circle(jarX + 6, jarY - 2, 3)
+      .fill({ color: mixColor(colors.accent.lemon, colors.cream[100], 0.4), alpha: 0.92 });
+    g.rect(jarX + 5.5, jarY - 16, 1.4, 10)
+      .fill({ color: mixColor(colors.ink[700], colors.accent.lemon, 0.25), alpha: 0.9 });
+  };
+
+  return [
+    build(addLamp),
+    build(addLedger),
+    build(addHoneyTools),
+  ];
+}
+
+function addWaxConduit(layer: Container, x: number, y: number, tile: number, noise: number): void {
+  const branch = new Graphics();
+  branch.eventMode = 'none';
+  branch.position.set((x + 0.5) * tile, (y + 0.5) * tile);
+  branch.zIndex = y * tile + 0.05;
+  const primaryAngle = noise * Math.PI * 2;
+  const length = tile * (0.8 + pseudoNoise(x * 0.37, y * 0.41) * 0.5);
+  branch.moveTo(0, 0)
+    .quadraticCurveTo(
+      Math.cos(primaryAngle) * length * 0.45,
+      Math.sin(primaryAngle) * length * 0.45,
+      Math.cos(primaryAngle) * length,
+      Math.sin(primaryAngle) * length,
+    )
+    .stroke({ color: 0xffb347, width: tile * 0.08, alpha: 0.38, cap: 'round' });
+  const sideAngle = primaryAngle + (noise > 0.5 ? 0.6 : -0.6);
+  const sideLength = length * 0.65;
+  branch.moveTo(0, 0)
+    .quadraticCurveTo(
+      Math.cos(sideAngle) * sideLength * 0.5,
+      Math.sin(sideAngle) * sideLength * 0.5,
+      Math.cos(sideAngle) * sideLength,
+      Math.sin(sideAngle) * sideLength,
+    )
+    .stroke({ color: 0xffc66e, width: tile * 0.06, alpha: 0.3, cap: 'round' });
+  branch.circle(Math.cos(primaryAngle) * length * 0.65, Math.sin(primaryAngle) * length * 0.65, tile * 0.14)
+    .fill({ color: 0xffe28f, alpha: 0.78 });
+  layer.addChild(branch);
+}
+
+function addPollenGrate(layer: Container, x: number, y: number, tile: number): void {
+  const grate = new Graphics();
+  grate.eventMode = 'none';
+  grate.position.set((x + 0.5) * tile, (y + 0.5) * tile);
+  grate.zIndex = y * tile + 0.04;
+  const w = tile * 0.9;
+  const h = tile * 0.55;
+  grate.roundRect(-w / 2, -h / 2, w, h, tile * 0.12)
+    .fill({ color: 0x2b1a0c, alpha: 0.95 });
+  grate.roundRect(-w / 2 + tile * 0.05, -h / 2 + tile * 0.05, w - tile * 0.1, h - tile * 0.1, tile * 0.08)
+    .fill({ color: 0x5a3b1f, alpha: 0.9 });
+  for (let i = -1; i <= 1; i++) {
+    grate.moveTo(-w * 0.45, -h / 2 + i * h * 0.32)
+      .lineTo(w * 0.45, h / 2 + i * h * 0.32)
+      .stroke({ color: 0x3a2614, width: tile * 0.05, alpha: 0.55 });
+  }
+  grate.roundRect(-w / 2 + tile * 0.1, -h / 2 + tile * 0.14, w - tile * 0.2, h - tile * 0.28, tile * 0.08)
+    .fill({ color: 0xe5a93c, alpha: 0.28 });
+  layer.addChild(grate);
+}
+
+function addHoneyCrust(layer: Container, x: number, y: number, tile: number): void {
+  const crust = new Graphics();
+  crust.eventMode = 'none';
+  crust.position.set((x + 0.5) * tile, (y + 0.5) * tile);
+  crust.zIndex = y * tile + 0.06;
+  const accent = mixColor(colors.accent.lemon, colors.accent.peach, 0.35);
+  const facets = [
+    { dx: -tile * 0.28, dy: -tile * 0.25, r: tile * 0.18 },
+    { dx: -tile * 0.05, dy: -tile * 0.35, r: tile * 0.16 },
+    { dx: tile * 0.2, dy: -tile * 0.22, r: tile * 0.14 },
+  ];
+  for (const facet of facets) {
+    drawHex(crust, facet.dx, facet.dy, facet.r, facet.r * 0.75, accent, {
+      alpha: 0.55,
+      stroke: 0xfff3b0,
+      strokeAlpha: 0.65,
+      strokeWidth: tile * 0.05,
+    });
+  }
+  crust.circle(tile * 0.05, -tile * 0.3, tile * 0.09)
+    .fill({ color: 0xfff3b0, alpha: 0.45 });
+  layer.addChild(crust);
 }
 
 /** What workers blurt out when the boss walks by — performative excellence.
@@ -346,17 +635,9 @@ export function OfficeFloor() {
       );
       if (mountIdRef.current !== mountId) { safeDestroy(app); return; }
 
-      let hiveFloorTex: Texture | null = null;
-      let hiveWallTex: Texture | null = null;
-      let hiveDeskTex: Texture | null = null;
-      if (theme.id === 'hive') {
-        [hiveFloorTex, hiveWallTex, hiveDeskTex] = await Promise.all([
-          loadTexture(honeycombFloorUrl),
-          loadTexture(waxWallUrl),
-          loadTexture(hiveDeskUrl)
-        ]);
-        if (mountIdRef.current !== mountId) { safeDestroy(app); return; }
-      }
+      let hiveFloorResources: HiveFloorResources | null = null;
+      let hiveWallTextures: HiveWallTextures | null = null;
+      let hiveDeskAssets: HiveDeskAsset[] | null = null;
 
       const world = new Container();
       app.stage.addChild(world);
@@ -369,9 +650,14 @@ export function OfficeFloor() {
       console.log(`[OfficeFloor] map ${mapRenderer.width}x${mapRenderer.height}, ${tileCount} tile sprites rendered`);
 
       const isHiveTheme = theme.id === 'hive';
+      if (isHiveTheme) {
+        hiveFloorResources = createHiveFloorTexture(app.renderer, mapRenderer.tileSize);
+        hiveWallTextures = createHiveWallTextures(app.renderer, mapRenderer.tileSize);
+        hiveDeskAssets = createHiveDeskAssets(app.renderer, mapRenderer.tileSize);
+      }
 
       const applyHiveSceneDecor = (): void => {
-        if (!hiveFloorTex || !hiveWallTex || !hiveDeskTex) return;
+        if (!hiveFloorResources || !hiveWallTextures || !hiveDeskAssets) return;
         const mapContainer = mapRenderer.getContainer();
         mapContainer.sortableChildren = true;
         const initialCharIndex = mapContainer.getChildIndex(charLayer);
@@ -386,7 +672,8 @@ export function OfficeFloor() {
           }
         }
 
-        // 1. Honeycomb Floor (TilingSprite across entire map)
+        // 1. Honeycomb Floor (tiled procedural texture)
+        const { texture: hiveFloorTex, patternSize } = hiveFloorResources;
         const floorWidth = mapRenderer.width * tile;
         const floorHeight = mapRenderer.height * tile;
         const honeyFloor = new TilingSprite({
@@ -394,16 +681,54 @@ export function OfficeFloor() {
           width: floorWidth,
           height: floorHeight
         });
-        const floorScale = (tile * 4) / 512;
+        const insertIndex = initialCharIndex >= 0 ? initialCharIndex : mapContainer.children.length;
+        const floorScale = (tile * 4) / patternSize;
         honeyFloor.tileScale.set(floorScale, floorScale);
+        honeyFloor.tilePosition.set(0, 0);
         honeyFloor.eventMode = 'none';
         honeyFloor.position.set(0, 0);
-        honeyFloor.tint = 0xfff8e8;
-        honeyFloor.alpha = 0.95;
-        const insertIndex = initialCharIndex >= 0 ? initialCharIndex : mapContainer.children.length;
         mapContainer.addChildAt(honeyFloor, insertIndex);
 
-        // 2. Wax Wall Layer (Sprite tiles using waxWallTex)
+        // Decorative floor accents along idle walls / corners
+        const patternLayer = new Container();
+        patternLayer.sortableChildren = true;
+        patternLayer.eventMode = 'none';
+        mapContainer.addChildAt(patternLayer, insertIndex + 1);
+
+        const spawnEntries = Array.from(mapRenderer.getAllSpawnPoints());
+        const seatTileKeys = new Set<string>();
+        for (const [name, point] of spawnEntries) {
+          if (name.startsWith('desk-') || name.startsWith('pc-') || name.startsWith('warroom-') || name.startsWith('cafe-')) {
+            seatTileKeys.add(`${point.x},${point.y}`);
+          }
+        }
+
+        for (let ty = 0; ty < mapRenderer.height; ty++) {
+          for (let tx = 0; tx < mapRenderer.width; tx++) {
+            if (!mapRenderer.isWalkable(tx, ty)) continue;
+            if (seatTileKeys.has(`${tx},${ty}`)) continue;
+            const furnitureBelow = mapRenderer.gidAt('furniture-below', tx, ty);
+            const furnitureAbove = mapRenderer.gidAt('furniture-above', tx, ty);
+            if (furnitureBelow || furnitureAbove) continue;
+            const wallLeft = !mapRenderer.isWalkable(tx - 1, ty);
+            const wallRight = !mapRenderer.isWalkable(tx + 1, ty);
+            const wallUp = !mapRenderer.isWalkable(tx, ty - 1);
+            const wallDown = !mapRenderer.isWalkable(tx, ty + 1);
+            const isCorner = (wallLeft && wallUp) || (wallLeft && wallDown) || (wallRight && wallUp) || (wallRight && wallDown);
+            const nearWall = wallLeft || wallRight || wallUp || wallDown;
+            if (!nearWall) continue;
+            const noise = pseudoNoise(tx * 0.33, ty * 0.21);
+            if (isCorner && noise > 0.6) {
+              addHoneyCrust(patternLayer, tx, ty, tile);
+            } else if (wallUp && noise < 0.2) {
+              addPollenGrate(patternLayer, tx, ty, tile);
+            } else if (noise < 0.08) {
+              addWaxConduit(patternLayer, tx, ty, tile, noise);
+            }
+          }
+        }
+
+        // 2. Wax Wall Layer (procedural tiles)
         const hiveWallLayer = new Container();
         hiveWallLayer.sortableChildren = true;
         (hiveWallLayer as Container & { label?: string }).label = 'hive-walls';
@@ -412,42 +737,46 @@ export function OfficeFloor() {
             const gid = mapRenderer.gidAt('walls', x, y);
             if (!gid) continue;
             const above = mapRenderer.gidAt('walls', x, y - 1);
-            const segment = new Sprite(hiveWallTex);
+            const left = mapRenderer.gidAt('walls', x - 1, y);
+            const right = mapRenderer.gidAt('walls', x + 1, y);
+            const upLeft = mapRenderer.gidAt('walls', x - 1, y - 1);
+            const upRight = mapRenderer.gidAt('walls', x + 1, y - 1);
+            let tex = hiveWallTextures.body;
+            if (!above) {
+              tex = hiveWallTextures.cap;
+            } else if ((!left && right) || (left && !right)) {
+              tex = hiveWallTextures.column;
+            }
+            if ((!above && !left) || (!above && !right) || (!left && !upLeft) || (!right && !upRight)) {
+              tex = hiveWallTextures.corner;
+            }
+            const segment = new Sprite(tex);
             segment.eventMode = 'none';
-            segment.width = tile;
-            segment.height = tile;
             segment.position.set(x * tile, y * tile);
             segment.zIndex = (y + 0.1) * tile;
-            if (!above) {
-              segment.tint = 0xfff4d0;
-            } else {
-              segment.tint = 0xf5ebd6;
-            }
             hiveWallLayer.addChild(segment);
           }
         }
         const wallInsertIndex = mapContainer.getChildIndex(charLayer);
         mapContainer.addChildAt(hiveWallLayer, wallInsertIndex >= 0 ? wallInsertIndex : mapContainer.children.length);
 
-        // 3. Hive Desks (Sprite instances using hiveDeskTex)
+        // 3. Hive desk pods (procedural sprites)
         const hiveDeskLayer = new Container();
         hiveDeskLayer.sortableChildren = true;
         const charInsertIndex = mapContainer.getChildIndex(charLayer);
         mapContainer.addChildAt(hiveDeskLayer, charInsertIndex >= 0 ? charInsertIndex : mapContainer.children.length);
 
-        const spawnEntries = Array.from(mapRenderer.getAllSpawnPoints());
+        const deskAssets = hiveDeskAssets;
         spawnEntries
           .filter(([name]) => name.startsWith('desk-') || name.startsWith('pc-'))
           .sort((a, b) => a[1].y - b[1].y || a[1].x - b[1].x)
           .forEach(([, point]) => {
-            const deskNoise = pseudoNoise(point.x * 0.37, point.y * 0.41);
-            const deskSprite = new Sprite(hiveDeskTex);
+            const deskNoise = Math.abs(pseudoNoise(point.x * 0.37, point.y * 0.41));
+            const variant = deskAssets[Math.floor(deskNoise * deskAssets.length) % deskAssets.length];
+            const deskSprite = new Sprite(variant.texture);
             deskSprite.eventMode = 'none';
-            deskSprite.width = tile * 2.4;
-            deskSprite.height = tile * 2.0;
-            deskSprite.anchor.set(0.5, 0.5);
+            deskSprite.anchor.set(variant.anchorX, variant.anchorY);
             deskSprite.position.set((point.x + 0.5) * tile, (point.y + 0.35) * tile);
-            deskSprite.tint = mixColor(0xffffff, colors.accent.lemon, 0.08 + deskNoise * 0.12);
             deskSprite.zIndex = (point.y + 0.25) * tile;
             hiveDeskLayer.addChild(deskSprite);
           });
