@@ -5156,7 +5156,7 @@ ipcMain.handle('pty:list', () => ptyManager.list());
 // resumes from the agent's memory.md. Treats the Overmind like any other agent
 // (no special-casing). The reconstructed config comes from the registry entry,
 // so the new session keeps the same name, cwd, provider, and runtime profile.
-ipcMain.handle('agent:respawn', async (_evt, agentId: unknown) => {
+ipcMain.handle('agent:respawn', async (evt, agentId: unknown) => {
   if (typeof agentId !== 'string' || !agentId.trim()) return { ok: false, error: 'invalid agentId' };
   const id = agentId.trim();
   const root = hive.root();
@@ -5182,38 +5182,78 @@ ipcMain.handle('agent:respawn', async (_evt, agentId: unknown) => {
     }
     hive.setArchived(id, true);
 
-    // 3) Queue a fresh spawn-request reconstructed from the registry entry. The
-    //    objective points at the prior session's memory.md (absolute path) so the
-    //    respawn resumes that thread rather than starting cold. This IPC path is
-    //    the FALLBACK for an agent with no live PTY — a live agent (including the
-    //    Overmind) is respawned renderer-side through the identity-preserving
-    //    restart path instead, so it never becomes a generic worker. The Overmind
-    //    objective still names its CLAUDE.md/PROTOCOL.md so a no-PTY god comes back
-    //    orchestrating the floor rather than acting like a one-off worker.
-    const dir = spawnRequestsDir();
-    if (!dir) return { ok: false, error: 'spawn-requests dir unavailable' };
-    mkdirSync(dir, { recursive: true });
-    const reqId = `respawn-${id}-${Date.now().toString(36)}`;
     const harnessHome = entry.isOvermind ? resolveHarnessHome() : null;
     if (entry.isOvermind && !harnessHome) return { ok: false, error: 'harnessHome unavailable' };
     const overmindAgentDir = entry.isOvermind && harnessHome ? join(harnessHome, 'agents', 'god') : undefined;
     const memPath = entry.isOvermind && overmindAgentDir
       ? join(overmindAgentDir, 'memory.md')
       : join(root, 'agents', id, 'memory.md');
-    const objective = entry.isOvermind
-      ? `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.`
-      : `You are a respawn of ${entry.name}. First read your prior session's memory at ${memPath}, then resume that work where the previous session left off.${entry.role ? ` Role: ${entry.role}.` : ''}`;
     const spawnCwd = entry.isOvermind && overmindAgentDir ? overmindAgentDir : (entry.cwd || root);
+
+    // 3) Overmind case: spawn directly via spawnAgentCore so the Queen comes back
+    //    with her exact identity, godId, CLAUDE.md, and skills, rather than an
+    //    unwatched spawn-request that would otherwise spawn an ephemeral worker.
+    if (entry.isOvermind) {
+      hive.setArchived(id, false);
+      const cfg = readConfig();
+      const profile = getRuntimeProfile(entry.profileId);
+      const effectiveProvider = (entry.provider || profile?.provider || cfg.godProvider || 'claude') as AgentProvider;
+      const launch = buildWorkerLaunch({
+        requestCommand: (entry as unknown as { command?: string }).command || profile?.command,
+        requestProvider: effectiveProvider,
+        requestModel: cfg.godModel || profile?.model,
+        defaultCommand: cfg.defaultCommand,
+        autoMode: !!cfg.autoMode
+      });
+      const webContents = (evt.sender ? BrowserWindow.fromWebContents(evt.sender)?.webContents : null) ?? liveWebContents();
+      const spawnOpts: AgentSpawnOptions = {
+        id,
+        cwd: spawnCwd,
+        command: launch.bin,
+        args: launch.args,
+        cols: 100,
+        rows: 30,
+        resume: false,
+        provider: effectiveProvider,
+        isolate: false,
+        hive: {
+          id,
+          name: 'BeeYoncé',
+          provider: effectiveProvider,
+          cwd: spawnCwd,
+          isOvermind: true,
+          role: 'Queen'
+        }
+      };
+      const res = await spawnAgentCore(spawnOpts, webContents);
+      if (!res.ok) return { ok: false, error: res.error ?? 'failed to spawn Overmind' };
+      setTimeout(() => {
+        try {
+          ptyManager.write(id, `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.\r`);
+        } catch { /* best-effort */ }
+      }, 1500);
+      return { ok: true };
+    }
+
+    // 4) Worker case: queue a fresh spawn-request and immediately process it so
+    //    an operator-initiated respawn runs even if orchestratorMaySpawn is false.
+    const dir = spawnRequestsDir();
+    if (!dir) return { ok: false, error: 'spawn-requests dir unavailable' };
+    mkdirSync(dir, { recursive: true });
+    const reqId = `respawn-${id}-${Date.now().toString(36)}`;
+    const objective = `You are a respawn of ${entry.name || id}. First read your prior session's memory at ${memPath}, then resume that work where the previous session left off.${entry.role ? ` Role: ${entry.role}.` : ''}`;
     const req: SpawnRequest = {
       id: reqId,
-      name: entry.isOvermind ? 'BeeYoncé' : (entry.name || id),
+      name: entry.name || id,
       objective,
       cwd: spawnCwd,
       provider: entry.provider,
       profile: entry.profileId,
       isolate: false
     };
-    writeFileSync(join(dir, `${reqId}.json`), JSON.stringify(req, null, 2), 'utf8');
+    const reqFile = join(dir, `${reqId}.json`);
+    writeFileSync(reqFile, JSON.stringify(req, null, 2), 'utf8');
+    void processSpawnRequest(reqFile).catch((e) => console.error('[respawn] processSpawnRequest failed:', e));
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

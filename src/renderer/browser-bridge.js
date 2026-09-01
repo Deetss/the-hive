@@ -52,6 +52,7 @@ if (typeof window.cth !== 'undefined') { /* Electron — preload handles IPC */ 
   "hiveAgentDirectory": "hive:agentDirectory",
   "listWorkers": "workers:list",
   "stopWorker": "workers:stop",
+  "respawnAgent": "agent:respawn",
   "memoryStatus": "hive:memoryStatus",
   "toolsStatus": "tools:status",
   "heroPayload": "hero:payload",

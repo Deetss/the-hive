@@ -22,6 +22,8 @@ All notable changes to this project are documented here. The format is based on
 ### Fixed
 
 - Fix query routing bug where human query replies from god appeared in For You instead of Ask
+- Fix Overmind (Queen) respawn button flow to directly launch fresh session via `spawnAgentCore`
+- Fix macOS release workflow failure by disabling auto-discovered code signing when cert secrets are absent
 
 ## [0.4.5] — 2026-08-22
 

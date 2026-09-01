@@ -62,6 +62,7 @@ jobs:
         run: npx electron-builder ${{ matrix.args }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
           # macOS code signing + notarization — MUST be macOS-only. CSC_LINK is the
           # Apple Developer ID .p12; if it leaks into the Windows/Linux runners,
           # electron-builder tries to sign those targets with the mac cert and the

@@ -75,6 +75,7 @@ npmRebuild: false
 
 # ---- macOS ----
 mac:
+  identity: null
   category: public.app-category.developer-tools
   icon: build/icon.icns
   # Declare WHY the app touches the user's folders. macOS shows these strings in
