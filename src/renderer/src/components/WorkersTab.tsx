@@ -336,6 +336,21 @@ export function WorkersTab() {
                       >
                         {w.releasing || stopping[w.workerId] ? 'stopping…' : 'stop'}
                       </PixelButton>
+                      <PixelButton
+                        onClick={async () => {
+                          if (!window.confirm(`Respawn ${w.name}? This will archive the current session and start a fresh one. It will resume from memory.md.`)) return;
+                          try {
+                            const res = await window.cth.respawnAgent(w.workerId);
+                            if (res && !res.ok) console.error('[respawn] failed:', res.error);
+                          } catch (err) {
+                            console.error('[respawn] error:', err);
+                          } finally {
+                            refresh();
+                          }
+                        }}
+                      >
+                        ↺ respawn
+                      </PixelButton>
                     </div>
                   </div>
                   <div style={metaRow}>

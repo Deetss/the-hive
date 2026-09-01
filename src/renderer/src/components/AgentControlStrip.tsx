@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PixelButton } from './PixelButton';
 import { AgentHoldButton } from './AgentHoldButton';
+import { useStore } from '@/store/store';
 
 /**
  * Operator control for one agent (#7C.1-7C.3) — pause (deny tools at the next
@@ -96,6 +97,29 @@ export function AgentControlStrip({ agentId }: { agentId: string }) {
             aria-label="Stop this agent after the current step"
           >
             stop after this step
+          </span>
+        </PixelButton>
+        <PixelButton
+          variant="secondary"
+          size="sm"
+          onClick={async () => {
+            const agent = useStore.getState().agents.find((x) => x.id === agentId);
+            const name = agent?.name ?? agentId;
+            if (!window.confirm(`Respawn ${name}? This will archive the current session and start a fresh one. It will resume from memory.md.`)) return;
+            try {
+              const res = await window.cth.respawnAgent(agentId);
+              if (res && !res.ok) console.error('[respawn] failed:', res.error);
+            } catch (err) {
+              console.error('[respawn] error:', err);
+            }
+          }}
+        >
+          <span
+            className="cth-tip cth-tip-left cth-tip-wrap"
+            data-tip="Archive the current session and start a fresh one resuming from memory.md."
+            aria-label="Respawn this agent"
+          >
+            ↺ respawn
           </span>
         </PixelButton>
         {/* Sits with them at the founder's call. It is a different KIND of

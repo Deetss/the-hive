@@ -5203,10 +5203,10 @@ ipcMain.handle('agent:respawn', async (_evt, agentId: unknown) => {
     const objective = entry.isOvermind
       ? `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.`
       : `You are a respawn of ${entry.name}. First read your prior session's memory at ${memPath}, then resume that work where the previous session left off.${entry.role ? ` Role: ${entry.role}.` : ''}`;
-    const spawnCwd = entry.isOvermind && overmindAgentDir ? overmindAgentDir : entry.cwd;
+    const spawnCwd = entry.isOvermind && overmindAgentDir ? overmindAgentDir : (entry.cwd || root);
     const req: SpawnRequest = {
       id: reqId,
-      name: entry.isOvermind ? 'BeeYoncé' : entry.name,
+      name: entry.isOvermind ? 'BeeYoncé' : (entry.name || id),
       objective,
       cwd: spawnCwd,
       provider: entry.provider,

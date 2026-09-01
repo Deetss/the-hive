@@ -9,6 +9,7 @@ All notable changes to this project are documented here. The format is based on
 ### Added
 
 - Add Linux .deb build target
+- Add Respawn (↺) button to agent fleet cards in UI (archives session & resumes fresh from memory.md)
 
 ### Changed
 

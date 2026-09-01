@@ -271,6 +271,15 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
     const all = useStore.getState().agents;
     await Promise.all(all.map((a) => window.cth.controlAutoDelivery(a.id, next).catch(() => null)));
   };
+  const handleRespawn = async (a: Agent) => {
+    if (!window.confirm(`Respawn ${a.name}? This will archive the current session and start a fresh one. It will resume from memory.md.`)) return;
+    try {
+      const res = await window.cth.respawnAgent(a.id);
+      if (res && !res.ok) console.error('[respawn] failed:', res.error);
+    } catch (err) {
+      console.error('[respawn] error:', err);
+    }
+  };
   const openQr = useCallback(async () => {
     setQrOpen(true);
     if (mobilePairing) return;
@@ -397,18 +406,16 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
               <QrGlyph /> mobile
             </span>
           </PixelButton>
-          {agent.isOvermind && (
-            <button
-              title="Archive this session and spawn a fresh BeeYoncé (respawn)"
-              onClick={() => respawn(agent)}
-              style={{
-                border: 'none', cursor: 'pointer', padding: '3px 6px',
-                fontFamily: 'var(--cth-font-ui)', fontSize: 13,
-                color: 'var(--cth-ink-500)', background: 'transparent',
-                display: 'inline-flex', alignItems: 'center'
-              }}
-            >↺</button>
-          )}
+          <button
+            title={`Archive this session and spawn a fresh ${agent.name} (respawn)`}
+            onClick={() => handleRespawn(agent)}
+            style={{
+              border: 'none', cursor: 'pointer', padding: '3px 6px',
+              fontFamily: 'var(--cth-font-ui)', fontSize: 13,
+              color: 'var(--cth-ink-500)', background: 'transparent',
+              display: 'inline-flex', alignItems: 'center'
+            }}
+          >↺</button>
         </div>
       </div>
 
@@ -830,7 +837,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
   // spawn-request can never produce that, so the IPC fallback below is only for
   // an agent with no live PTY (already archived), which cannot use this path.
   const respawn = async (a: Agent) => {
-    if (!window.confirm(`Archive and respawn ${a.name}? It will start a fresh session (resuming from memory.md).`)) return;
+    if (!window.confirm(`Respawn ${a.name}? This will archive the current session and start a fresh one. It will resume from memory.md.`)) return;
     if (a.ptyId) {
       await restartWithModel(a, a.model, { resume: false });
       return;
@@ -1179,6 +1186,17 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
               </button>
               <PixelBadge status={armed ? 'looping' : a.status} />
               {armed && <span title={breaker?.reason} style={{ color: 'var(--cth-coral)', fontSize: 12 }}>⚠</span>}
+              <button
+                type="button"
+                title={`Archive ${a.name}'s current session and spawn a fresh one (respawn)`}
+                onClick={(e) => { e.stopPropagation(); respawn(a); }}
+                style={{
+                  border: 'none', cursor: 'pointer', padding: '1px 4px',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 12,
+                  color: 'var(--cth-ink-500)', background: 'transparent',
+                  display: 'inline-flex', alignItems: 'center'
+                }}
+              >↺</button>
               <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--cth-ink-500)' }}>
                 {(toolCounts[a.id] ?? 0)} tool calls
               </span>

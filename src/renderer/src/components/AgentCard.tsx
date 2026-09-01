@@ -63,6 +63,8 @@ export interface AgentCardProps {
   provider?: AgentProvider;
   model?: string;
   profileId?: string;
+  /** Custom handler for respawn; defaults to window.cth.respawnAgent(agentId). */
+  onRespawn?: (agentId: string) => void;
 }
 
 const fmtK = (n: number): string => `${Math.round(n / 1000)}k`;
@@ -103,7 +105,8 @@ export function AgentCard({
   name, agentId, character, accent, status, ptyId, project, action, progress = 0,
   contextTokens, contextLimit, selected, isOvermind, onClick, onRename,
   doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold,
-  lastTool, lastActivityTs, cwd, worktreePath, command, provider, model, profileId
+  lastTool, lastActivityTs, cwd, worktreePath, command, provider, model, profileId,
+  onRespawn
 }: AgentCardProps) {
   const [hover, setHover] = useState(false);
   const typing = useHasTerminalDraft(ptyId);
@@ -300,6 +303,41 @@ export function AgentCard({
                   background: 'var(--cth-lemon)', color: 'var(--cth-ink-900)',
                   boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
                 }}>1:1</span>
+              )}
+              {agentId && (
+                <button
+                  type="button"
+                  title={`Respawn ${name} (archive session & start fresh from memory.md)`}
+                  aria-label={`Respawn ${name}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (!window.confirm(`Respawn ${name}? This will archive the current session and start a fresh one. It will resume from memory.md.`)) return;
+                    if (onRespawn) {
+                      onRespawn(agentId);
+                      return;
+                    }
+                    try {
+                      const res = await window.cth.respawnAgent(agentId);
+                      if (res && !res.ok) console.error('[respawn] failed:', res.error);
+                    } catch (err) {
+                      console.error('[respawn] error:', err);
+                    }
+                  }}
+                  style={{
+                    flexShrink: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    padding: '0 2px',
+                    fontFamily: 'var(--cth-font-ui)',
+                    fontSize: 12,
+                    lineHeight: '12px',
+                    color: 'var(--cth-ink-500)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >↺</button>
               )}
             </div>
 
