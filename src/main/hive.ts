@@ -2842,6 +2842,18 @@ There are two shared surfaces, both in the hive root:
 - \`tasks.json\` — the structured task ledger (a kanban: \`todo / doing / blocked / done\`, with title,
   assignee, priority, deps). Keep the task you're working reflected in its status.
 
+## Blocked on a decision? Surface it on ASK ME
+Do not guess on a choice you cannot make autonomously (a design trade-off, ambiguous scope,
+or anything that needs the human's call), and do not bury it in a \`done\` report. Instead:
+1. Set your task's \`status\` to \`blocked\` in \`tasks.json\`.
+2. Append the ask to that card's \`humanQA\` array: push \`{"q":"<the decision + the concrete options>","askedAt":"<iso>"}\`, keeping every past entry.
+3. Message Abathur (\`"to":"god"\`) so the floor knows you are waiting.
+
+The harness surfaces open \`humanQA\` on the office floor's ASK ME board, labelled with your task
+title so the human has context. The answer lands back in the same entry (\`a\`) and also arrives as
+an inbox message to you: read it, act on it, and move the card off \`blocked\` so work continues.
+While you wait, pick up other work rather than sitting idle.
+
 ## Guardrails: circuit breaker & token budgets
 A circuit breaker watches every agent for runaway behavior (looping on the same tool, error storms,
 overspending). It escalates gently: \`steer\` → \`constrain\` → \`stop\`. If a \`Circuit breaker: steer\`
