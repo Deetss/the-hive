@@ -236,6 +236,12 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
   // Seeded via the store one-shot (the detail overlay lives app-wide now);
   // { seq } makes every assign distinct so identical text re-seeds.
   const [dispatchSeed, setDispatchSeed] = useState<{ text: string; seq: number }>({ text: '', seq: 0 });
+  // Keep the heavy "monitor" (floor) tab MOUNTED once it is first opened, so
+  // returning to it is instant instead of paying a full remount plus a config +
+  // telemetry re-fetch on every switch (the "monitor tab feels laggy" report).
+  // Deferred until the first visit, so it costs nothing on initial app load.
+  const [floorMounted, setFloorMounted] = useState(false);
+  useEffect(() => { if (tab === 'floor') setFloorMounted(true); }, [tab]);
   const dispatchSeedRequest = useStore((s) => s.dispatchSeedRequest);
   const clearDispatchSeedRequest = useStore((s) => s.clearDispatchSeedRequest);
   useEffect(() => {
@@ -613,7 +619,11 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
             <Centered>BeeYoncé has no live terminal.</Centered>
           )
         )}
-        {tab === 'floor' && <FloorTab seed={dispatchSeed} onSeedConsumed={resetDispatchSeed} />}
+        {floorMounted && (
+          <div style={{ flex: 1, minHeight: 0, display: tab === 'floor' ? 'flex' : 'none', flexDirection: 'column' }}>
+            <FloorTab seed={dispatchSeed} onSeedConsumed={resetDispatchSeed} />
+          </div>
+        )}
         {tab === 'tasks' && <TasksKanban mobile={mobile} />}
         {tab === 'ask' && <QuickAskPanel />}
         {tab === 'human' && <AskMeTab />}
