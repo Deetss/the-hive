@@ -186,17 +186,17 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   // and written once by finish() — onboarding never persists config incrementally.
   type KbSourceType = 'folder' | 'outline-mcp' | 'custom-mcp';
   type KbSourceEntry = { type: KbSourceType; value: string };
-  const OUTLINE_DEFAULT_URL = 'https://docs.bloomfieldhomes.org';
+  // Generic placeholder only — never prefill a real instance URL, there is no
+  // Outline connection URL in config to pull from and hardcoding one is wrong.
+  const OUTLINE_URL_PLACEHOLDER = 'https://your-outline-instance.com';
   const [kbSources, setKbSources] = useState<KbSourceEntry[]>([]);
   const addKbSource = () => setKbSources((prev) => [...prev, { type: 'folder', value: '' }]);
   const removeKbSource = (idx: number) => setKbSources((prev) => prev.filter((_, i) => i !== idx));
   const updateKbSource = (idx: number, patch: Partial<KbSourceEntry>) =>
     setKbSources((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
   const changeKbSourceType = (idx: number, type: KbSourceType) => {
-    // Switching an empty row to Outline prefills the instance URL (SettingsModal parity).
-    const cur = kbSources[idx];
-    const value = type === 'outline-mcp' && !cur.value.trim() ? OUTLINE_DEFAULT_URL : cur.value;
-    updateKbSource(idx, { type, value });
+    // Keep whatever the user typed; do NOT auto-fill any instance URL.
+    updateKbSource(idx, { type });
   };
   const pickKbFolder = async (idx: number) => {
     const res = await window.cth.chooseFolder();
@@ -676,7 +676,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                         <input
                           type="url"
                           value={src.value}
-                          placeholder={src.type === 'outline-mcp' ? OUTLINE_DEFAULT_URL : 'https://…'}
+                          placeholder={src.type === 'outline-mcp' ? OUTLINE_URL_PLACEHOLDER : 'https://…'}
                           onChange={(e) => updateKbSource(idx, { value: e.target.value })}
                           style={inputStyle}
                         />
