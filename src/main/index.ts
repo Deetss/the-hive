@@ -2399,7 +2399,10 @@ let governorBeatTimer: ReturnType<typeof setInterval> | null = null;
 let lockHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
 // Feed the breaker's api_error-storm trip from Oscar's OTel api_error spans —
 // Jim's one breaker input with no on-branch source (telemetry.onApiError seam).
-telemetry.onApiError((agentId) => breaker.recordError(agentId));
+// The error text rides along so the breaker can route rate-limit/quota errors
+// (429/529, usage limit, overloaded) to a quota-limited stop instead of the
+// loop-detection escalation.
+telemetry.onApiError((agentId, error) => breaker.recordError(agentId, error));
 // Shared roster on disk — created early so HookServer can re-read standing goals
 // on every UserPromptSubmit (Edit Agent saves land here via persistAgents).
 const roster = new RosterStore(() => resolveHarnessHome());
@@ -3475,7 +3478,7 @@ function writeFleetSnapshot(): void {
           : isWorking ? 'working' : (lastAgentStatus.get(id) ?? (a.status || 'idle'));
         const agentLastTool = lastAgentTool.get(id) ?? (spans.length ? spans[spans.length - 1].tool : null);
         const ptyCtx = lastAgentPtyCtx.get(id);
-        let quotaLimited = lastAgentQuotaLimited.get(id) ?? false;
+        let quotaLimited = (lastAgentQuotaLimited.get(id) ?? false) || breaker.isQuotaLimited(id);
         const quotaResetsAt = lastAgentQuotaResetsAt.get(id) ?? null;
         // Auto-recover: once the parsed reset time passes, clear the flag so the
         // badge and status drop on their own without waiting for fresh PTY output.

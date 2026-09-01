@@ -86,6 +86,19 @@ const PROGRESS_TOOL_WINDOW_MS = 300_000;
  *  one-beat blip (inbox ack, statusline burst) never steers on its own. */
 const NO_PROGRESS_BEATS = 2;
 
+/** API rate-limit / quota-exhaustion errors. These are EXTERNAL provider limits,
+ *  not agent loop behavior, so they must route to a quota-limited stop (stop
+ *  sending to the agent) — NOT the error-storm loop escalation. Matches 429,
+ *  usage/quota exhaustion, and Anthropic "overloaded" (529). */
+const RATE_LIMIT_RE =
+  /\b429\b|\b529\b|rate[ _-]?limit|usage limit|quota (?:reached|exceeded|exhausted|limit)|overloaded|too many requests|insufficient[ _-]?quota/i;
+
+/** True when an api_error message is an external rate-limit/quota hit rather than
+ *  a general/transient API error. */
+export function isRateLimitError(message: string | undefined | null): boolean {
+  return !!message && RATE_LIMIT_RE.test(message);
+}
+
 interface AgentBreakerState {
   level: BreakerLevel;
   reason: string;
@@ -95,6 +108,13 @@ interface AgentBreakerState {
   repeatCount: number;
   /** Consecutive api_error / retry events with no intervening progress. */
   errorCount: number;
+  /** External provider rate-limit/quota hit (429/529, usage limit, overloaded).
+   *  Set by recordError when the error text is a rate-limit pattern; means STOP
+   *  sending to this agent, NOT loop escalation. Cleared on the next distinct
+   *  tool call (the agent is working again) or on forget(). */
+  quotaLimited: boolean;
+  /** The rate-limit error text that set quotaLimited (truncated), for surfacing. */
+  quotaReason: string;
   /** Δoutput-based trips are exempt until this instant (compaction in flight,
    *  set on PreCompact; PostCompact shortens it to a trailing grace). */
   compactingUntil: number;
@@ -132,7 +152,8 @@ export class CircuitBreaker {
     if (!s) {
       s = {
         level: 'healthy', reason: '', lastSample: null, repeatKey: null, repeatCount: 0,
-        errorCount: 0, compactingUntil: 0, lastDistinctToolAt: 0, noProgressBeats: 0
+        errorCount: 0, quotaLimited: false, quotaReason: '', compactingUntil: 0,
+        lastDistinctToolAt: 0, noProgressBeats: 0
       };
       this.agents.set(agentId, s);
     }
@@ -147,6 +168,18 @@ export class CircuitBreaker {
   /** Current breaker level for an agent (for the live fleet snapshot). */
   levelFor(agentId: string): BreakerLevel {
     return this.agents.get(agentId)?.level ?? 'healthy';
+  }
+
+  /** True when this agent hit an external rate-limit/quota (429/529, usage limit,
+   *  overloaded) — the caller should stop sending requests to it, NOT steer it.
+   *  Auto-clears once the agent makes a distinct tool call (quota recovered). */
+  isQuotaLimited(agentId: string): boolean {
+    return this.agents.get(agentId)?.quotaLimited ?? false;
+  }
+
+  /** The rate-limit error text that set the quota-limited flag, or '' if none. */
+  quotaReasonFor(agentId: string): string {
+    return this.agents.get(agentId)?.quotaReason ?? '';
   }
 
   // ── event-driven inputs (fed by HookServer) ──────────────────────────────
@@ -164,12 +197,25 @@ export class CircuitBreaker {
       s.repeatCount = 1;
       s.errorCount = 0; // a distinct tool call = progress; clear the error storm
       s.lastDistinctToolAt = now;
+      s.quotaLimited = false; // a fresh distinct tool call = quota recovered
+      s.quotaReason = '';
     }
   }
 
-  /** An api_error / retry occurred (no forward progress). */
-  recordError(agentId: string): void {
-    this.get(agentId).errorCount += 1;
+  /** An api_error / retry occurred. A rate-limit / quota error (429/529, usage
+   *  limit, overloaded) is an EXTERNAL provider limit, not loop behavior: it
+   *  flags the agent quota-limited (caller stops sending) and clears any pending
+   *  error storm so the loop ladder can't also fire on it. Every other api_error
+   *  feeds the error-storm trip as before. */
+  recordError(agentId: string, message?: string): void {
+    const s = this.get(agentId);
+    if (isRateLimitError(message)) {
+      s.quotaLimited = true;
+      s.quotaReason = (message ?? '').slice(0, 200);
+      s.errorCount = 0;
+      return;
+    }
+    s.errorCount += 1;
   }
 
   /** Compaction started (PreCompact hook). Exempt the Δoutput-based trips —

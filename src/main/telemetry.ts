@@ -152,7 +152,7 @@ export class TelemetryCollector {
   private readonly usageSubs = new Set<(s: AgentUsageSample) => void>();
   /** api_error subscribers — feeds Lane A's breaker error-storm trip (#6), which
    *  has no input source of its own (hook payloads don't expose api errors). */
-  private readonly apiErrorSubs = new Set<(agentId: string) => void>();
+  private readonly apiErrorSubs = new Set<(agentId: string, error: string) => void>();
 
   constructor(opts: TelemetryCollectorOptions = {}) {
     this.host = opts.host ?? '127.0.0.1';
@@ -210,7 +210,7 @@ export class TelemetryCollector {
   /** In-process api_error feed for Lane A's breaker (#6). At integration:
    *  `telemetry.onApiError((agentId) => breaker.recordError(agentId))`. Returns
    *  an unsubscribe fn. */
-  onApiError(cb: (agentId: string) => void): () => void {
+  onApiError(cb: (agentId: string, error: string) => void): () => void {
     this.apiErrorSubs.add(cb);
     return () => this.apiErrorSubs.delete(cb);
   }
@@ -356,7 +356,7 @@ export class TelemetryCollector {
             if (ring?.length) ring[ring.length - 1].decision = decision;
           } else if (name === 'api_error' || (name && name.includes('error'))) {
             const error = str(attrs['error']) || str(attrs['message']) || name;
-            for (const cb of this.apiErrorSubs) { try { cb(agentId); } catch { /* subscriber threw */ } }
+            for (const cb of this.apiErrorSubs) { try { cb(agentId, error); } catch { /* subscriber threw */ } }
             this.emit?.('telemetry:event', { kind: 'api_error', agentId, sessionId, ts: Date.now(), error } satisfies TelemetryEvent);
           }
         }

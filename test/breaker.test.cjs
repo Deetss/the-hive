@@ -29,7 +29,7 @@ const js = ts.transpileModule(fs.readFileSync(SRC, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
 }).outputText;
 fs.writeFileSync(path.join(out, 'breaker.js'), js, 'utf8');
-const { CircuitBreaker } = require(path.join(out, 'breaker.js'));
+const { CircuitBreaker, isRateLimitError } = require(path.join(out, 'breaker.js'));
 
 let failures = 0;
 function test(name, fn) {
@@ -74,6 +74,71 @@ test('error storm trips', () => {
   const d = beat(b, 'a', null, true, T0);
   assert.equal(d.state.level, 'steering');
   assert.match(d.state.reason, /error storm/);
+});
+
+test('generic api errors with a message still trip the error storm', () => {
+  const b = makeBreaker();
+  for (let i = 0; i < 5; i++) b.recordError('a', 'ECONNRESET: socket hang up');
+  const d = beat(b, 'a', null, true, T0);
+  assert.equal(d.state.level, 'steering');
+  assert.match(d.state.reason, /error storm/);
+});
+
+// ── rate-limit / quota errors route to a quota stop, NOT loop escalation ─────
+
+test('isRateLimitError matches provider rate-limit / quota text', () => {
+  for (const m of [
+    'HTTP 429 Too Many Requests',
+    '529 overloaded_error',
+    'This request would exceed your usage limit',
+    'rate limit reached for requests',
+    'quota exceeded',
+    'insufficient_quota',
+    'Overloaded'
+  ]) assert.ok(isRateLimitError(m), `expected rate-limit: ${m}`);
+  for (const m of [undefined, null, '', 'ECONNRESET', 'internal server error', 'timeout'])
+    assert.ok(!isRateLimitError(m), `expected NOT rate-limit: ${m}`);
+});
+
+test('rate-limit errors do NOT trip the error storm (even past the limit)', () => {
+  const b = makeBreaker();
+  for (let i = 0; i < 8; i++) b.recordError('a', 'HTTP 429: rate limit reached');
+  const d = beat(b, 'a', null, true, T0);
+  assert.equal(d.state.level, 'healthy', `reason: ${d.state.reason}`);
+});
+
+test('a rate-limit error flags the agent quota-limited', () => {
+  const b = makeBreaker();
+  assert.equal(b.isQuotaLimited('a'), false);
+  b.recordError('a', 'usage limit exceeded — resets in 2h');
+  assert.equal(b.isQuotaLimited('a'), true);
+  assert.match(b.quotaReasonFor('a'), /usage limit/);
+});
+
+test('a rate-limit error clears an accumulated error storm', () => {
+  const b = makeBreaker();
+  for (let i = 0; i < 4; i++) b.recordError('a'); // 4 generic errors, one shy of the trip
+  b.recordError('a', '429 too many requests');    // the storm was the quota surfacing
+  const d = beat(b, 'a', null, true, T0);
+  assert.equal(d.state.level, 'healthy', `reason: ${d.state.reason}`);
+  assert.equal(b.isQuotaLimited('a'), true);
+});
+
+test('a distinct tool call clears the quota-limited flag (recovered)', () => {
+  const b = makeBreaker();
+  b.recordError('a', '429 rate limit reached');
+  assert.equal(b.isQuotaLimited('a'), true);
+  b.recordToolUse('a', 'Read', { file: 'x' });
+  assert.equal(b.isQuotaLimited('a'), false);
+  assert.equal(b.quotaReasonFor('a'), '');
+});
+
+test('forget() drops the quota-limited flag', () => {
+  const b = makeBreaker();
+  b.recordError('a', 'overloaded');
+  assert.equal(b.isQuotaLimited('a'), true);
+  b.forget('a');
+  assert.equal(b.isQuotaLimited('a'), false);
 });
 
 test('token velocity spike trips on the second sample', () => {
