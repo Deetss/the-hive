@@ -399,6 +399,11 @@ export interface HarnessConfig {
    *  is a local `.md`/`.txt` folder (grep/Read) or an MCP endpoint (Outline /
    *  custom, https). Agents fan out across ALL entries. Empty/unset = no KB. */
   knowledgeBaseSources?: KnowledgeBaseSource[];
+  /** User overrides for the two shipped prompt templates. Persist across app
+   *  updates (the shipped default updates but the override stays); blank/unset a
+   *  field to fall back to the current shipped default. Edited in Settings →
+   *  Prompts, with a revert-to-default per field. */
+  promptOverrides?: { workerOrientation?: string; protocolTemplate?: string };
   /** Skip the launch-time harness config picker and open the last-used home directly. */
   skipHarnessPickerOnLaunch?: boolean;
   /** When true, new agents are spawned with --permission-mode bypassPermissions. */

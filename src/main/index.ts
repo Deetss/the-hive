@@ -6000,6 +6000,13 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
   // config per tick so it gates immediately; this is for the PROMPT, which is
   // built per spawn, so flipping the toggle reaches god the next time he starts.
   if (typeof patch?.orchestratorMaySpawn === 'boolean') hive.setOrchestratorMaySpawn(patch.orchestratorMaySpawn);
+  // Prompt overrides feed the prompt builder (built per spawn) and the PROTOCOL.md
+  // writer. Mirror them; when they change, re-run ensureHive so PROTOCOL.md is
+  // rewritten immediately from the new template (ensureHive is idempotent).
+  if (patch?.promptOverrides !== undefined) {
+    hive.setPromptOverrides(next.promptOverrides);
+    if (hive.enabled()) { try { hive.ensureHive(); } catch (e) { console.error('[hive] ensureHive after prompt override:', e); } }
+  }
   if (!hiveWasEnabled && hive.enabled()) {
     console.log('[hive] harnessHome configured — bootstrapping hive services');
     try { bootstrapHiveServices(); } catch (e) { console.error('[hive] bootstrap after onboarding:', e); }
@@ -6008,6 +6015,12 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
 });
 ipcMain.handle('config:setAgentTokenCap', (_evt, agentId: unknown, tokenCap: unknown) =>
   setAgentTokenCap(agentId, tokenCap)
+);
+// The shipped defaults for the two user-editable prompts, so Settings → Prompts
+// can pre-fill each textarea and offer revert-to-default without baking the
+// (long) default strings into the renderer bundle.
+ipcMain.handle('prompts:getDefaults', (): { workerOrientation: string; protocolTemplate: string } =>
+  hive.promptDefaults()
 );
 // Renderer needs both to build the pairing URL: the LAN/Tailscale hostname the
 // phone will actually reach (window.location.hostname is useless here — the
@@ -8703,6 +8716,7 @@ function bootstrapHiveServices(): void {
   // builder reads this, so an agent spawned earlier would never learn it.
   hive.setRuntimeInfo({ version: app.getVersion(), packaged: app.isPackaged, appPath: app.getAppPath(), userData: app.getPath('userData') });
   hive.setOrchestratorMaySpawn(readConfig().orchestratorMaySpawn === true);
+  hive.setPromptOverrides(readConfig().promptOverrides);
   // An app-start marker in the event log. log.jsonl had twelve event kinds and
   // none of them meant "the app restarted", so a relaunch, and more importantly a
   // switch between a packaged build and a local one, was invisible to every agent

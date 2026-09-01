@@ -379,6 +379,22 @@ export class HiveManager {
     return this._maySpawn;
   }
 
+  /** User's prompt overrides (config.promptOverrides), mirrored here so the prompt
+   *  builder and the PROTOCOL.md writer can use them instead of the shipped
+   *  defaults. Set at bootstrap and on every config write; hive.ts deliberately
+   *  does not import the config module. Blank/absent → the shipped default. */
+  private _promptOverrides: { workerOrientation?: string; protocolTemplate?: string } = {};
+  setPromptOverrides(overrides: { workerOrientation?: string; protocolTemplate?: string } | undefined): void {
+    this._promptOverrides = overrides ?? {};
+  }
+
+  /** The shipped defaults for the two user-editable prompts — for the Settings UI
+   *  to pre-fill and revert-to-default. workerOrientation is the standard worker
+   *  orientation body; protocolTemplate is the PROTOCOL.md template. */
+  promptDefaults(): { workerOrientation: string; protocolTemplate: string } {
+    return { workerOrientation: DEFAULT_WORKER_ORIENTATION, protocolTemplate: PROTOCOL_MD };
+  }
+
   // — paths —
   root(): string | null {
     const home = this.getHome();
@@ -616,7 +632,7 @@ export class HiveManager {
     // the day it was initialised, so every protocol addition since had reached
     // new hives only. The file is generated, not user-authored, and agents are
     // pointed at it as the authority, so a stale copy is worse than a rewrite.
-    writeFileSync(join(root, 'PROTOCOL.md'), PROTOCOL_MD, 'utf8');
+    writeFileSync(join(root, 'PROTOCOL.md'), this._promptOverrides.protocolTemplate?.trim() || PROTOCOL_MD, 'utf8');
 
     const registry = join(root, 'registry.json');
     if (!existsSync(registry)) {
@@ -1599,15 +1615,23 @@ export class HiveManager {
       : meta.isAssistant
       ? 'You are Abathur\'s PREP ASSISTANT. You will be handed short, possibly vague instructions (each begins with "ENRICH TASK:"). For each one: (1) figure out which project it concerns and cd into the most relevant repo — you start in Abathur\'s home directory; (2) gather concrete context READ-ONLY (exact file paths, current state, relevant code, conventions, active branch, gotchas) — NEVER modify, create, or delete files; (3) rewrite the instruction into ONE clear, self-contained prompt that Abathur can execute autonomously, preserving the user\'s original intent without inventing scope. Then deliver it: write ONE message JSON into your outbox with "to":"god", "act":"request", a short subject, and the finished prompt as the body. Do NOT perform the task yourself — your only output is the improved prompt sent to Abathur.'
       : 'For anything ambiguous, cross-cutting, or needing sign-off, address a message to Abathur (to: "god").';
-    const guardrailsLine = 'Guardrails: obey breaker steer/constrain notes, keep board.md/tasks.json current, stay token-frugal.';
+    const guardrailsLine = GUARDRAILS_LINE;
     const slackLine = meta.isOvermind
       ? 'SLACK REPLIES: When composing a Slack reply (or writing the `result` field of a Slack-origin kanban card), you MUST: (1) directly address what the user asked — never a bare "done"; (2) include the relevant specifics, outcome, and details; (3) format for Slack mrkdwn — open with a short *bold* headline, use bullet points for multiple items, wrap code/paths in `backtick` blocks, keep it concise (no walls of text). When finishing a Slack-origin task, always write a complete, user-facing, well-formatted `result` on the kanban card — the system posts it verbatim to Slack as the done reply.'
       : `SLACK REPLIES: If Abathur dispatches you a task that came from Slack, it will include an exact \`"${hiveNode}" "<helper>" --channel … --thread … --text "…"\` reply command — when you finish, run it VERBATIM to post your result back to that thread yourself. The reply must be SUBSTANTIVE Slack mrkdwn (a short *bold* headline + the actual outcome/specifics/links), NEVER a bare "done".`;
-    const progressLine = 'Progress notes: as you work, append timestamped entries to your task card\'s "progressLog" array in tasks.json at key milestones (root-cause found, fix applied, tests passing, etc). Pattern: read tasks.json → JSON.parse → find your task → push {step:"...", ts:new Date().toISOString()} → write back. The human sees these live on the kanban board.';
-    const completionLine = meta.isOvermind
-      ? ''
-      : 'FINISHING A TASK — never go silent the moment the work is done. Run this close-out every time, in order: (1) set the task\'s tasks.json "status" to "done" (keep its "assignee" and "progressLog"); (2) send a substantive "done" report to Abathur ("to":"god") — commit hash / files changed / what changed / how you verified it, NEVER a bare "done"; (3) RE-DRAIN your inbox — new dispatches and "urgent" messages often arrive while you were working (process urgent first, then FIFO); (4) if nothing is waiting, check tasks.json for an unassigned "todo" whose deps are met that fits you, claim it (set "assignee" + "status":"doing") and start — you do not need to wait for a hand-off; (5) only if there is genuinely nothing to pick up, send Abathur a one-line "inform": "inbox empty, idle and available", then stop — do NOT sit polling your own session.';
-    const decisionGateLine = 'Need the human to answer something? Surface it on the ASK ME board, never only in your terminal. This covers EVERY question you need the human to decide, including a quick yes/no or a "which of these": if you just type the question into your own session and wait, the human has to scroll the terminal to even find it and will likely miss it (that is the exact failure this rule exists to stop). Instead: (1) append the ask to your task card\'s "humanQA" array in tasks.json (push {"q":"<the question + the concrete options>","askedAt":"<iso>"}, keeping every past entry); (2) if you are truly stuck until it is answered, also set that task\'s "status" to "blocked" (a quick non-blocking question can stay "doing" so you keep working other parts); (3) message Abathur (to:"god") so the floor knows you are waiting. The harness surfaces open humanQA on the ASK ME board with a badge, labelled with your task title for context; the human\'s answer lands back in the same entry ("a") and arrives in your inbox. Read it, act on it, and move the card off "blocked". While you wait, pick up other work rather than sitting idle.';
+    const progressLine = PROGRESS_LINE;
+    const completionLine = meta.isOvermind ? '' : COMPLETION_LINE_WORKER;
+    const decisionGateLine = DECISION_GATE_LINE;
+    // The orientation body (guardrails, progress, ASK-ME gate, task close-out) is
+    // the one block a user can override via config.promptOverrides.workerOrientation;
+    // the identity header and the feature/role lines around it stay computed. The
+    // override applies to plain workers only — the Overmind/assistant prompts are
+    // structurally special and keep their computed body.
+    const isPlainWorker = !meta.isOvermind && !meta.isAssistant;
+    const orientationOverride = this._promptOverrides.workerOrientation?.trim();
+    const orientationBody = (isPlainWorker && orientationOverride)
+      ? orientationOverride
+      : [guardrailsLine, progressLine, decisionGateLine, completionLine].filter(Boolean).join('\n');
     const basePrompt = [
       `You are "${meta.name}" (${meta.id}), an autonomous agent in a collaborating hive of Claude agents.`,
       `Workspace: ${dir}. Shared hive: ${root}. Full protocol + Slack rules: ${inRoot('PROTOCOL.md')}.`,
@@ -1615,10 +1639,7 @@ export class HiveManager {
       `- Start: read ${inDir('memory.md')} and inbox; file handled mail into ${inDir('inbox', '.done')}.`,
       `- During: capture durable facts in memory.md and send requests via ${inDir('outbox')} JSON.`,
       `- Finish: append what you learned to memory.md, then run the task close-out below (done-report → re-drain inbox → next task or "idle and available").`,
-      guardrailsLine,
-      progressLine,
-      decisionGateLine,
-      completionLine,
+      orientationBody,
       memoryLine,
       knowledgeLine,
       knowledgeBaseLine,
@@ -2849,6 +2870,19 @@ function renderCommandsMd(): string {
   return lines.join('\n');
 }
 const COMMANDS_MD = renderCommandsMd();
+
+/** The standing behavioral instructions for a worker — the block a user can
+ *  override via config.promptOverrides.workerOrientation. The identity header and
+ *  the feature/role lines around it stay computed per agent; only this middle
+ *  body is swapped when an override is present. Kept at module scope so the
+ *  Settings UI can pre-fill + revert to the exact shipped text. */
+const GUARDRAILS_LINE = 'Guardrails: obey breaker steer/constrain notes, keep board.md/tasks.json current, stay token-frugal.';
+const PROGRESS_LINE = 'Progress notes: as you work, append timestamped entries to your task card\'s "progressLog" array in tasks.json at key milestones (root-cause found, fix applied, tests passing, etc). Pattern: read tasks.json → JSON.parse → find your task → push {step:"...", ts:new Date().toISOString()} → write back. The human sees these live on the kanban board.';
+const DECISION_GATE_LINE = 'Need the human to answer something? Surface it on the ASK ME board, never only in your terminal. This covers EVERY question you need the human to decide, including a quick yes/no or a "which of these": if you just type the question into your own session and wait, the human has to scroll the terminal to even find it and will likely miss it (that is the exact failure this rule exists to stop). Instead: (1) append the ask to your task card\'s "humanQA" array in tasks.json (push {"q":"<the question + the concrete options>","askedAt":"<iso>"}, keeping every past entry); (2) if you are truly stuck until it is answered, also set that task\'s "status" to "blocked" (a quick non-blocking question can stay "doing" so you keep working other parts); (3) message Abathur (to:"god") so the floor knows you are waiting. The harness surfaces open humanQA on the ASK ME board with a badge, labelled with your task title for context; the human\'s answer lands back in the same entry ("a") and arrives in your inbox. Read it, act on it, and move the card off "blocked". While you wait, pick up other work rather than sitting idle.';
+const COMPLETION_LINE_WORKER = 'FINISHING A TASK — never go silent the moment the work is done. Run this close-out every time, in order: (1) set the task\'s tasks.json "status" to "done" (keep its "assignee" and "progressLog"); (2) send a substantive "done" report to Abathur ("to":"god") — commit hash / files changed / what changed / how you verified it, NEVER a bare "done"; (3) RE-DRAIN your inbox — new dispatches and "urgent" messages often arrive while you were working (process urgent first, then FIFO); (4) if nothing is waiting, check tasks.json for an unassigned "todo" whose deps are met that fits you, claim it (set "assignee" + "status":"doing") and start — you do not need to wait for a hand-off; (5) only if there is genuinely nothing to pick up, send Abathur a one-line "inform": "inbox empty, idle and available", then stop — do NOT sit polling your own session.';
+export const DEFAULT_WORKER_ORIENTATION = [
+  GUARDRAILS_LINE, PROGRESS_LINE, DECISION_GATE_LINE, COMPLETION_LINE_WORKER
+].join('\n');
 
 const PROTOCOL_MD = `# Hive protocol
 

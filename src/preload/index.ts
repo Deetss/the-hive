@@ -762,6 +762,8 @@ const api = {
     ipcRenderer.invoke('config:get'),
   updateConfig: (patch: Partial<HarnessConfig>): Promise<HarnessConfig> =>
     ipcRenderer.invoke('config:update', patch),
+  getPromptDefaults: (): Promise<{ workerOrientation: string; protocolTemplate: string }> =>
+    ipcRenderer.invoke('prompts:getDefaults'),
   /** Set or clear one per-agent token ceiling against main's latest config. */
   setAgentTokenCap: (agentId: string, tokenCap?: number): Promise<HarnessConfig> =>
     ipcRenderer.invoke('config:setAgentTokenCap', agentId, tokenCap),

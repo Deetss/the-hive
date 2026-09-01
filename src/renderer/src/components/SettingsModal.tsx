@@ -160,8 +160,8 @@ function clearLocalState(): void {
 // v0.3.4 redesign: six tabs, one topic each. 'AI Engines' folded into
 // Agents & Models; MCP + Slack + webhook + REST live together in Connections;
 // voice gets its own tab; Danger Zone became a red row at the bottom of General.
-export type Section = 'General' | 'Prerequisites' | 'Agents & Models' | 'Autonomy & Budgets' | 'Connections' | 'Voice' | 'Memory & Knowledge';
-const NAV_SECTIONS: Section[] = ['General', 'Prerequisites', 'Agents & Models', 'Autonomy & Budgets', 'Connections', 'Voice', 'Memory & Knowledge'];
+export type Section = 'General' | 'Prerequisites' | 'Agents & Models' | 'Autonomy & Budgets' | 'Connections' | 'Voice' | 'Memory & Knowledge' | 'Prompts';
+const NAV_SECTIONS: Section[] = ['General', 'Prerequisites', 'Agents & Models', 'Autonomy & Budgets', 'Connections', 'Voice', 'Memory & Knowledge', 'Prompts'];
 
 export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initialSection }: SettingsModalProps) {
   const [confirming, setConfirming] = useState(false);
@@ -234,6 +234,31 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
     setOrchSpawnOn(next);
     try { await window.cth.updateConfig({ orchestratorMaySpawn: next } as Partial<HarnessConfig>); }
     catch { setOrchSpawnOn(!next); }
+  };
+
+  // ─── Prompts (Settings → Prompts): the two overridable prompt templates ──────
+  // An override is null when the user hasn't customized the field (the textarea
+  // shows the shipped default); a string is the user's edit. writeConfig shallow-
+  // overwrites promptOverrides, so we always send BOTH fields on save.
+  const cfgPrompts = (config as HarnessConfig & { promptOverrides?: { workerOrientation?: string; protocolTemplate?: string } }).promptOverrides ?? {};
+  const [promptDefaults, setPromptDefaults] = useState<{ workerOrientation: string; protocolTemplate: string } | null>(null);
+  useEffect(() => { window.cth.getPromptDefaults().then(setPromptDefaults).catch(() => { /* main not ready */ }); }, []);
+  const [woOverride, setWoOverride] = useState<string | null>(cfgPrompts.workerOrientation ?? null);
+  const [ptOverride, setPtOverride] = useState<string | null>(cfgPrompts.protocolTemplate ?? null);
+  const [promptSaveNote, setPromptSaveNote] = useState('');
+  const savePromptOverrides = async (wo: string | null, pt: string | null) => {
+    // A field equal to its default (or blank) means "no override" → undefined.
+    const norm = (v: string | null, def: string | undefined): string | undefined =>
+      (v != null && v.trim() !== '' && v !== def) ? v : undefined;
+    const promptOverrides = {
+      workerOrientation: norm(wo, promptDefaults?.workerOrientation),
+      protocolTemplate: norm(pt, promptDefaults?.protocolTemplate)
+    };
+    try {
+      await window.cth.updateConfig({ promptOverrides } as Partial<HarnessConfig>);
+      setPromptSaveNote('Saved.');
+      setTimeout(() => setPromptSaveNote(''), 2000);
+    } catch { setPromptSaveNote('Save failed — try again.'); }
   };
   const [defaultModelSel, setDefaultModelSel] = useState<string>(cfgX.defaultModel ?? 'claude-fable-5');
   const [defaultModelNote, setDefaultModelNote] = useState('');
@@ -1710,6 +1735,79 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                   )}
 
                   {/* MEMORY & KNOWLEDGE */}
+                  {activeSection === 'Prompts' && (
+                    <>
+                      <div style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', marginBottom: 4 }}>
+                        Customize the prompts The Hive ships to agents. Your edits persist across app updates;
+                        leave a field on its default (or use Revert) to always track the shipped version.
+                      </div>
+                      {!promptDefaults ? (
+                        <div style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>Loading defaults…</div>
+                      ) : (
+                        <>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px', color: 'var(--cth-ink-700)', textTransform: 'uppercase' }}>
+                                Worker orientation
+                              </div>
+                              <PixelButton
+                                variant="secondary" size="sm"
+                                disabled={woOverride == null || woOverride === promptDefaults.workerOrientation}
+                                onClick={() => { setWoOverride(null); void savePromptOverrides(null, ptOverride); }}
+                              >
+                                revert to default
+                              </PixelButton>
+                            </div>
+                            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', display: 'block', marginBottom: 6 }}>
+                              The standing behavioral instructions in every worker's system prompt (guardrails,
+                              progress notes, the ASK ME decision gate, task close-out). Each agent's identity,
+                              workspace, and feature lines stay automatic. Applies to workers, not the Overmind.
+                            </span>
+                            <textarea
+                              value={woOverride ?? promptDefaults.workerOrientation}
+                              onChange={(e) => setWoOverride(e.target.value)}
+                              onBlur={() => void savePromptOverrides(woOverride, ptOverride)}
+                              spellCheck={false}
+                              style={{ ...slackInputStyle, minHeight: 160, resize: 'vertical', lineHeight: '18px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                            />
+                          </div>
+
+                          <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
+
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px', color: 'var(--cth-ink-700)', textTransform: 'uppercase' }}>
+                                PROTOCOL.md template
+                              </div>
+                              <PixelButton
+                                variant="secondary" size="sm"
+                                disabled={ptOverride == null || ptOverride === promptDefaults.protocolTemplate}
+                                onClick={() => { setPtOverride(null); void savePromptOverrides(woOverride, null); }}
+                              >
+                                revert to default
+                              </PixelButton>
+                            </div>
+                            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', display: 'block', marginBottom: 6 }}>
+                              The shared protocol doc written to <code>hive/PROTOCOL.md</code> and pointed to as the
+                              authority for every agent. Saving rewrites the file immediately.
+                            </span>
+                            <textarea
+                              value={ptOverride ?? promptDefaults.protocolTemplate}
+                              onChange={(e) => setPtOverride(e.target.value)}
+                              onBlur={() => void savePromptOverrides(woOverride, ptOverride)}
+                              spellCheck={false}
+                              style={{ ...slackInputStyle, minHeight: 220, resize: 'vertical', lineHeight: '18px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                            />
+                          </div>
+
+                          {promptSaveNote && (
+                            <div style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{promptSaveNote}</div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+
                   {activeSection === 'Memory & Knowledge' && (
                     <>
                       <div>
