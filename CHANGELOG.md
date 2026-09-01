@@ -26,6 +26,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Unify the message composer and the Floor dispatch form into one input (ux-unified-input): the per-agent composer gains a `TO` picker — blank keeps the existing queue-for-this-agent behavior, choosing "BeeYoncé decides" or suggesting a worker turns the same box into a structured dispatch (act / subject / priority) routed through the Overmind. The Command Center's standalone DISPATCH section is now a pointer to it, and task/issue "assign" seeds the composer in dispatch mode
 - PROTOCOL.md now documents that 1:1 (on-hold) mode only pauses Overmind automation for an agent and does NOT change its tools — an on-hold agent keeps the same tool set and permission mode as the Overmind; granting a 1:1 agent orchestration reach (spawn, board scribe) is a separate config/feature choice, not a tool gap
 - Replace non-semantic monospace font usage with proportional UI typography across FullscreenTerminal, MessageQueueComposer, McpDefaultsSettings, and DelegationsTab
 - Default office theme is now **The Hive**, and TV-show themes ship enabled so new installs open straight into BeeYoncé's honeycomb floor.

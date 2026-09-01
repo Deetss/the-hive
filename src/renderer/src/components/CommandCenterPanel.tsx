@@ -232,26 +232,16 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
     if (key === 'trigger-history' && !triggerHistoryVisible(useStore.getState())) return;
     setTab(key);
   }, [ccTabRequest]);
-  // A task-detail "assign" pre-fills the Floor dispatch box and jumps to it.
-  // Seeded via the store one-shot (the detail overlay lives app-wide now);
-  // { seq } makes every assign distinct so identical text re-seeds.
-  const [dispatchSeed, setDispatchSeed] = useState<{ text: string; seq: number }>({ text: '', seq: 0 });
+  // A task-detail / issue "assign" seeds a dispatch via the store one-shot
+  // (`dispatchSeedRequest`); it is now consumed by the unified MessageQueueComposer
+  // (ux-unified-input), which flips to dispatch mode and prefills — so this panel
+  // no longer plumbs the seed through the Floor tab.
   // Keep the heavy "monitor" (floor) tab MOUNTED once it is first opened, so
   // returning to it is instant instead of paying a full remount plus a config +
   // telemetry re-fetch on every switch (the "monitor tab feels laggy" report).
   // Deferred until the first visit, so it costs nothing on initial app load.
   const [floorMounted, setFloorMounted] = useState(false);
   useEffect(() => { if (tab === 'floor') setFloorMounted(true); }, [tab]);
-  const dispatchSeedRequest = useStore((s) => s.dispatchSeedRequest);
-  const clearDispatchSeedRequest = useStore((s) => s.clearDispatchSeedRequest);
-  useEffect(() => {
-    if (!dispatchSeedRequest) return;
-    setDispatchSeed({ text: dispatchSeedRequest.text, seq: dispatchSeedRequest.seq });
-    clearDispatchSeedRequest();
-  }, [dispatchSeedRequest, clearDispatchSeedRequest]);
-  // Reset once FloorTab has consumed the seed so a later remount (tab switch)
-  // can't re-inject stale text into a field the user already dispatched + cleared.
-  const resetDispatchSeed = useCallback(() => setDispatchSeed({ text: '', seq: 0 }), []);
   // Lifted so the memory-graph tab can jump to a specific agent's memory file.
   const [selectedMemoryAgent, setSelectedMemoryAgent] = useState<string | null>(null);
   const updateAgent = useStore((s) => s.updateAgent);
@@ -621,7 +611,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         )}
         {floorMounted && (
           <div style={{ flex: 1, minHeight: 0, display: tab === 'floor' ? 'flex' : 'none', flexDirection: 'column' }}>
-            <FloorTab seed={dispatchSeed} onSeedConsumed={resetDispatchSeed} />
+            <FloorTab />
           </div>
         )}
         {tab === 'tasks' && <TasksKanban mobile={mobile} />}
@@ -653,7 +643,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
 
 // ─── Floor tab — roster, model, dispatch, dirs, assistant ────────────────────
 
-function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number }; onSeedConsumed: () => void }) {
+function FloorTab() {
   const agents = useStore((s) => s.agents);
   const select = useStore((s) => s.select);
   const updateAgent = useStore((s) => s.updateAgent);
@@ -675,14 +665,8 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
   // new agent spawn on this, so the picker marks it — otherwise the only entry
   // reading "default" was the CLI's, which is a different thing entirely.
   const [defaultModel, setDefaultModel] = useState<string | undefined>(undefined);
-  const [dispatchTo, setDispatchTo] = useState<string>(''); // '' = BeeYoncé decides
-  const [dispatchAct, setDispatchAct] = useState<'request' | 'query' | 'inform'>('request');
-  const [dispatchSubject, setDispatchSubject] = useState('');
-  const [dispatchText, setDispatchText] = useState('');
-  const [dispatchPriority, setDispatchPriority] = useState<'urgent' | 'normal' | 'backlog'>('normal');
-  const [dispatchMsg, setDispatchMsg] = useState<string | null>(null);
-  const [localSkills, setLocalSkills] = useState<Array<{ name: string; description: string }>>([]);
-  const [suggestIdx, setSuggestIdx] = useState(-1);
+  // Dispatch moved into the unified MessageQueueComposer (ux-unified-input).
+  const requestDispatchSeed = useStore((s) => s.requestDispatchSeed);
   // ── ISSUES section state ──
   const [issueRepo, setIssueRepo] = useState<string>('');
   const [issues, setIssues] = useState<GHIssue[]>([]);
@@ -703,24 +687,6 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
       setHarnessHome(c.harnessHome ?? null);
     }).catch(() => { /* noop */ });
   }, []);
-
-  // Seed the dispatch box from a task-card "assign" (keyed on seq so repeat
-  // assigns re-prefill). seq === 0 is the untouched initial state — skip it.
-  useEffect(() => {
-    if (seed.seq > 0) {
-      setDispatchText(seed.text);
-      onSeedConsumed(); // clear the parent seed so a remount won't re-seed after dispatch
-    }
-  }, [seed.seq, seed.text, onSeedConsumed]);
-
-  // Load local skills lazily when user types '/' in the dispatch box.
-  useEffect(() => {
-    if (dispatchText.startsWith('/') && localSkills.length === 0) {
-      void window.cth.skillsLocal()
-        .then((skills) => setLocalSkills((skills ?? []).map((s) => ({ name: s.name, description: s.description ?? '' }))))
-        .catch(() => {});
-    }
-  }, [dispatchText, localSkills.length]);
 
   // Subscribe to fleet token data (PTY-parsed from fleet.json for non-Claude agents)
   useEffect(() => {
@@ -924,65 +890,6 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
     }
   };
 
-  const handleDispatchPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const hasImage = Array.from(e.clipboardData.items).some((item) => item.type.startsWith('image/'));
-    if (!hasImage) return;
-    e.preventDefault();
-    // Capture caret position before the async save — the textarea DOM element
-    // holds the live positions; stale closure on dispatchText would overwrite
-    // any keystrokes typed while saveClipboardImage() is in flight.
-    const ta = e.currentTarget;
-    const start = ta.selectionStart ?? ta.value.length;
-    const end = ta.selectionEnd ?? ta.value.length;
-    const res = await window.cth.saveClipboardImage();
-    if (res.ok) {
-      const ref = `[image: ${res.file.path}]`;
-      setDispatchText((prev) => prev.slice(0, start) + ref + prev.slice(end));
-    } else {
-      setDispatchText((prev) => prev + ` [image paste failed: ${res.error}]`);
-    }
-  };
-
-  // ALL human dispatch flows through the god — never directly into a worker's
-  // inbox. Direct dispatch bypassed the orchestrator's whole job: no 4-part
-  // contract, no card in tasks.json, no board awareness — and the old
-  // 'broadcast' DEFAULT sent the same task to every worker at once. A worker
-  // picked in the dropdown is forwarded as a SUGGESTION the god may follow.
-  const dispatch = async () => {
-    const body = dispatchText.trim();
-    const subject = dispatchSubject.trim() || body.slice(0, 60);
-    if (!body) return;
-    const suggested = dispatchTo ? agents.find((a) => a.id === dispatchTo) : undefined;
-    const tasksPath = harnessHome ? `${harnessHome}\\hive\\tasks.json` : 'hive/tasks.json';
-    const priorityDirective =
-      dispatchPriority === 'urgent'
-        ? `\n\n[PRIORITY: URGENT] Step 1: Write a task card to ${tasksPath} (id, title, status:"doing", assignee). Step 2: Delegate to the right worker NOW — spawn one if needed. Step 3: Do nothing else. You orchestrate; never implement.`
-        : dispatchPriority === 'backlog'
-        ? `\n\n[PRIORITY: BACKLOG] Write a task card to ${tasksPath} (id, title, status:"todo") and stop. No delegation, no dispatch, no reply.`
-        : `\n\n[PRIORITY: NORMAL] Step 1: Write a task card to ${tasksPath} (id, title, status:"doing", assignee). Step 2: Delegate to an available worker. Step 3: Do nothing else. You orchestrate; never implement.`;
-    const full = suggested
-      ? `${body}${priorityDirective}\n\n(The human suggests ${suggested.name} (${suggested.id}) for this — your call as orchestrator.)`
-      : `${body}${priorityDirective}`;
-    const res = await window.cth.hiveSend(
-      {
-        to: 'god',
-        act: dispatchAct,
-        subject,
-        body: full,
-        priority: dispatchPriority
-      },
-      'human'
-    );
-    if (res.ok) {
-      setDispatchText('');
-      setDispatchSubject('');
-    }
-    setDispatchMsg(res.ok
-      ? `sent to BeeYoncé${suggested ? ` (suggesting ${suggested.name})` : ''}`
-      : `failed: ${res.error ?? '?'}`);
-    setTimeout(() => setDispatchMsg(null), 4000);
-  };
-
   const fetchIssues = async () => {
     const repo = issueRepo || repos[0];
     if (!repo) { setIssuesError('No repo selected.'); return; }
@@ -1006,8 +913,8 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
 
   const assignIssue = (issue: GHIssue) => {
     const body = (issue.body ?? '').slice(0, 200);
-    setDispatchText(`GitHub Issue #${issue.number}: ${issue.title}\n\n${body}\n\nURL: ${issue.url}`);
-    setDispatchTo(''); // Abathur decomposes and assigns — no more broadcast blasts
+    // Seed the unified composer (dispatch mode) — Abathur decomposes and assigns.
+    requestDispatchSeed(`GitHub Issue #${issue.number}: ${issue.title}\n\n${body}\n\nURL: ${issue.url}`);
   };
 
   // Set/clear one agent's token limit atomically in main. Renderer config objects
@@ -1049,154 +956,17 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
 
   return (
     <Scroll>
-      <Section title="DISPATCH · VIA BEEYONCÉ">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 150 }}>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)', flexShrink: 0 }}>OWNER</span>
-            <Select value={dispatchTo} onChange={setDispatchTo}>
-              <option value="">BeeYoncé decides</option>
-              {agents.filter((a) => !a.isOvermind && a.id !== 'god').map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </Select>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)', flexShrink: 0 }}>ACT</span>
-            <Select value={dispatchAct} onChange={(v) => setDispatchAct(v as 'request' | 'query' | 'inform')}>
-              <option value="request">Request</option>
-              <option value="query">Query</option>
-              <option value="inform">Inform</option>
-            </Select>
-          </label>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <input
-            type="text"
-            className="cth-input"
-            value={dispatchSubject}
-            onChange={(e) => setDispatchSubject(e.target.value)}
-            placeholder="Subject"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              padding: '6px 8px',
-              fontFamily: 'var(--cth-font-ui)',
-              fontSize: 14,
-              fontWeight: 600,
-              background: 'var(--cth-paper-100)',
-              color: 'var(--cth-ink-900)',
-              border: 'none',
-              boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-              outline: 'none',
-              boxSizing: 'border-box'
-            }}
-          />
-          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-            {(['urgent', 'normal', 'backlog'] as const).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setDispatchPriority(p)}
-                title={`Priority: ${p}`}
-                style={{
-                  padding: '3px 8px',
-                  fontFamily: 'var(--cth-font-ui)',
-                  fontSize: 11,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                  border: 'none',
-                  borderRadius: 2,
-                  cursor: 'pointer',
-                  background: dispatchPriority === p ? 'var(--cth-ink-900)' : 'transparent',
-                  color: dispatchPriority === p ? 'var(--cth-paper-100)' : 'var(--cth-ink-500)',
-                  boxShadow: dispatchPriority === p ? 'none' : 'inset 0 0 0 1px var(--cth-ink-300)',
-                  transition: 'background 0.1s, color 0.1s'
-                }}
-              >{p}</button>
-            ))}
-          </div>
-        </div>
-        {(() => {
-          const slashQ = dispatchText.startsWith('/') ? dispatchText.slice(1).toLowerCase() : null;
-          const suggestions = slashQ !== null ? [
-            ...COMMAND_GROUPS.flatMap((g) => g.items)
-              .filter((c) => c.kind === 'slash' && (slashQ === '' || c.cmd.toLowerCase().includes(slashQ)))
-              .map((c) => ({ cmd: c.cmd, hint: c.desc })),
-            ...localSkills
-              .filter((s) => slashQ === '' || s.name.toLowerCase().includes(slashQ) || s.description.toLowerCase().includes(slashQ))
-              .map((s) => ({ cmd: `/${s.name}`, hint: s.description }))
-          ].slice(0, 12) : [];
-          const pickSuggestion = (cmd: string) => {
-            setDispatchText(cmd + ' ');
-            setSuggestIdx(-1);
-          };
-          return (
-            <div style={{ position: 'relative' }}>
-              {suggestions.length > 0 && (
-                <div style={{
-                  position: 'absolute', bottom: '100%', left: 0, right: 0, zIndex: 200,
-                  background: 'var(--cth-paper-100)',
-                  boxShadow: '0 0 0 1.5px var(--cth-ink-700), 0 -3px 0 var(--cth-ink-900)',
-                  maxHeight: 220, overflowY: 'auto'
-                }}>
-                  {suggestions.map(({ cmd, hint }, i) => (
-                    <button
-                      key={cmd}
-                      onMouseDown={(e) => { e.preventDefault(); pickSuggestion(cmd); }}
-                      style={{
-                        width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
-                        padding: '5px 8px',
-                        background: i === suggestIdx ? 'var(--cth-cream-200)' : 'transparent',
-                        display: 'flex', alignItems: 'baseline', gap: 8,
-                        boxShadow: 'inset 0 -1px 0 var(--cth-ink-100)'
-                      }}
-                      onMouseEnter={() => setSuggestIdx(i)}
-                      onMouseLeave={() => setSuggestIdx(-1)}
-                    >
-                      <span style={{ fontFamily: 'var(--cth-font-mono)', fontSize: 12, color: 'var(--cth-ink-900)', flexShrink: 0 }}>{cmd}</span>
-                      <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{hint}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <textarea
-                value={dispatchText}
-                onChange={(e) => { setDispatchText(e.target.value); setSuggestIdx(-1); }}
-                onPaste={handleDispatchPaste}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                    dispatch();
-                    return;
-                  }
-                  if (suggestions.length === 0) return;
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    setSuggestIdx((i) => Math.min(i + 1, suggestions.length - 1));
-                  } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    setSuggestIdx((i) => Math.max(i - 1, -1));
-                  } else if ((e.key === 'Enter' || e.key === 'Tab') && suggestIdx >= 0) {
-                    e.preventDefault();
-                    pickSuggestion(suggestions[suggestIdx].cmd);
-                  } else if (e.key === 'Escape') {
-                    setSuggestIdx(-1);
-                    setDispatchText('');
-                  }
-                }}
-                rows={3}
-                placeholder="Describe the task… or / for skills & commands"
-                style={textareaStyle}
-              />
-            </div>
-          );
-        })()}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-          <PixelButton variant="primary" size="sm" onClick={dispatch} disabled={!dispatchText.trim()}>
-            dispatch
-          </PixelButton>
-          {dispatchMsg && <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{dispatchMsg}</span>}
-        </div>
+      {/* Dispatch moved into the unified message composer below the terminal
+          (ux-unified-input): pick a target other than the focused agent to
+          switch that one input from "queue for this agent" to a structured
+          dispatch routed through BeeYoncé. A task/issue "assign" seeds it. */}
+      <Section title="DISPATCH">
+        <p style={{ margin: 0, fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', lineHeight: 1.5 }}>
+          Dispatch now lives in the message composer under the terminal. Open an
+          agent, then set <strong>TO</strong> to <em>BeeYoncé decides</em> (or suggest a
+          worker) to turn that input into a structured dispatch with act, subject,
+          and priority.
+        </p>
       </Section>
 
       <Section title="AGENTS">

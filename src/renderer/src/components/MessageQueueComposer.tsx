@@ -34,6 +34,13 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   const updateQueuedMessage = useStore((s) => s.updateQueuedMessage);
   const releaseQueuedMessage = useStore((s) => s.releaseQueuedMessage);
   const clearQueue = useStore((s) => s.clearQueue);
+  // ux-unified-input: one composer, two destinations. Blank target keeps the
+  // per-agent queue (the terminal-input model); picking BeeYoncé or another
+  // agent turns this into the structured dispatch the Floor tab used to own.
+  const agents = useStore((s) => s.agents);
+  const selectedId = useStore((s) => s.selectedId);
+  const dispatchSeedRequest = useStore((s) => s.dispatchSeedRequest);
+  const clearDispatchSeedRequest = useStore((s) => s.clearDispatchSeedRequest);
 
   // Draft lives in the store, keyed by agent — switching agents remounts this
   // component, and component-local state would silently eat the typed text.
@@ -74,6 +81,38 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   // persist in the store, attachments deliberately don't carry over).
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
+
+  // Dispatch mode — active whenever a target other than "this agent's queue" is
+  // picked. The act/subject/priority controls only appear then.
+  const [target, setTarget] = useState('');
+  const dispatchMode = target !== '';
+  const [dispAct, setDispAct] = useState<'request' | 'query' | 'inform'>('request');
+  const [dispSubject, setDispSubject] = useState('');
+  const [dispPriority, setDispPriority] = useState<'urgent' | 'normal' | 'backlog'>('normal');
+  const [dispMsg, setDispMsg] = useState<string | null>(null);
+  const [harnessHome, setHarnessHome] = useState<string | null>(null);
+  useEffect(() => {
+    window.cth.getConfig().then((c) => setHarnessHome(c.harnessHome ?? null)).catch(() => { /* main not ready */ });
+  }, []);
+
+  const selectStyle = {
+    padding: '4px 6px', fontFamily: 'var(--cth-font-ui)', fontSize: 12,
+    background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
+    border: 'none', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', outline: 'none'
+  } as const;
+
+  // A task-card / setup / GitHub-issue "assign" seeds a dispatch (shared store
+  // action, previously consumed by the Floor form). The composer for the FOCUSED
+  // agent picks it up, flips to dispatch mode, and prefills — one input, one flow.
+  useEffect(() => {
+    if (!dispatchSeedRequest) return;
+    if (selectedId && agent.id !== selectedId) return;
+    setTarget((t) => (t === '' ? 'god' : t));
+    setDraft(agent.id, dispatchSeedRequest.text);
+    setDispSubject((s) => s || dispatchSeedRequest.text.split('\n')[0].slice(0, 60));
+    clearDispatchSeedRequest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatchSeedRequest?.seq]);
 
   const addAttachments = (incoming: Attachment[]) =>
     setAttachments((prev) => {
@@ -128,24 +167,62 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
 
   const canSend = !!text.trim() || attachments.length > 0;
 
+  // Prepend an "Attached files:" block using the same path-based convention as
+  // the Slack inbound path (useHive.ts) so agents Read the files directly.
+  const buildBody = () =>
+    attachments.length
+      ? (text.trim() ? `${text}\n\nAttached files:\n` : 'Attached files:\n') +
+        attachments.map((a) => `- ${a.path} (${a.name})`).join('\n')
+      : text;
+
   const queueIt = () => {
     if (!canSend) return;
-    // Prepend an "Attached files:" block using the same path-based convention as
-    // the Slack inbound path (useHive.ts) so agents Read the files directly.
-    const body = attachments.length
-      ? (text.trim()
-          ? `${text}\n\nAttached files:\n`
-          : 'Attached files:\n') + attachments.map((a) => `- ${a.path} (${a.name})`).join('\n')
-      : text;
-    enqueueMessage(agent.id, body);
+    enqueueMessage(agent.id, buildBody());
     setText('');
     setAttachments([]);
   };
 
+  // Structured dispatch — mirrors the old Floor form: ALL human dispatch flows
+  // through the Overmind (never straight into a worker's inbox); a picked agent
+  // rides along as a suggestion, and the priority directive tells god how to
+  // triage it.
+  const dispatchIt = async () => {
+    if (!canSend) return;
+    const body = buildBody().trim();
+    if (!body) return;
+    const subject = dispSubject.trim() || body.slice(0, 60);
+    const suggested = target !== 'god' ? agents.find((a) => a.id === target) : undefined;
+    const tasksPath = harnessHome ? `${harnessHome}\\hive\\tasks.json` : 'hive/tasks.json';
+    const priorityDirective =
+      dispPriority === 'urgent'
+        ? `\n\n[PRIORITY: URGENT] Step 1: Write a task card to ${tasksPath} (id, title, status:"doing", assignee). Step 2: Delegate to the right worker NOW — spawn one if needed. Step 3: Do nothing else. You orchestrate; never implement.`
+        : dispPriority === 'backlog'
+        ? `\n\n[PRIORITY: BACKLOG] Write a task card to ${tasksPath} (id, title, status:"todo") and stop. No delegation, no dispatch, no reply.`
+        : `\n\n[PRIORITY: NORMAL] Step 1: Write a task card to ${tasksPath} (id, title, status:"doing", assignee). Step 2: Delegate to an available worker. Step 3: Do nothing else. You orchestrate; never implement.`;
+    const full = suggested
+      ? `${body}${priorityDirective}\n\n(The human suggests ${suggested.name} (${suggested.id}) for this — your call as orchestrator.)`
+      : `${body}${priorityDirective}`;
+    const res = await window.cth.hiveSend(
+      { to: 'god', act: dispAct, subject, body: full, priority: dispPriority },
+      'human'
+    );
+    if (res.ok) {
+      setText('');
+      setDispSubject('');
+      setAttachments([]);
+    }
+    setDispMsg(res.ok
+      ? `sent to BeeYoncé${suggested ? ` (suggesting ${suggested.name})` : ''}`
+      : `failed: ${res.error ?? '?'}`);
+    setTimeout(() => setDispMsg(null), 4000);
+  };
+
+  const handleSend = () => { if (dispatchMode) void dispatchIt(); else queueIt(); };
+
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      queueIt();
+      handleSend();
     }
   };
 
@@ -263,6 +340,56 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
         )}
       </div>
 
+      {/* Unified target picker: this agent's queue, or a structured dispatch
+          routed through BeeYoncé (ux-unified-input — the Floor form, folded in). */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)', flexShrink: 0 }}>TO</span>
+        <select className="cth-input" value={target} onChange={(e) => setTarget(e.target.value)} style={selectStyle}>
+          <option value="">{agent.name} — queue</option>
+          <option value="god">Dispatch · BeeYoncé decides</option>
+          {agents.filter((a) => !a.isOvermind && a.id !== 'god' && a.id !== agent.id).map((a) => (
+            <option key={a.id} value={a.id}>Dispatch · suggest {a.name}</option>
+          ))}
+        </select>
+        {dispatchMode && (
+          <select className="cth-input" value={dispAct} onChange={(e) => setDispAct(e.target.value as 'request' | 'query' | 'inform')} style={selectStyle}>
+            <option value="request">Request</option>
+            <option value="query">Query</option>
+            <option value="inform">Inform</option>
+          </select>
+        )}
+        {dispatchMode && (['urgent', 'normal', 'backlog'] as const).map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => setDispPriority(p)}
+            title={`Priority: ${p}`}
+            style={{
+              padding: '3px 8px', fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+              textTransform: 'uppercase', letterSpacing: 0.5, border: 'none', borderRadius: 2, cursor: 'pointer',
+              background: dispPriority === p ? 'var(--cth-ink-900)' : 'transparent',
+              color: dispPriority === p ? 'var(--cth-paper-100)' : 'var(--cth-ink-500)',
+              boxShadow: dispPriority === p ? 'none' : 'inset 0 0 0 1px var(--cth-ink-300)'
+            }}
+          >{p}</button>
+        ))}
+        {dispMsg && <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{dispMsg}</span>}
+      </div>
+      {dispatchMode && (
+        <input
+          type="text"
+          className="cth-input"
+          value={dispSubject}
+          onChange={(e) => setDispSubject(e.target.value)}
+          placeholder="Subject (optional — defaults to the first line)"
+          style={{
+            width: '100%', padding: '6px 8px', fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 600,
+            background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)', border: 'none',
+            boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', outline: 'none', boxSizing: 'border-box'
+          }}
+        />
+      )}
+
       {/* Pending list */}
       {queue.length > 0 && (
         <div style={{
@@ -339,7 +466,13 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
           onKeyDown={onKey}
           onPaste={onPaste}
           rows={5}
-          placeholder={idle ? `Message ${agent.name}…` : `Message ${agent.name}… (queued — delivers when ready)`}
+          placeholder={
+            dispatchMode
+              ? 'Describe the task for BeeYoncé… (Enter to dispatch)'
+              : idle
+              ? `Message ${agent.name}…`
+              : `Message ${agent.name}… (queued — delivers when ready)`
+          }
           style={{
             width: '100%',
             resize: 'vertical',
@@ -373,9 +506,9 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
             </span>
           </PixelButton>
           {freeflowEnabled && <FreeFlowButton agentId={agent.id} hasGroqKey={hasGroqKey} />}
-          <PixelButton variant="primary" size="sm" onClick={queueIt} disabled={!canSend}>
+          <PixelButton variant="primary" size="sm" onClick={handleSend} disabled={!canSend}>
             <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-              {idle ? 'send' : 'queue'} <Icon name="arrow-right" />
+              {dispatchMode ? 'dispatch' : idle ? 'send' : 'queue'} <Icon name="arrow-right" />
             </span>
           </PixelButton>
         </div>
