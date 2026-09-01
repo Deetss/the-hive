@@ -458,6 +458,31 @@
   }
   .context-gauge-fill { height: 100%; background: var(--cth-lemon); }
 
+  /* Compact status strip — the mobile equivalent of the desktop StatusBar:
+     tokens · session cost · context % · engine/model for the agent. */
+  .agent-statusbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    margin-top: 8px;
+    font-family: var(--cth-font-mono);
+    font-size: 10px;
+    color: var(--cth-ink-500);
+  }
+  .agent-statusbar .sb-sep { color: var(--cth-ink-300); }
+  .agent-statusbar .sb-cost { color: var(--cth-mint); }
+  .agent-statusbar .sb-model {
+    background: var(--cth-paper-200);
+    box-shadow: inset 0 0 0 1px var(--cth-ink-300);
+    color: var(--cth-ink-700);
+    padding: 1px 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+  }
+
   /* ── Section Headers ── */
   .fleet-header {
     display: flex;
@@ -1496,8 +1521,17 @@ function agentCard(a) {
     <span>⏱ ${activeAgo}</span>
     ${a.lastTool ? `<span style="color:var(--cth-ink-300)">·</span><span class="agent-tool-val">⌨ ${esc(a.lastTool)}</span>` : ''}
   </div>
-  <div class="context-gauge" title="Context usage">
-    <div class="context-gauge-fill" style="width: ${Math.min(100, Math.max(5, (a.tokens || 0) % 100))}%"></div>
+  <div class="agent-statusbar">
+    <span title="Tokens used">${fmtNum(a.tokens || 0)} tok</span>
+    <span class="sb-sep">·</span>
+    <span class="sb-cost" title="Session cost">$${a.sessionUsd != null ? Number(a.sessionUsd).toFixed(2) : '0.00'}</span>
+    <span class="sb-sep">·</span>
+    <span title="Context window used">${a.ctxPct != null ? a.ctxPct + '% ctx' : '— ctx'}</span>
+    <span class="sb-sep">·</span>
+    <span class="sb-model" title="Engine / model">${esc(a.model || a.provider || 'default')}</span>
+  </div>
+  <div class="context-gauge" title="Context window used${a.ctxPct != null ? ': ' + a.ctxPct + '%' : ''}">
+    <div class="context-gauge-fill" style="width: ${a.ctxPct != null ? Math.min(100, Math.max(2, a.ctxPct)) : 2}%"></div>
   </div>
   <div style="display:flex;gap:4px;margin-top:8px;">
     <button class="btn btn-secondary agent-terminal-toggle" style="flex:1;font-size:10px;padding:4px 6px;" data-agent-id="${esc(a.id)}">
