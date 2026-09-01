@@ -65,6 +65,11 @@ export interface HarnessConfig {
   registeredRepos: string[];
   /** Optional shared knowledge-base folder (.md/.txt) agents read/grep. */
   knowledgeBasePath?: string;
+  /** Where the shared KB lives: 'folder' (knowledgeBasePath) or an MCP endpoint
+   *  (knowledgeBaseMcpUrl). Unset = 'folder'. Mirrors src/main/config.ts. */
+  knowledgeBaseSource?: 'folder' | 'outline-mcp' | 'custom-mcp';
+  /** MCP endpoint URL for the KB when knowledgeBaseSource is an MCP type (https). */
+  knowledgeBaseMcpUrl?: string;
   /** Skip the launch-time harness config picker and open the last-used home directly. */
   skipHarnessPickerOnLaunch?: boolean;
   autoMode: boolean;

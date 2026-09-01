@@ -271,8 +271,13 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
     catch { setSemMemOn(!next); }
   };
 
-  // Shared knowledge-base folder (.md/.txt) agents grep/read; empty = none.
-  const [kbPath, setKbPath] = useState<string>((cfgX as { knowledgeBasePath?: string }).knowledgeBasePath ?? '');
+  // Shared knowledge base: a local folder of .md/.txt notes, or an MCP endpoint.
+  type KbSource = 'folder' | 'outline-mcp' | 'custom-mcp';
+  const cfgKb = cfgX as { knowledgeBasePath?: string; knowledgeBaseSource?: KbSource; knowledgeBaseMcpUrl?: string };
+  const OUTLINE_DEFAULT_URL = 'https://docs.bloomfieldhomes.org';
+  const [kbPath, setKbPath] = useState<string>(cfgKb.knowledgeBasePath ?? '');
+  const [kbSource, setKbSource] = useState<KbSource>(cfgKb.knowledgeBaseSource ?? 'folder');
+  const [kbMcpUrl, setKbMcpUrl] = useState<string>(cfgKb.knowledgeBaseMcpUrl ?? '');
   const pickKbFolder = async () => {
     const res = await window.cth.chooseFolder();
     if (res.ok) {
@@ -283,6 +288,22 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
   const clearKbPath = async () => {
     setKbPath('');
     try { await window.cth.updateConfig({ knowledgeBasePath: '' } as Partial<HarnessConfig>); } catch { /* noop */ }
+  };
+  const changeKbSource = async (next: KbSource) => {
+    setKbSource(next);
+    // Prefill the Outline instance URL the first time that source is chosen; leave
+    // an existing value (or a blank custom URL) alone.
+    const url = next === 'outline-mcp' && !kbMcpUrl.trim() ? OUTLINE_DEFAULT_URL : kbMcpUrl;
+    if (url !== kbMcpUrl) setKbMcpUrl(url);
+    try {
+      await window.cth.updateConfig({
+        knowledgeBaseSource: next,
+        knowledgeBaseMcpUrl: url
+      } as Partial<HarnessConfig>);
+    } catch { /* noop */ }
+  };
+  const saveKbMcpUrl = async () => {
+    try { await window.cth.updateConfig({ knowledgeBaseMcpUrl: kbMcpUrl.trim() } as Partial<HarnessConfig>); } catch { /* noop */ }
   };
 
   // --- circuit-breaker config (Lane A #6 canonical fields, widened view) ---
@@ -1719,40 +1740,76 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
 
                       <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
 
-                      {/* Knowledge base folder — a local folder of .md/.txt notes
-                          agents grep/read for team knowledge (no indexing needed). */}
+                      {/* Knowledge base — a local folder of .md/.txt notes agents
+                          grep/read, OR an MCP endpoint (Outline / custom) they query
+                          for team knowledge. */}
                       <div>
                         <div style={{
                           fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-700)', textTransform: 'uppercase', marginBottom: 10
                         }}>
-                          Knowledge base folder
+                          Knowledge base
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                            <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
-                              Shared notes folder
-                            </span>
-                            <span style={{
-                              fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)',
-                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                            }} title={kbPath || undefined}>
-                              {kbPath
-                                ? kbPath
-                                : 'Point at a folder of .md/.txt notes; agents grep/read it for conventions, decisions & how-tos.'}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                            <PixelButton variant="secondary" size="sm" onClick={pickKbFolder}>
-                              {kbPath ? 'change…' : 'choose…'}
-                            </PixelButton>
-                            {kbPath && (
-                              <PixelButton variant="secondary" size="sm" onClick={clearKbPath}>
-                                clear
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                          <span style={{ fontSize: 13, color: 'var(--cth-ink-900)', flexShrink: 0 }}>Source</span>
+                          <select
+                            value={kbSource}
+                            onChange={(e) => void changeKbSource(e.target.value as KbSource)}
+                            style={{ ...slackInputStyle, width: 'auto', flex: 1, maxWidth: 260 }}
+                          >
+                            <option value="folder">Local Folder</option>
+                            <option value="outline-mcp">Outline MCP</option>
+                            <option value="custom-mcp">Custom MCP URL</option>
+                          </select>
+                        </div>
+
+                        {kbSource === 'folder' ? (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                              <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+                                Shared notes folder
+                              </span>
+                              <span style={{
+                                fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)',
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                              }} title={kbPath || undefined}>
+                                {kbPath
+                                  ? kbPath
+                                  : 'Point at a folder of .md/.txt notes; agents grep/read it for conventions, decisions & how-tos.'}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                              <PixelButton variant="secondary" size="sm" onClick={pickKbFolder}>
+                                {kbPath ? 'change…' : 'choose…'}
                               </PixelButton>
-                            )}
+                              {kbPath && (
+                                <PixelButton variant="secondary" size="sm" onClick={clearKbPath}>
+                                  clear
+                                </PixelButton>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+                              MCP endpoint URL
+                            </span>
+                            <input
+                              type="url"
+                              value={kbMcpUrl}
+                              placeholder={kbSource === 'outline-mcp' ? OUTLINE_DEFAULT_URL : 'https://…'}
+                              onChange={(e) => setKbMcpUrl(e.target.value)}
+                              onBlur={() => void saveKbMcpUrl()}
+                              style={slackInputStyle}
+                            />
+                            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                              {kbSource === 'outline-mcp'
+                                ? 'Agents query this Outline workspace over MCP for team knowledge. https only; an OAuth-gated server needs a one-time /mcp auth per agent.'
+                                : 'Agents query this MCP server for team knowledge. https only; an OAuth-gated server needs a one-time /mcp auth per agent.'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </>
                   )}

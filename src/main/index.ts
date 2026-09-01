@@ -852,6 +852,8 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       ok: true,
       costCapTokens: cfg.costCapTokens ?? null,
       knowledgeBasePath: cfg.knowledgeBasePath ?? '',
+      knowledgeBaseSource: cfg.knowledgeBaseSource ?? 'folder',
+      knowledgeBaseMcpUrl: cfg.knowledgeBaseMcpUrl ?? '',
       governorOverride: cfg.governorPolicy?.manualOverride === 'force-green',
       defaultModel: cfg.defaultModel ?? null,
       profiles
@@ -861,7 +863,7 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
 
   // POST /api/settings — patch a small, safe subset of config from mobile
   if (pathname === '/api/settings' && method === 'POST') {
-    let sBody: { costCapTokens?: number; knowledgeBasePath?: string; governorOverride?: boolean; defaultModel?: string };
+    let sBody: { costCapTokens?: number; knowledgeBasePath?: string; knowledgeBaseSource?: string; knowledgeBaseMcpUrl?: string; governorOverride?: boolean; defaultModel?: string };
     try {
       sBody = await readJsonBody(req);
     } catch {
@@ -874,6 +876,10 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       patch.costCapTokens = Math.round(sBody.costCapTokens);
     }
     if (typeof sBody.knowledgeBasePath === 'string') patch.knowledgeBasePath = sBody.knowledgeBasePath.trim();
+    if (sBody.knowledgeBaseSource === 'folder' || sBody.knowledgeBaseSource === 'outline-mcp' || sBody.knowledgeBaseSource === 'custom-mcp') {
+      patch.knowledgeBaseSource = sBody.knowledgeBaseSource;
+    }
+    if (typeof sBody.knowledgeBaseMcpUrl === 'string') patch.knowledgeBaseMcpUrl = sBody.knowledgeBaseMcpUrl.trim();
     if (typeof sBody.defaultModel === 'string' && sBody.defaultModel.trim()) patch.defaultModel = sBody.defaultModel.trim();
     if (Object.keys(patch).length) writeConfig(patch);
     if (typeof sBody.governorOverride === 'boolean') applyGovernorOverride(sBody.governorOverride ? 'force-green' : undefined);
@@ -5041,6 +5047,8 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
           // Windows floor. Empty when the KG is off (the line isn't emitted then).
           kgCliPath: knowledge.env().KG_CLI,
           knowledgeBasePath: readConfig().knowledgeBasePath,
+          knowledgeBaseSource: readConfig().knowledgeBaseSource,
+          knowledgeBaseMcpUrl: readConfig().knowledgeBaseMcpUrl,
           theme: readConfig().terminalTheme ?? 'light',
           // W3 — default-MCP consent state + the bundled skills source dir.
           mcpDefaults: readConfig().mcpDefaults,
@@ -5588,8 +5596,19 @@ ipcMain.handle('dialog:chooseFolder', async (evt) => {
 // own file tools on it (see PROTOCOL.md). Every read is contained to the KB root.
 const KB_EXTS = new Set(['.md', '.txt', '.markdown']);
 function kbRoot(): string | null {
-  const p = readConfig().knowledgeBasePath;
+  const cfg = readConfig();
+  if (cfg.knowledgeBaseSource === 'outline-mcp' || cfg.knowledgeBaseSource === 'custom-mcp') return null;
+  const p = cfg.knowledgeBasePath;
   return typeof p === 'string' && p.trim() && existsSync(p) ? resolve(p) : null;
+}
+/** The message kb:* handlers return when there is no browsable local folder — it
+ *  distinguishes an unconfigured KB from an MCP-source KB the app cannot list. */
+function kbUnavailableError(): string {
+  const cfg = readConfig();
+  if (cfg.knowledgeBaseSource === 'outline-mcp' || cfg.knowledgeBaseSource === 'custom-mcp') {
+    return `knowledge base is an MCP source (${cfg.knowledgeBaseMcpUrl || 'no URL set'}); agents query it via the hive-kb MCP server`;
+  }
+  return 'no knowledge base configured';
 }
 function kbList(root: string): string[] {
   const out: string[] = [];
@@ -5617,12 +5636,12 @@ function kbResolve(root: string, rel: string): string | null {
 
 ipcMain.handle('kb:list', () => {
   const root = kbRoot();
-  if (!root) return { ok: false as const, error: 'no knowledge base configured' };
+  if (!root) return { ok: false as const, error: kbUnavailableError() };
   return { ok: true as const, root, files: kbList(root) };
 });
 ipcMain.handle('kb:read', (_evt, rel: unknown) => {
   const root = kbRoot();
-  if (!root) return { ok: false as const, error: 'no knowledge base configured' };
+  if (!root) return { ok: false as const, error: kbUnavailableError() };
   if (typeof rel !== 'string' || !rel.trim()) return { ok: false as const, error: 'invalid path' };
   const full = kbResolve(root, rel);
   if (!full || !existsSync(full) || !statSync(full).isFile()) return { ok: false as const, error: 'not found' };
@@ -5632,7 +5651,7 @@ ipcMain.handle('kb:read', (_evt, rel: unknown) => {
 });
 ipcMain.handle('kb:search', (_evt, query: unknown) => {
   const root = kbRoot();
-  if (!root) return { ok: false as const, error: 'no knowledge base configured' };
+  if (!root) return { ok: false as const, error: kbUnavailableError() };
   if (typeof query !== 'string' || !query.trim()) return { ok: false as const, error: 'empty query' };
   const q = query.toLowerCase();
   const hits: Array<{ file: string; line: number; text: string }> = [];

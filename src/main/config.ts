@@ -356,6 +356,14 @@ export interface HarnessConfig {
   /** Optional shared knowledge-base folder (.md/.txt) agents can read/grep and the
    *  app can browse via the kb:* IPC. Unset = no KB. */
   knowledgeBasePath?: string;
+  /** Where the shared knowledge base lives. Unset/'folder' keeps the local-folder
+   *  behavior (knowledgeBasePath). 'outline-mcp' / 'custom-mcp' point agents at an
+   *  MCP endpoint (knowledgeBaseMcpUrl) instead. */
+  knowledgeBaseSource?: 'folder' | 'outline-mcp' | 'custom-mcp';
+  /** MCP endpoint URL for the knowledge base when knowledgeBaseSource is an MCP
+   *  type. https only; wired into each Claude agent's per-session mcpServers as an
+   *  `hive-kb` HTTP server and named in every agent's orientation. */
+  knowledgeBaseMcpUrl?: string;
   /** Skip the launch-time harness config picker and open the last-used home directly. */
   skipHarnessPickerOnLaunch?: boolean;
   /** When true, new agents are spawned with --permission-mode bypassPermissions. */
