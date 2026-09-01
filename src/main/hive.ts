@@ -169,7 +169,10 @@ export interface AgentMeta {
 }
 
 export interface RegistryAgent extends AgentMeta {
-  status: 'idle' | 'working' | 'blocked' | 'gone';
+  /** `compacting` is transient and lives only in the live fleet.json snapshot
+   *  (set from the PreCompact hook, cleared on PostCompact); it is never
+   *  persisted to registry.json. See PROTOCOL.md § Agent status. */
+  status: 'idle' | 'working' | 'blocked' | 'gone' | 'compacting';
   lastSeen: number;
   /** True once the agent's terminal/PTY tab is closed. The record is retained
    *  (not deleted) so its history/memory survive; only agents with a live PTY
@@ -2491,7 +2494,7 @@ export class HiveManager {
         ts?: number;
         agents?: Array<{
           id: string; name?: string; role?: string; isOvermind?: boolean;
-          breaker?: string; tokens?: number; usd?: number;
+          breaker?: string; tokens?: number; usd?: number; status?: string;
           lastTool?: string | null; lastActiveSecAgo?: number | null; inboxBacklog?: number;
           onHold?: boolean;
         }>;
@@ -2518,6 +2521,7 @@ export class HiveManager {
         if (a.usd) bits.push(`$${a.usd.toFixed(2)}`);
         if (a.inboxBacklog) bits.push(`inbox ${a.inboxBacklog}`);
         if (a.breaker && a.breaker !== 'ok' && a.breaker !== 'none') bits.push(`breaker ${a.breaker}`);
+        if (a.status === 'compacting') bits.push('compacting');
         if (a.isOvermind) bits.push('you');
         // First in the row after the role would be louder, but this reads in
         // the same scan as `breaker` and `inbox`, and god already treats those
@@ -2872,6 +2876,12 @@ sessions (they're spawned independently) — \`fleet.json\` is your source of tr
 look at one agent, read its \`agents/<id>/memory.md\` and \`inbox/\`, or send it a \`query\`. A full
 Claude Code command reference (slash = your own session only; CLI = your shell, can target the fleet)
 is in \`COMMANDS.md\` in the hive root.
+
+On each standup, REAP idle agents: any non-Overmind agent that is \`idle\` with no active task and has
+not moved for over two hours is burning heartbeat tokens for nothing. The floor already flags these
+with an \`idle Xh\` badge on the fleet card. Send it a wrap-up (\`act:"inform"\`, tell it to write its
+memory.md and stop) or, if it holds no in-flight work, archive it. Spawn fresh when the next task
+needs it rather than keeping bodies idle on the floor.
 
 ## Spawning a worker (orchestrator)
 You can start an ephemeral worker yourself. Write ONE JSON file into \`spawn-requests/<id>.json\` in

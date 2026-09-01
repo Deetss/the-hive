@@ -69,6 +69,11 @@ export interface AgentCardProps {
 
 const fmtK = (n: number): string => `${Math.round(n / 1000)}k`;
 
+/** An idle worker with no active task past this long is a reaping candidate:
+ *  the floor flags it so the Overmind (or the human) can send it home and stop
+ *  paying for heartbeats. Conservative so brief between-task idles don't nag. */
+const IDLE_STALE_MS = 2 * 60 * 60 * 1000;
+
 function formatAgo(ts: number | null | undefined, now: number): string | null {
   if (!ts) return null;
   const diff = Math.max(0, now - ts);
@@ -181,6 +186,10 @@ export function AgentCard({
     return () => window.clearInterval(id);
   }, []);
   const activityLabel = formatAgo(lastActivityTs, now);
+  const idleMs = status === 'idle' && !isOvermind && doingCount === 0 && lastActivityTs
+    ? Math.max(0, now - lastActivityTs)
+    : 0;
+  const idleStaleLabel = idleMs >= IDLE_STALE_MS ? `idle ${Math.floor(idleMs / 3_600_000)}h` : null;
   const location = shortenPath(worktreePath ?? cwd);
   const toolLabel = lastTool ?? ((status !== 'idle' && action) ? action : undefined);
   const prov = inferAgentProvider(command, provider);
@@ -295,6 +304,15 @@ export function AgentCard({
                   eating the NAME instead. Truncation should land on the longest,
                   most redundant thing, not on the identity. */}
               <PixelBadge status={typing ? 'typing' : status} style={{ flexShrink: 0 }} />
+              {idleStaleLabel && (
+                <span title={`Idle with no active task for ${idleStaleLabel.replace('idle ', '')} — reaping candidate (send home to save tokens)`} style={{
+                  flexShrink: 0,
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
+                  padding: '1px 4px 0', textTransform: 'uppercase',
+                  background: 'var(--cth-coral-light)', color: 'var(--cth-ink-900)',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-coral)'
+                }}>{idleStaleLabel}</span>
+              )}
               {onHold && (
                 <span title="Human has this agent 1:1 — floor automation paused" style={{
                   flexShrink: 0,
