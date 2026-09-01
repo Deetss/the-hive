@@ -122,7 +122,15 @@ export function UpdateToast() {
       try {
         const cur = await window.cth.updateCurrent();
         const t = toastable(cur);
-        if (t) { setStatus(t); return; }
+        // Only adopt an in-app status that will actually RENDER something.
+        // `just-updated` without an authored drop block renders null (see the
+        // early return below), and it is the last status of every session right
+        // after an update — so short-circuiting on it left "what's new" dead.
+        // Fall through to the releases page in that case.
+        if (t && (t.state !== 'just-updated' || !!extractDropHtml(t.notes))) {
+          setStatus(t);
+          return;
+        }
       } catch { /* fall through to the page */ }
       void window.cth.updateOpenRelease();
     };

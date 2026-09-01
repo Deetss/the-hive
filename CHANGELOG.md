@@ -44,6 +44,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Fix the Settings hero card's "what's new" button doing nothing — right after an update the last update status is `just-updated`, which renders no panel, so the button silently adopted it instead of falling through; it now opens the releases page in that case (an authored release-drop still shows in-app)
 - Remove the "join Discord" button from the Settings hero card; the remaining actions ("what's new", "star on GitHub", "report a problem", "full changelog →") already point at the correct GitHub repo
 - Fix the Monitor (floor) tab's load lag on every switch — the heavy roster/telemetry panel now mounts once on first open and stays mounted (hidden when inactive) instead of a full remount plus config/telemetry re-fetch each time
 - Fix generated agy/codex/Gemini lifecycle-hook commands failing on multi-user installs — the launcher and shim paths are now double-quoted when they contain whitespace (e.g. a hive under `C:\Users\First Last\...`); space-free paths are unchanged
