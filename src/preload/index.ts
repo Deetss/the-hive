@@ -1035,9 +1035,9 @@ const api = {
   },
   /** Fleet token data from fleet.json (PTY-parsed tokens/ctx for non-Claude agents). */
   onFleetTokens: (
-    cb: (data: Record<string, { tokens: number; ctxPct: number | null; usd: number }>) => void
+    cb: (data: Record<string, { tokens: number; ctxPct: number | null; usd: number; quotaLimited?: boolean; quotaResetsAt?: number | null }>) => void
   ): (() => void) => {
-    const listener = (_e: IpcRendererEvent, data: Record<string, { tokens: number; ctxPct: number | null; usd: number }>) => cb(data);
+    const listener = (_e: IpcRendererEvent, data: Record<string, { tokens: number; ctxPct: number | null; usd: number; quotaLimited?: boolean; quotaResetsAt?: number | null }>) => cb(data);
     ipcRenderer.on('hive:fleetTokens', listener);
     return () => ipcRenderer.removeListener('hive:fleetTokens', listener);
   },

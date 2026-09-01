@@ -51,6 +51,8 @@ export interface AgentCardProps {
   onEditNote?: () => void;
   /** Human has this agent 1:1 — show a '1:1' chip so the floor knows it's on hold. */
   onHold?: boolean;
+  /** Agent hit provider quota/rate limit — show a QUOTA chip so the floor can re-route. */
+  quotaLimited?: boolean;
   /** Most recent telemetry tool summary (last command). */
   lastTool?: string;
   /** Epoch ms of the most recent activity (telemetry or transcript). */
@@ -109,7 +111,7 @@ function shortenPath(path: string | undefined, keepSegments = 2): { display: str
 export function AgentCard({
   name, agentId, character, accent, status, ptyId, project, action, progress = 0,
   contextTokens, contextLimit, selected, isOvermind, onClick, onRename,
-  doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold,
+  doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold, quotaLimited,
   lastTool, lastActivityTs, cwd, worktreePath, command, provider, model, profileId,
   onRespawn
 }: AgentCardProps) {
@@ -304,6 +306,15 @@ export function AgentCard({
                   eating the NAME instead. Truncation should land on the longest,
                   most redundant thing, not on the identity. */}
               <PixelBadge status={typing ? 'typing' : status} style={{ flexShrink: 0 }} />
+              {quotaLimited && (
+                <span title="Hit provider quota / rate limit — re-route or respawn on another profile" style={{
+                  flexShrink: 0,
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
+                  padding: '1px 4px 0', textTransform: 'uppercase', fontWeight: 600,
+                  background: 'var(--cth-coral)', color: 'var(--cth-paper-100)',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-700)'
+                }}>⊘ quota</span>
+              )}
               {idleStaleLabel && (
                 <span title={`Idle with no active task for ${idleStaleLabel.replace('idle ', '')} — reaping candidate (send home to save tokens)`} style={{
                   flexShrink: 0,

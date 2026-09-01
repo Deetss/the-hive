@@ -13,6 +13,8 @@ All notable changes to this project are documented here. The format is based on
 - Surface open UAT checklist and humanQA items in UI via For You and tasks badge counts and actionable top alert banner
 - Agents now surface blocking decisions on the ASK ME board: orientation and PROTOCOL.md instruct a blocked agent to set task status `blocked`, push a `humanQA` ask, and notify the Overmind (the ASK ME item already shows its task title for context)
 - Fleet cards flag idle-stale agents (idle over 2h with no active task) with an `idle Xh` badge, and PROTOCOL.md directs the Overmind to reap them on standup
+- Mobile PWA agent cards now carry a compact status strip (tokens, session cost, real context %, engine/model) mirroring the desktop StatusBar; `fleet.json` gained per-agent `provider` and `model`, and the context gauge is driven by the real `ctxPct` instead of a placeholder
+- PROTOCOL.md and agent orientation now require UAT / verification questions to state WHERE to look, WHAT to do, and WHAT to expect (pass criteria + fail signal), one check per question, so ASK ME items are actionable without a follow-up
 - Wire Bee-casso animated worker bee entity sprites into the Hive office floor desks
 - Implement 3-tier priority (urgent/normal/backlog) across hive router delivery, PROTOCOL.md schema, mobile and desktop dispatch UI, mobile and desktop Ask Me lists, and God inbox scan order
 

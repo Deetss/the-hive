@@ -3310,6 +3310,8 @@ function writeFleetSnapshot(): void {
           inboxBacklog: hive.inboxBacklog(id),
           onHold: !!a.onHold,
           profileId: a.profileId ?? null,
+          provider: a.provider ?? 'claude',
+          model: u?.model ?? null,
           ctxPct: ptyCtx ?? (u?.contextWindow?.percentage ? Math.round(u.contextWindow.percentage * 100) : null),
           quotaLimited,
           quotaResetsAt

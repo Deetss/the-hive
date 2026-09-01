@@ -26,6 +26,17 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
   const renameAgent = useStore(s => s.renameAgent);
   const setAgentNote = useStore(s => s.setAgentNote);
   const { samples: telemetrySamples, lastTool } = useFleetTelemetry();
+  // Quota-limited flags come from the PTY-parsed fleet snapshot (main pushes them
+  // on hive:fleetTokens); the card renders a QUOTA chip so the floor can re-route.
+  const [quotaById, setQuotaById] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!window.cth.onFleetTokens) return;
+    return window.cth.onFleetTokens((data) => {
+      const next: Record<string, boolean> = {};
+      for (const [id, v] of Object.entries(data)) if (v?.quotaLimited) next[id] = true;
+      setQuotaById(next);
+    });
+  }, []);
   // Shared with the fullscreen roster so both show one restore in progress.
   const { restoring, autoRestoring, restoreTeam } = useRestoreTeam(config);
   // ONE restore control (bottom-right): a button whose dropdown OPENS UPWARD and
@@ -150,6 +161,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
             selected={a.id === selectedId}
             isOvermind={a.isOvermind}
             onHold={a.onHold}
+            quotaLimited={quotaById[a.id]}
             onClick={() => select(a.id)}
             onRename={(name) => renameAgent(a.id, name)}
             doingCount={doingByAgent[a.id]?.length ?? 0}
