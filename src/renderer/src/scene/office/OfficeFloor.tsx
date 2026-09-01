@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Application, Container, Graphics, Ticker, Texture, Sprite, TilingSprite, Renderer } from 'pixi.js';
+import { Application, Container, Graphics, Ticker, Texture, Sprite, Renderer } from 'pixi.js';
 // PixiJS uses new Function() internally, blocked by Electron CSP — this patches it.
 import 'pixi.js/unsafe-eval';
 import { useStore, type Agent } from '@/store/store';
@@ -151,11 +151,6 @@ function drawHex(
   return g;
 }
 
-interface HiveFloorResources {
-  texture: Texture;
-  patternSize: number;
-}
-
 interface HiveDeskAsset {
   texture: Texture;
   anchorX: number;
@@ -169,57 +164,64 @@ interface HiveWallTextures {
   corner: Texture;
 }
 
-function createHiveFloorTexture(renderer: Renderer, tile: number): HiveFloorResources {
-  const patternSize = tile * 4;
-  const g = new Graphics();
+function createHiveFloorLayer(tile: number, width: number, height: number): Graphics {
+  const layer = new Graphics();
   const base = mixColor(colors.accent.lemon, colors.cream[200], 0.18);
-  const waxBase = mixColor(base, colors.ink[500], 0.08);
-  g.rect(0, 0, patternSize, patternSize).fill({ color: waxBase, alpha: 1 });
+  // Match background fill to base hex color so any sub-pixel rasterization blends seamlessly
+  layer.rect(0, 0, width, height).fill({ color: base, alpha: 1 });
 
-  const rx = tile * 1.2;
-  const ry = tile * 0.95;
-  const horizontalStep = rx * 1.5;
-  const verticalStep = ry * 1.3;
+  // Regular pointy-top hexagon geometry: height = 2*R, width = sqrt(3)*R
+  const R = Math.max(12, Math.round(tile * 0.95));
+  const ry = R;
+  const rx = R * (Math.sqrt(3) / 2);
+  const horizontalStep = 2 * rx;
+  const verticalStep = 1.5 * ry;
+
+  // 0.75px overlap ensures neighboring hexagons butt up with zero seams
+  const drawRx = rx + 0.75;
+  const drawRy = ry + 0.75;
+
   let row = 0;
-  for (let y = -verticalStep; y <= patternSize + verticalStep; y += verticalStep, row++) {
-    const offset = row % 2 === 0 ? 0 : horizontalStep / 2;
-    for (let x = -horizontalStep; x <= patternSize + horizontalStep; x += horizontalStep) {
+  for (let y = -verticalStep; y <= height + verticalStep * 2; y += verticalStep, row++) {
+    const offset = row % 2 === 0 ? 0 : rx;
+    for (let x = -horizontalStep; x <= width + horizontalStep * 2; x += horizontalStep) {
       const cx = x + offset;
-      const noise = pseudoNoise(cx * 0.015, y * 0.017);
-      const fill = mixColor(base, colors.accent.lemonLight, 0.28 + noise * 0.25);
-      const shell = mixColor(base, colors.ink[700], 0.12 + noise * 0.1);
-      drawHex(g, cx, y, rx, ry, fill, {
+      const noise = pseudoNoise(cx * 0.012, y * 0.014);
+      const fill = mixColor(base, colors.accent.lemonLight, 0.3 + noise * 0.22);
+      const shell = mixColor(base, colors.ink[700], 0.14 + noise * 0.08);
+      drawHex(layer, cx, y, drawRx, drawRy, fill, {
         stroke: shell,
-        strokeAlpha: 0.85,
-        strokeWidth: tile * 0.12,
+        strokeAlpha: 0.88,
+        strokeWidth: Math.max(1, Math.round(tile * 0.1)),
       });
-      drawHex(g, cx, y - ry * 0.34, rx * 0.55, ry * 0.45, lighten(fill, 0.45), { alpha: 0.82 });
-      drawHex(g, cx, y + ry * 0.32, rx * 0.4, ry * 0.3, darken(fill, 0.28), { alpha: 0.28 });
-      g.moveTo(cx - rx * 0.75, y)
-        .lineTo(cx + rx * 0.75, y)
-        .stroke({ color: lighten(fill, 0.35), width: tile * 0.05, alpha: 0.18 });
+      drawHex(layer, cx, y - ry * 0.32, rx * 0.55, ry * 0.44, lighten(fill, 0.42), { alpha: 0.8 });
+      drawHex(layer, cx, y + ry * 0.34, rx * 0.42, ry * 0.32, darken(fill, 0.25), { alpha: 0.3 });
+      layer.moveTo(cx - rx * 0.72, y)
+        .lineTo(cx + rx * 0.72, y)
+        .stroke({ color: lighten(fill, 0.32), width: Math.max(1, tile * 0.05), alpha: 0.2 });
     }
   }
 
   const sheen = new Graphics();
-  sheen.moveTo(0, patternSize * 0.35)
-    .lineTo(patternSize, patternSize * 0.15)
-    .lineTo(patternSize, 0)
+  sheen.moveTo(0, height * 0.35)
+    .lineTo(width, height * 0.18)
+    .lineTo(width, 0)
     .lineTo(0, 0)
     .closePath()
-    .fill({ color: 0xffffff, alpha: 0.04 });
-  g.addChild(sheen);
+    .fill({ color: 0xffffff, alpha: 0.035 });
+  layer.addChild(sheen);
 
-  const texture = renderer.generateTexture(g, { resolution: 2 });
-  g.destroy(true);
-  return { texture, patternSize };
+  layer.eventMode = 'none';
+  sheen.eventMode = 'none';
+  layer.cacheAsBitmap = true;
+  return layer;
 }
 
 function createHiveWallTextures(renderer: Renderer, tile: number): HiveWallTextures {
   const build = (draw: (g: Graphics) => void): Texture => {
     const g = new Graphics();
     draw(g);
-    const tex = renderer.generateTexture(g, { resolution: 2 });
+    const tex = renderer.generateTexture({ target: g, resolution: 2 });
     g.destroy(true);
     return tex;
   };
@@ -305,7 +307,7 @@ function createHiveDeskAssets(renderer: Renderer, tile: number): HiveDeskAsset[]
 
     decorate(g, width, height);
 
-    const texture = renderer.generateTexture(g, { resolution: 2 });
+    const texture = renderer.generateTexture({ target: g, resolution: 2 });
     g.destroy(true);
     return {
       texture,
@@ -635,7 +637,7 @@ export function OfficeFloor() {
       );
       if (mountIdRef.current !== mountId) { safeDestroy(app); return; }
 
-      let hiveFloorResources: HiveFloorResources | null = null;
+      let hiveFloorLayer: Graphics | null = null;
       let hiveWallTextures: HiveWallTextures | null = null;
       let hiveDeskAssets: HiveDeskAsset[] | null = null;
 
@@ -651,13 +653,12 @@ export function OfficeFloor() {
 
       const isHiveTheme = theme.id === 'hive';
       if (isHiveTheme) {
-        hiveFloorResources = createHiveFloorTexture(app.renderer, mapRenderer.tileSize);
         hiveWallTextures = createHiveWallTextures(app.renderer, mapRenderer.tileSize);
         hiveDeskAssets = createHiveDeskAssets(app.renderer, mapRenderer.tileSize);
       }
 
       const applyHiveSceneDecor = (): void => {
-        if (!hiveFloorResources || !hiveWallTextures || !hiveDeskAssets) return;
+        if (!hiveWallTextures || !hiveDeskAssets) return;
         const mapContainer = mapRenderer.getContainer();
         mapContainer.sortableChildren = true;
         const initialCharIndex = mapContainer.getChildIndex(charLayer);
@@ -673,21 +674,17 @@ export function OfficeFloor() {
         }
 
         // 1. Honeycomb Floor (tiled procedural texture)
-        const { texture: hiveFloorTex, patternSize } = hiveFloorResources;
         const floorWidth = mapRenderer.width * tile;
         const floorHeight = mapRenderer.height * tile;
-        const honeyFloor = new TilingSprite({
-          texture: hiveFloorTex,
-          width: floorWidth,
-          height: floorHeight
-        });
+        if (hiveFloorLayer) {
+          hiveFloorLayer.destroy(true);
+          hiveFloorLayer = null;
+        }
+        hiveFloorLayer = createHiveFloorLayer(tile, floorWidth, floorHeight);
         const insertIndex = initialCharIndex >= 0 ? initialCharIndex : mapContainer.children.length;
-        const floorScale = (tile * 4) / patternSize;
-        honeyFloor.tileScale.set(floorScale, floorScale);
-        honeyFloor.tilePosition.set(0, 0);
-        honeyFloor.eventMode = 'none';
-        honeyFloor.position.set(0, 0);
-        mapContainer.addChildAt(honeyFloor, insertIndex);
+        hiveFloorLayer.position.set(0, 0);
+        hiveFloorLayer.eventMode = 'none';
+        mapContainer.addChildAt(hiveFloorLayer, insertIndex);
 
         // Decorative floor accents along idle walls / corners
         const patternLayer = new Container();
