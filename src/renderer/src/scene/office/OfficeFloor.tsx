@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Application, Container, Graphics, Ticker, Texture, Sprite, Renderer } from 'pixi.js';
+import { Application, Container, Graphics, Ticker, Texture, Sprite, Renderer, Rectangle } from 'pixi.js';
 // PixiJS uses new Function() internally, blocked by Electron CSP — this patches it.
 import 'pixi.js/unsafe-eval';
 import { useStore, type Agent } from '@/store/store';
@@ -7,6 +7,8 @@ import { TiledMapRenderer } from './TiledMapRenderer';
 import { Camera } from './Camera';
 import { Character, paintCup } from './Character';
 import { DeskScreen } from './DeskScreen';
+import workEntityUrl from '@/assets/hive/agent-work-entity.png?url';
+import workEntityAnimUrl from '@/assets/hive/agent-work-entity-anim.png?url';
 import { MessageEnvelope, type MessageAct } from './MessageEnvelope';
 import { hexToNumber, getDefaultCharacter } from './cast';
 import { pickSoloLine, pickExchange, type BreakSpot } from './cafeteriaLines';
@@ -640,6 +642,7 @@ export function OfficeFloor() {
       let hiveFloorLayer: Graphics | null = null;
       let hiveWallTextures: HiveWallTextures | null = null;
       let hiveDeskAssets: HiveDeskAsset[] | null = null;
+      let hiveAgentFrames: Texture[] | null = null;
 
       const world = new Container();
       app.stage.addChild(world);
@@ -655,6 +658,22 @@ export function OfficeFloor() {
       if (isHiveTheme) {
         hiveWallTextures = createHiveWallTextures(app.renderer, mapRenderer.tileSize);
         hiveDeskAssets = createHiveDeskAssets(app.renderer, mapRenderer.tileSize);
+        try {
+          const animTex = await loadTexture(workEntityAnimUrl);
+          hiveAgentFrames = [
+            new Texture({ source: animTex.source, frame: new Rectangle(0, 0, 32, 32) }),
+            new Texture({ source: animTex.source, frame: new Rectangle(0, 32, 32, 32) }),
+            new Texture({ source: animTex.source, frame: new Rectangle(0, 64, 32, 32) }),
+            new Texture({ source: animTex.source, frame: new Rectangle(0, 96, 32, 32) }),
+          ];
+        } catch {
+          try {
+            const staticTex = await loadTexture(workEntityUrl);
+            hiveAgentFrames = [staticTex];
+          } catch (e) {
+            console.warn('[hive] failed to load work entity sprites:', e);
+          }
+        }
       }
 
       const applyHiveSceneDecor = (): void => {
@@ -757,17 +776,19 @@ export function OfficeFloor() {
         const wallInsertIndex = mapContainer.getChildIndex(charLayer);
         mapContainer.addChildAt(hiveWallLayer, wallInsertIndex >= 0 ? wallInsertIndex : mapContainer.children.length);
 
-        // 3. Hive desk pods (procedural sprites)
+        // 3. Hive desk pods and worker agent entity markers (Bee-casso sprites)
         const hiveDeskLayer = new Container();
         hiveDeskLayer.sortableChildren = true;
         const charInsertIndex = mapContainer.getChildIndex(charLayer);
         mapContainer.addChildAt(hiveDeskLayer, charInsertIndex >= 0 ? charInsertIndex : mapContainer.children.length);
 
         const deskAssets = hiveDeskAssets;
+        const agentSprites: { sprite: Sprite; phase: number }[] = [];
+
         spawnEntries
           .filter(([name]) => name.startsWith('desk-') || name.startsWith('pc-'))
           .sort((a, b) => a[1].y - b[1].y || a[1].x - b[1].x)
-          .forEach(([, point]) => {
+          .forEach(([, point], idx) => {
             const deskNoise = Math.abs(pseudoNoise(point.x * 0.37, point.y * 0.41));
             const variant = deskAssets[Math.floor(deskNoise * deskAssets.length) % deskAssets.length];
             const deskSprite = new Sprite(variant.texture);
@@ -776,8 +797,38 @@ export function OfficeFloor() {
             deskSprite.position.set((point.x + 0.5) * tile, (point.y + 0.35) * tile);
             deskSprite.zIndex = (point.y + 0.25) * tile;
             hiveDeskLayer.addChild(deskSprite);
+
+            if (hiveAgentFrames && hiveAgentFrames.length > 0) {
+              const marker = new Sprite(hiveAgentFrames[0]);
+              marker.eventMode = 'none';
+              marker.anchor.set(0.5, 0.5);
+              marker.position.set((point.x + 0.5) * tile, (point.y + 0.5) * tile);
+              marker.zIndex = (point.y + 0.4) * tile;
+              hiveDeskLayer.addChild(marker);
+              agentSprites.push({ sprite: marker, phase: idx });
+            }
           });
         hiveDeskLayer.sortChildren();
+
+        // 4fps bob animation ticker for work entity sprites
+        if (hiveAgentFrames && hiveAgentFrames.length > 1 && agentSprites.length > 0) {
+          const frames = hiveAgentFrames;
+          let animTimer = 0;
+          let currentStep = 0;
+          const animTicker = (ticker: Ticker) => {
+            if (mountIdRef.current !== mountId) return;
+            animTimer += ticker.deltaMS;
+            if (animTimer >= 250) {
+              animTimer = 0;
+              currentStep = (currentStep + 1) % frames.length;
+              for (const { sprite, phase } of agentSprites) {
+                const fIndex = (currentStep + phase) % frames.length;
+                sprite.texture = frames[fIndex];
+              }
+            }
+          };
+          app.ticker.add(animTicker);
+        }
       };
 
       if (isHiveTheme) applyHiveSceneDecor();
