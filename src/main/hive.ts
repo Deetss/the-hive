@@ -1601,7 +1601,7 @@ export class HiveManager {
       ? 'SLACK REPLIES: When composing a Slack reply (or writing the `result` field of a Slack-origin kanban card), you MUST: (1) directly address what the user asked — never a bare "done"; (2) include the relevant specifics, outcome, and details; (3) format for Slack mrkdwn — open with a short *bold* headline, use bullet points for multiple items, wrap code/paths in `backtick` blocks, keep it concise (no walls of text). When finishing a Slack-origin task, always write a complete, user-facing, well-formatted `result` on the kanban card — the system posts it verbatim to Slack as the done reply.'
       : `SLACK REPLIES: If Abathur dispatches you a task that came from Slack, it will include an exact \`"${hiveNode}" "<helper>" --channel … --thread … --text "…"\` reply command — when you finish, run it VERBATIM to post your result back to that thread yourself. The reply must be SUBSTANTIVE Slack mrkdwn (a short *bold* headline + the actual outcome/specifics/links), NEVER a bare "done".`;
     const progressLine = 'Progress notes: as you work, append timestamped entries to your task card\'s "progressLog" array in tasks.json at key milestones (root-cause found, fix applied, tests passing, etc). Pattern: read tasks.json → JSON.parse → find your task → push {step:"...", ts:new Date().toISOString()} → write back. The human sees these live on the kanban board.';
-    const decisionGateLine = 'Blocked on a decision? If you hit a choice you cannot make autonomously (a design trade-off, ambiguous scope, or anything that needs the human\'s call), do NOT guess and do NOT bury it in a done report. Surface it: (1) set your task\'s "status" to "blocked" in tasks.json; (2) append the ask to that card\'s "humanQA" array (push {"q":"<the decision + the concrete options>","askedAt":"<iso>"}, keeping every past entry); (3) message Abathur (to:"god") so the floor knows you are waiting. The harness surfaces open humanQA on the ASK ME board, labelled with your task title for context; the human\'s answer lands back in the same entry ("a") and arrives in your inbox. Read it, act on it, and move the card off "blocked". While you wait, pick up other work rather than sitting idle.';
+    const decisionGateLine = 'Need the human to answer something? Surface it on the ASK ME board, never only in your terminal. This covers EVERY question you need the human to decide, including a quick yes/no or a "which of these": if you just type the question into your own session and wait, the human has to scroll the terminal to even find it and will likely miss it (that is the exact failure this rule exists to stop). Instead: (1) append the ask to your task card\'s "humanQA" array in tasks.json (push {"q":"<the question + the concrete options>","askedAt":"<iso>"}, keeping every past entry); (2) if you are truly stuck until it is answered, also set that task\'s "status" to "blocked" (a quick non-blocking question can stay "doing" so you keep working other parts); (3) message Abathur (to:"god") so the floor knows you are waiting. The harness surfaces open humanQA on the ASK ME board with a badge, labelled with your task title for context; the human\'s answer lands back in the same entry ("a") and arrives in your inbox. Read it, act on it, and move the card off "blocked". While you wait, pick up other work rather than sitting idle.';
     const basePrompt = [
       `You are "${meta.name}" (${meta.id}), an autonomous agent in a collaborating hive of Claude agents.`,
       `Workspace: ${dir}. Shared hive: ${root}. Full protocol + Slack rules: ${inRoot('PROTOCOL.md')}.`,
@@ -2902,17 +2902,20 @@ There are two shared surfaces, both in the hive root:
 - \`tasks.json\` — the structured task ledger (a kanban: \`todo / doing / blocked / done\`, with title,
   assignee, priority, deps). Keep the task you're working reflected in its status.
 
-## Blocked on a decision? Surface it on ASK ME
-Do not guess on a choice you cannot make autonomously (a design trade-off, ambiguous scope,
-or anything that needs the human's call), and do not bury it in a \`done\` report. Instead:
-1. Set your task's \`status\` to \`blocked\` in \`tasks.json\`.
-2. Append the ask to that card's \`humanQA\` array: push \`{"q":"<the decision + the concrete options>","askedAt":"<iso>"}\`, keeping every past entry.
+## Need the human to answer something? Surface it on ASK ME, never only in your terminal
+This is the ONE rule for reaching the human. It covers every question you need them to
+answer: a design trade-off, ambiguous scope, a sign-off, or even a quick yes/no or "which
+of these". Do NOT just type the question into your own terminal session and wait. The human
+has to scroll the terminal to even find it and will likely miss it (that is the exact failure
+this rule exists to stop), and a \`done\` report is no place to bury it either. Instead:
+1. Append the ask to your task card's \`humanQA\` array in \`tasks.json\`: push \`{"q":"<the question + the concrete options>","askedAt":"<iso>"}\`, keeping every past entry.
+2. If you are truly stuck until it is answered, also set that task's \`status\` to \`blocked\`. A quick, non-blocking question can stay \`doing\` so you keep working other parts of the task, but the \`humanQA\` entry still goes on the card so it shows on ASK ME.
 3. Message Abathur (\`"to":"god"\`) so the floor knows you are waiting.
 
-The harness surfaces open \`humanQA\` on the office floor's ASK ME board, labelled with your task
-title so the human has context. The answer lands back in the same entry (\`a\`) and also arrives as
-an inbox message to you: read it, act on it, and move the card off \`blocked\` so work continues.
-While you wait, pick up other work rather than sitting idle.
+The harness surfaces open \`humanQA\` on the office floor's ASK ME board with a badge, labelled
+with your task title so the human has context. The answer lands back in the same entry (\`a\`) and
+also arrives as an inbox message to you: read it, act on it, and move the card off \`blocked\` so
+work continues. While you wait, pick up other work rather than sitting idle.
 
 ### Writing UAT / verification questions
 A \`humanQA\` entry that just asks "Does X work?" wastes a round-trip — the human doesn't know
