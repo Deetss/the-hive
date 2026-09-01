@@ -111,6 +111,14 @@ export function parseTasks(raw: unknown): HiveTask[] {
             docPath: typeof e.docPath === 'string' ? e.docPath : undefined,
             approved: typeof e.approved === 'boolean' ? e.approved : undefined
           }))
+        : undefined,
+      progressLog: Array.isArray(t.progressLog)
+        ? (t.progressLog as unknown[])
+          .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object' && typeof (e as { step?: unknown }).step === 'string')
+          .map((e) => ({
+            step: e.step as string,
+            ts: typeof e.ts === 'string' ? e.ts : new Date().toISOString()
+          }))
         : undefined
     }));
 }
@@ -141,6 +149,8 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'tasks' | 'uat'>('tasks');
   const [uatPending, setUatPending] = useState(0);
+  const [dragOverColumn, setDragOverColumn] = useState<Status | null>(null);
+  const dragTaskIdRef = useRef<string | null>(null);
 
   const viewingActive = viewedTaskSessionId === null;
   const selectedArchivedSession = useMemo(
@@ -277,6 +287,19 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
     setAnswerDrafts({});
     setExpandedKeys(new Set());
   }, [loadLiveTasks, setAnswerDrafts, setExpandedKeys, startNewTaskSession, tasks]);
+
+  const moveTaskToStatus = useCallback(async (taskId: string, newStatus: Status) => {
+    if (readOnly) return;
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.status === newStatus) return;
+    // Optimistic update
+    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t));
+    try {
+      await window.cth.hivePatchTask(taskId, { status: newStatus });
+    } catch {
+      void loadLiveTasks();
+    }
+  }, [loadLiveTasks, readOnly, tasks]);
 
   useEffect(() => {
     if (timer.current) { clearInterval(timer.current); timer.current = null; }
@@ -650,13 +673,30 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
       }}>
         {COLUMNS.map((col) => {
           const cards = tasksByStatus.get(col.key) ?? [];
+          const isDropTarget = dragOverColumn === col.key;
           return (
-            <div key={col.key} style={{
-              flex: mobile ? '1 0 auto' : '1 1 0',
-              minWidth: mobile ? '100%' : 170,
-              display: 'flex', flexDirection: 'column',
-              background: 'var(--cth-cream-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
-            }}>
+            <div
+              key={col.key}
+              onDragOver={readOnly ? undefined : (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverColumn(col.key); }}
+              onDragLeave={readOnly ? undefined : () => setDragOverColumn(null)}
+              onDrop={readOnly ? undefined : (e) => {
+                e.preventDefault();
+                const taskId = e.dataTransfer.getData('text/plain') || dragTaskIdRef.current;
+                setDragOverColumn(null);
+                dragTaskIdRef.current = null;
+                if (taskId) void moveTaskToStatus(taskId, col.key);
+              }}
+              style={{
+                flex: mobile ? '1 0 auto' : '1 1 0',
+                minWidth: mobile ? '100%' : 170,
+                display: 'flex', flexDirection: 'column',
+                background: isDropTarget ? 'var(--cth-cream-200)' : 'var(--cth-cream-100)',
+                boxShadow: isDropTarget
+                  ? `inset 0 0 0 2px ${col.accent}`
+                  : 'inset 0 0 0 1px var(--cth-ink-300)',
+                transition: 'background 0.12s, box-shadow 0.12s'
+              }}
+            >
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px',
                 background: 'var(--cth-cream-200)',
@@ -689,6 +729,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
                     assigneeName={nameFor(t.assignee)}
                     onOpen={readOnly ? undefined : handleOpenTask}
                     onDismiss={readOnly ? undefined : dismissTask}
+                    onDragStart={readOnly ? undefined : (id) => { dragTaskIdRef.current = id; }}
                     readOnly={readOnly}
                   />
                 ))}
@@ -696,6 +737,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
             </div>
           );
         })}
+
         </div>
       </div>
 
@@ -719,12 +761,24 @@ interface TaskCardProps {
   assigneeName?: string;
   onOpen?: (taskId: string) => void;
   onDismiss?: (taskId: string) => void;
+  onDragStart?: (taskId: string) => void;
   readOnly: boolean;
 }
 
-const TaskCard = memo(function TaskCard({ task, accent, assigneeName, onOpen, onDismiss, readOnly }: TaskCardProps) {
+const TaskCard = memo(function TaskCard({ task, accent, assigneeName, onOpen, onDismiss, onDragStart, readOnly }: TaskCardProps) {
+  const [dragging, setDragging] = useState(false);
   return (
-    <div style={{ position: 'relative', display: 'flex' }}>
+    <div
+      draggable={!readOnly}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', task.id);
+        setDragging(true);
+        onDragStart?.(task.id);
+      }}
+      onDragEnd={() => setDragging(false)}
+      style={{ position: 'relative', display: 'flex', opacity: dragging ? 0.45 : 1, transition: 'opacity 0.12s' }}
+    >
       <button
         onClick={readOnly || !onOpen ? undefined : () => onOpen(task.id)}
         title={readOnly ? 'Session history view (read-only)' : 'open task details'}
@@ -782,7 +836,9 @@ const TaskCard = memo(function TaskCard({ task, accent, assigneeName, onOpen, on
   && prev.assigneeName === next.assigneeName
   && prev.readOnly === next.readOnly
   && prev.onOpen === next.onOpen
-  && prev.onDismiss === next.onDismiss);
+  && prev.onDismiss === next.onDismiss
+  && prev.onDragStart === next.onDragStart);
+
 
 // ─── Detail view ─────────────────────────────────────────────────────────────
 // The full breakdown of one task: status, assignee, priority, the complete
@@ -1078,6 +1134,54 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
                 </div>
               )}
             </div>
+
+            {/* Progress Log — timestamped notes agents write during execution */}
+            {(task.progressLog?.length ?? 0) > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
+                  AGENT PROGRESS LOG
+                </div>
+                <div style={{
+                  padding: '6px 8px', background: 'var(--cth-paper-100)',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                  display: 'flex', flexDirection: 'column', gap: 0
+                }}>
+                  {task.progressLog!.map((entry, i) => {
+                    const d = new Date(entry.ts);
+                    const timeLabel = isNaN(d.getTime()) ? entry.ts : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const isLast = i === task.progressLog!.length - 1;
+                    return (
+                      <div key={i} style={{ display: 'flex', gap: 8, paddingBottom: isLast ? 0 : 8, position: 'relative' }}>
+                        {/* timeline spine */}
+                        {!isLast && (
+                          <div style={{
+                            position: 'absolute', left: 5, top: 14, bottom: 0,
+                            width: 1, background: 'var(--cth-ink-300)'
+                          }} />
+                        )}
+                        <div style={{
+                          width: 11, height: 11, marginTop: 2, borderRadius: '50%',
+                          background: isLast ? 'var(--cth-mint)' : 'var(--cth-ink-300)',
+                          boxShadow: isLast ? '0 0 0 2px var(--cth-mint-light, #d9eed9)' : 'none',
+                          flexShrink: 0
+                        }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-400)' }}>
+                            {timeLabel}
+                          </div>
+                          <div style={{
+                            fontSize: 12, lineHeight: '17px', fontFamily: 'var(--cth-font-ui)',
+                            color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap', wordBreak: 'break-word'
+                          }}>
+                            {entry.step}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* The human Q&A trail — every decision documented on the card */}
             {(task.humanQA?.length ?? 0) > 0 && (

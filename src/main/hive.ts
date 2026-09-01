@@ -1539,6 +1539,7 @@ export class HiveManager {
     const slackLine = meta.isOvermind
       ? 'SLACK REPLIES: When composing a Slack reply (or writing the `result` field of a Slack-origin kanban card), you MUST: (1) directly address what the user asked — never a bare "done"; (2) include the relevant specifics, outcome, and details; (3) format for Slack mrkdwn — open with a short *bold* headline, use bullet points for multiple items, wrap code/paths in `backtick` blocks, keep it concise (no walls of text). When finishing a Slack-origin task, always write a complete, user-facing, well-formatted `result` on the kanban card — the system posts it verbatim to Slack as the done reply.'
       : `SLACK REPLIES: If Abathur dispatches you a task that came from Slack, it will include an exact \`"${hiveNode}" "<helper>" --channel … --thread … --text "…"\` reply command — when you finish, run it VERBATIM to post your result back to that thread yourself. The reply must be SUBSTANTIVE Slack mrkdwn (a short *bold* headline + the actual outcome/specifics/links), NEVER a bare "done".`;
+    const progressLine = 'Progress notes: as you work, append timestamped entries to your task card\'s "progressLog" array in tasks.json at key milestones (root-cause found, fix applied, tests passing, etc). Pattern: read tasks.json → JSON.parse → find your task → push {step:"...", ts:new Date().toISOString()} → write back. The human sees these live on the kanban board.';
     const basePrompt = [
       `You are "${meta.name}" (${meta.id}), an autonomous agent in a collaborating hive of Claude agents.`,
       `Workspace: ${dir}. Shared hive: ${root}. Full protocol + Slack rules: ${inRoot('PROTOCOL.md')}.`,
@@ -1547,6 +1548,7 @@ export class HiveManager {
       `- During: capture durable facts in memory.md and send requests via ${inDir('outbox')} JSON.`,
       `- Finish: append what you learned to memory.md.`,
       guardrailsLine,
+      progressLine,
       memoryLine,
       knowledgeLine,
       godLine,

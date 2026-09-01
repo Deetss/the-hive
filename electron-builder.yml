@@ -152,7 +152,11 @@ portable:
 # also drives the updater filenames and the userData path).
 linux:
   category: Development
-  icon: build/icon.png
+  # Point at the icons/ directory — electron-builder picks the best size for
+  # each platform target. The directory contains pre-generated PNGs at
+  # 16×16, 32×32, 48×48, 64×64, 128×128, 256×256, 512×512 so the .deb
+  # desktop entry and taskbar always have a full icon set.
+  icon: build/icons
   executableName: the-hive
   maintainer: Dylan Dietz <dylan@bloomfieldhomes.net>
   synopsis: A swarm of CLI coding agents, orchestrated by Abathur

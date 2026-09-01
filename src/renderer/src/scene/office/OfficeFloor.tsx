@@ -785,19 +785,20 @@ export function OfficeFloor() {
         const deskAssets = hiveDeskAssets;
         const agentSprites: { sprite: Sprite; phase: number }[] = [];
 
-        // Check which desk positions have an active agent assigned in the current fleet/scene data
+        // Check which desk positions have an active WORKER agent assigned.
+        // The Overmind (Queen) is explicitly excluded here: her animated cast
+        // sprite (bee cast system) already renders at the CEO desk — adding a
+        // second work-entity sprite on top creates a duplicate. Worker agents
+        // have no cast sprite, so the work-entity sprite is their only visual.
         const currentAgents = useStore.getState().agents;
-        const occupiedKeys = new Set<string>();
+        const occupiedWorkerKeys = new Set<string>();
         const primarySeats = theme.primarySeatNames;
         let workerSlot = 1;
         for (const agent of currentAgents) {
-          if (agent.isOvermind) {
-            const ceoPt = mapRenderer.getSpawnPoint(primarySeats[0] || 'desk-ceo');
-            if (ceoPt) occupiedKeys.add(`${ceoPt.x},${ceoPt.y}`);
-          } else {
+          if (!agent.isOvermind) {
             if (workerSlot < primarySeats.length) {
               const pt = mapRenderer.getSpawnPoint(primarySeats[workerSlot]);
-              if (pt) occupiedKeys.add(`${pt.x},${pt.y}`);
+              if (pt) occupiedWorkerKeys.add(`${pt.x},${pt.y}`);
               workerSlot++;
             }
           }
@@ -816,8 +817,8 @@ export function OfficeFloor() {
             deskSprite.zIndex = (point.y + 0.25) * tile;
             hiveDeskLayer.addChild(deskSprite);
 
-            // Only render worker sprite if this desk position has an active agent assigned to it
-            const isOccupied = occupiedKeys.has(`${point.x},${point.y}`);
+            // Only render worker sprite if this desk has an active WORKER agent (not the Overmind)
+            const isOccupied = occupiedWorkerKeys.has(`${point.x},${point.y}`);
             if (isOccupied && hiveAgentFrames && hiveAgentFrames.length > 0) {
               const marker = new Sprite(hiveAgentFrames[0]);
               marker.eventMode = 'none';

@@ -3,6 +3,8 @@ import type {
   LocalDelegateConfig, LdaCapability, LdaApiCapability,
   LdaProviderKind, LdaTransport
 } from '../../../shared/localDelegate';
+import { CopyButton } from './CopyButton';
+
 
 const ALL_SCRIPT_CAPS: LdaCapability[] = ['find', 'map', 'run', 'check', 'task', 'loop'];
 const ALL_API_CAPS: LdaApiCapability[] = ['complete', 'embed'];
@@ -287,6 +289,7 @@ export function LocalDelegateSettings() {
                     {h.checking ? 'pinging…' : h.ok ? `OK ${h.latencyMs}ms` : 'OFFLINE'}
                   </span>
                 )}
+                <CopyButton value={transportLabel(d.transport, d.model)} title="Copy connection string" />
                 <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-700)' }}
                   onClick={() => checkHealth(d.id)}>ping</button>
                 <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'var(--cth-ink-100)', border: '1px solid var(--cth-ink-300)', borderRadius: 3, color: 'var(--cth-ink-700)' }}
@@ -296,6 +299,7 @@ export function LocalDelegateSettings() {
                 <button style={{ fontSize: 13, padding: '2px 6px', cursor: 'pointer', background: 'transparent', border: '1px solid #c0392b', borderRadius: 3, color: '#c0392b' }}
                   onClick={() => remove(d.id)}>remove</button>
               </div>
+
             </div>
           </div>
         );

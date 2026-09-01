@@ -30,6 +30,12 @@ All notable changes to this project are documented here. The format is based on
 - Fix raw agent IDs like "god" displaying across For You, Activity, and Tasks UI by resolving to registry display names
 - Add clear and dismiss actions for open humanQA items in For You tab and top alert banner
 - Fix agent worker sprite placement to render only at occupied desks with aligned monitor geometry
+- Fix duplicate sprite for Overmind/Queen — work-entity desk sprite is now skipped for the CEO desk since BeeYoncé's cast sprite already represents her on the floor
+- Fix Linux .deb desktop icon by pre-generating icon set at 16×16–512×512 PNG sizes in build/icons/ and referencing the directory in electron-builder.yml
+- Add Kanban drag-and-drop — task cards are now draggable between columns; dropping into a column instantly updates the task status via the existing IPC patch mechanism, with column highlight feedback on dragover
+- Add agent progress log to task cards — agents can now write timestamped milestone entries to a `progressLog` array on their task card in tasks.json; entries render as a timeline in the task detail overlay and are visible in real time on the kanban board; PROTOCOL.md and agent orientation prompts updated to instruct agents to write these notes
+- Add copy-to-clipboard buttons (📋→✓) to AI Engines Settings (local base-URL fields, model fields, runtime profile rows) and Local Delegate Settings (connection string per delegate)
+
 
 ## [0.4.5] — 2026-08-22
 

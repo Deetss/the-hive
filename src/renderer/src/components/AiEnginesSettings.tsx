@@ -5,6 +5,7 @@ import { PixelButton } from './PixelButton';
 import { ProviderLogo } from './ProviderLogo';
 import { OSS_BLOG_LINKS } from '@shared/ossModels';
 import { useStore } from '@/store/store';
+import { CopyButton } from './CopyButton';
 
 /**
  * AiEnginesSettings — the v0.3.1 per-provider config surface for the BYOK CLI
@@ -212,21 +213,32 @@ export function AiEnginesSettings({
               <ProviderLogo provider={c.id} size={12} /> {c.label}
             </label>
             <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                placeholder={`base-URL — ${c.hint}`}
-                defaultValue={baseUrls[c.id] ?? ''}
-                onBlur={(e) => saveBaseUrl(c.id, e.target.value)}
-                style={inputStyle}
-              />
-              <input
-                placeholder="default model (provider/model)"
-                defaultValue={models[c.id] ?? ''}
-                onBlur={(e) => saveModel(c.id, e.target.value)}
-                style={{ ...inputStyle, maxWidth: 220 }}
-              />
+              <div style={{ display: 'flex', flex: 1, gap: 4, alignItems: 'center' }}>
+                <input
+                  placeholder={`base-URL — ${c.hint}`}
+                  defaultValue={baseUrls[c.id] ?? ''}
+                  onBlur={(e) => saveBaseUrl(c.id, e.target.value)}
+                  style={inputStyle}
+                />
+                {(baseUrls[c.id] ?? '').trim() && (
+                  <CopyButton value={baseUrls[c.id] ?? ''} title="Copy base URL" />
+                )}
+              </div>
+              <div style={{ display: 'flex', maxWidth: 220, gap: 4, alignItems: 'center' }}>
+                <input
+                  placeholder="default model (provider/model)"
+                  defaultValue={models[c.id] ?? ''}
+                  onBlur={(e) => saveModel(c.id, e.target.value)}
+                  style={{ ...inputStyle }}
+                />
+                {(models[c.id] ?? '').trim() && (
+                  <CopyButton value={models[c.id] ?? ''} title="Copy model name" />
+                )}
+              </div>
             </div>
           </div>
         ))}
+
         {/* Local-setup guides (ondev-c part-3) — link the two how-to blogs. */}
         <div style={{ fontSize: 12, color: 'var(--cth-ink-700)', lineHeight: '17px' }}>
           Running open models? Step-by-step guides:{' '}
@@ -264,23 +276,28 @@ export function AiEnginesSettings({
 
         {profiles.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {profiles.map((p) => (
-              <div key={p.id} style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
-                boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', background: 'var(--cth-paper-100)'
-              }}>
-                <ProviderLogo provider={p.provider} size={14} />
-                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: 13, color: 'var(--cth-ink-900)', fontFamily: 'var(--cth-font-ui)' }}>{p.name}</span>
-                  <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.provider}{p.model ? ` · ${p.model}` : ''}{p.claudeConfigDir ? ` · ${p.claudeConfigDir}` : ''}
-                  </span>
+            {profiles.map((p) => {
+              const profileStr = `${p.provider}${p.model ? ` · ${p.model}` : ''}${p.claudeConfigDir ? ` · ${p.claudeConfigDir}` : ''}`;
+              return (
+                <div key={p.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', background: 'var(--cth-paper-100)'
+                }}>
+                  <ProviderLogo provider={p.provider} size={14} />
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 13, color: 'var(--cth-ink-900)', fontFamily: 'var(--cth-font-ui)' }}>{p.name}</span>
+                    <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {profileStr}
+                    </span>
+                  </div>
+                  <CopyButton value={`${p.name} · ${profileStr}`} title="Copy profile config" />
+                  <PixelButton variant="secondary" size="sm" onClick={() => removeProfileById(p.id)}>Delete</PixelButton>
                 </div>
-                <PixelButton variant="secondary" size="sm" onClick={() => removeProfileById(p.id)}>Delete</PixelButton>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
+
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

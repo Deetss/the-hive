@@ -41,9 +41,20 @@ export interface HiveTask {
   /** Completion percent 0–100, shown as a bar on the card. Optional: a card
    *  without it renders no bar. */
   progress?: number;
+  /** Timestamped progress notes written by the assigned agent during execution.
+   *  Each entry is a milestone the agent recorded mid-task so the kanban board
+   *  shows live progress. Agents should append entries (never overwrite) by
+   *  reading tasks.json, pushing { step, ts }, and writing back. */
+  progressLog?: ProgressEntry[];
   /** First-class human feedback: the god appends {q} when a card needs the human;
    *  the ASK ME view fills in {a}. Full history stays on the card. */
   humanQA?: HumanQA[];
+}
+
+/** A single timestamped progress note written by an agent during task execution. */
+export interface ProgressEntry {
+  step: string;
+  ts: string;
 }
 
 export interface TaskSessionSnapshot {
