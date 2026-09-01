@@ -878,6 +878,21 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
         zIndex: 300
       }}
     >
+      {/* Governor range sliders — native <input type=range> has no inline hook for
+          its track/thumb pseudo-elements, so the design-system look is applied
+          here: square thumb, honey fill, the same 1px ink hairline the rest of
+          the app's chrome uses. Style only. */}
+      <style>{`
+        .cth-gov-range { -webkit-appearance: none; appearance: none; height: 18px; background: transparent; cursor: pointer; }
+        .cth-gov-range:disabled { cursor: not-allowed; opacity: 0.4; }
+        .cth-gov-range::-webkit-slider-runnable-track { height: 6px; background: var(--cth-cream-300); box-shadow: inset 0 0 0 1px var(--cth-ink-300); }
+        .cth-gov-range::-moz-range-track { height: 6px; background: var(--cth-cream-300); box-shadow: inset 0 0 0 1px var(--cth-ink-300); }
+        .cth-gov-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 14px; margin-top: -4px; border-radius: 0; background: var(--cth-lemon); box-shadow: inset 0 0 0 1px var(--cth-ink-700); }
+        .cth-gov-range::-moz-range-thumb { width: 12px; height: 14px; border: none; border-radius: 0; background: var(--cth-lemon); box-shadow: inset 0 0 0 1px var(--cth-ink-700); }
+        .cth-gov-range:focus-visible { outline: none; }
+        .cth-gov-range:focus-visible::-webkit-slider-thumb { box-shadow: inset 0 0 0 2px var(--cth-ink-900); }
+        .cth-gov-range:focus-visible::-moz-range-thumb { box-shadow: inset 0 0 0 2px var(--cth-ink-900); }
+      `}</style>
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -1468,8 +1483,9 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                           </div>
                           <span style={{
                             fontFamily: 'var(--cth-font-ui)', fontSize: 10, lineHeight: '16px', padding: '2px 8px',
-                            color: 'var(--cth-paper-100)', textTransform: 'uppercase',
-                            background: govMode === 'red' ? 'var(--cth-coral)' : govMode === 'yellow' ? '#c98a1a' : 'var(--cth-mint-700, #1f7a4d)'
+                            color: 'var(--cth-on-accent)', textTransform: 'uppercase',
+                            boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                            background: govMode === 'red' ? 'var(--cth-coral)' : govMode === 'yellow' ? 'var(--cth-lemon)' : 'var(--cth-mint)'
                           }}>
                             {govMode}
                           </span>
@@ -1490,6 +1506,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               5h: {govFiveHour.enabled !== false ? 'on' : 'off'}
                             </PixelButton>
                             <input
+                              className="cth-gov-range"
                               type="range" min={5} max={100} step={5}
                               value={govFiveHour.absoluteBackstopPct ?? 20}
                               onChange={(e) => setGovFiveHour({ absoluteBackstopPct: Number(e.target.value) })}
@@ -1510,6 +1527,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               7d: {govSevenDay.enabled !== false ? 'on' : 'off'}
                             </PixelButton>
                             <input
+                              className="cth-gov-range"
                               type="range" min={5} max={100} step={5}
                               value={govSevenDay.absoluteBackstopPct ?? 80}
                               onChange={(e) => setGovSevenDay({ absoluteBackstopPct: Number(e.target.value) })}
@@ -1593,6 +1611,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                             5h: {profile5h.enabled !== false ? 'on' : 'off'}
                                           </PixelButton>
                                           <input
+                                            className="cth-gov-range"
                                             type="range" min={5} max={100} step={5}
                                             value={profile5h.absoluteBackstopPct ?? govFiveHour.absoluteBackstopPct ?? 20}
                                             onChange={(e) => setProfileWindow(profile.id, 'fiveHour', { absoluteBackstopPct: Number(e.target.value) })}
@@ -1612,6 +1631,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                                             7d: {profile7d.enabled !== false ? 'on' : 'off'}
                                           </PixelButton>
                                           <input
+                                            className="cth-gov-range"
                                             type="range" min={5} max={100} step={5}
                                             value={profile7d.absoluteBackstopPct ?? govSevenDay.absoluteBackstopPct ?? 80}
                                             onChange={(e) => setProfileWindow(profile.id, 'sevenDay', { absoluteBackstopPct: Number(e.target.value) })}
