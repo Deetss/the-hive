@@ -1100,7 +1100,7 @@
     <!-- Fleet Screen -->
     <section id="screen-fleet" class="screen active">
       <div class="fleet-header">
-        <span class="fleet-header-title"><span class="sse-indicator" id="sse-dot"></span>Live Fleet</span>
+        <span class="fleet-header-title"><span class="sse-indicator" id="sse-dot"></span>Live Agents</span>
         <button class="fleet-refresh-btn" id="fleet-refresh">↻</button>
       </div>
       <div id="fleet-list"><div class="spinner">⟳ loading…</div></div>
@@ -1150,7 +1150,7 @@
       </div>
       <div class="field">
         <label>Message</label>
-        <textarea id="dispatch-body" placeholder="Describe the task for the fleet…"></textarea>
+        <textarea id="dispatch-body" placeholder="Describe the task for the agents…"></textarea>
       </div>
       <div class="field">
         <label>Priority</label>
@@ -1287,7 +1287,7 @@
   <nav>
     <button class="nav-btn active" data-screen="fleet">
       <span class="nav-icon">👥</span>
-      <span class="nav-label">Fleet</span>
+      <span class="nav-label">Agents</span>
     </button>
     <button class="nav-btn" data-screen="askme" id="nav-askme">
       <span class="nav-icon">🔔</span>
@@ -1568,7 +1568,7 @@ async function loadFleet() {
     if (!res.ok) return;
     fleetData = await res.json();
     renderFleet();
-  } catch (e) { if (e.message !== '401') showError('Fleet load failed'); }
+  } catch (e) { if (e.message !== '401') showError('Agents load failed'); }
 }
 
 function renderFleet() {
@@ -2369,7 +2369,7 @@ document.getElementById('new-agent-spawn').addEventListener('click', async () =>
       body: JSON.stringify({ name, objective, profile: profile || undefined, isolate: type === 'worker' })
     });
     if (res.ok) {
-      showResult(`✓ Queued "${name}" — it will appear in Fleet shortly.`, true);
+      showResult(`✓ Queued "${name}" — it will appear in Agents shortly.`, true);
       document.getElementById('new-agent-name').value = '';
       document.getElementById('new-agent-objective').value = '';
       setTimeout(loadFleet, 1500);
