@@ -16,7 +16,7 @@ export interface OnboardingWizardProps {
 }
 
 type Audience = 'technical' | 'non-technical';
-type Step = 'persona' | 'welcome' | 'home' | 'orchestrator' | 'repos' | 'permissions' | 'done';
+type Step = 'persona' | 'welcome' | 'home' | 'orchestrator' | 'repos' | 'knowledge' | 'permissions' | 'done';
 
 // First-run showcase — the highest-value features a brand-new user should grasp
 // before any setup. Each carries a developer-register `desc` and a plain-language
@@ -181,6 +181,28 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
   const removeRepo = (path: string) => setRepos(repos.filter(r => r !== path));
 
+  // Shared knowledge base sources (multi-source, commit 9b214fd5): local .md/.txt
+  // folders agents grep/read and/or MCP endpoints they query. Held in local state
+  // and written once by finish() — onboarding never persists config incrementally.
+  type KbSourceType = 'folder' | 'outline-mcp' | 'custom-mcp';
+  type KbSourceEntry = { type: KbSourceType; value: string };
+  const OUTLINE_DEFAULT_URL = 'https://docs.bloomfieldhomes.org';
+  const [kbSources, setKbSources] = useState<KbSourceEntry[]>([]);
+  const addKbSource = () => setKbSources((prev) => [...prev, { type: 'folder', value: '' }]);
+  const removeKbSource = (idx: number) => setKbSources((prev) => prev.filter((_, i) => i !== idx));
+  const updateKbSource = (idx: number, patch: Partial<KbSourceEntry>) =>
+    setKbSources((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+  const changeKbSourceType = (idx: number, type: KbSourceType) => {
+    // Switching an empty row to Outline prefills the instance URL (SettingsModal parity).
+    const cur = kbSources[idx];
+    const value = type === 'outline-mcp' && !cur.value.trim() ? OUTLINE_DEFAULT_URL : cur.value;
+    updateKbSource(idx, { type, value });
+  };
+  const pickKbFolder = async (idx: number) => {
+    const res = await window.cth.chooseFolder();
+    if (res.ok) updateKbSource(idx, { value: res.path });
+  };
+
   const finish = async () => {
     setBusy(true);
     setError(undefined);
@@ -203,11 +225,15 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       audience: audience ?? 'technical',
       harnessHome, // the same trimmed value we just mkdir'd, not the raw field
       registeredRepos: repos,
+      // Drop blank-valued rows so a half-filled source never reaches an agent.
+      knowledgeBaseSources: kbSources
+        .filter((s) => s.value.trim())
+        .map((s) => ({ type: s.type, value: s.value.trim() })),
       autoMode,
       overmindProvider,
       overmindModel,
       telemetryEnabled: shareStats
-    });
+    } as Partial<HarnessConfig>);
     setBusy(false);
     onComplete(next);
   };
@@ -237,10 +263,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
           title={
             step === 'persona' ? 'WELCOME TO THE HIVE'
             : step === 'welcome' ? 'MEET YOUR OFFICE'
-            : step === 'home' ? (plain ? 'STEP 1 OF 4 · A HOME FOR THE APP' : 'STEP 1 OF 4 · HARNESS HOME')
-            : step === 'orchestrator' ? (plain ? "STEP 2 OF 4 · YOUR CLONE" : "STEP 2 OF 4 · YOUR CLONE'S ENGINE")
-            : step === 'repos' ? (plain ? 'STEP 3 OF 4 · YOUR PROJECTS' : 'STEP 3 OF 4 · YOUR REPOS')
-            : step === 'permissions' ? 'STEP 4 OF 4 · PERMISSIONS & RELIABILITY'
+            : step === 'home' ? (plain ? 'STEP 1 OF 5 · A HOME FOR THE APP' : 'STEP 1 OF 5 · HARNESS HOME')
+            : step === 'orchestrator' ? (plain ? "STEP 2 OF 5 · YOUR CLONE" : "STEP 2 OF 5 · YOUR CLONE'S ENGINE")
+            : step === 'repos' ? (plain ? 'STEP 3 OF 5 · YOUR PROJECTS' : 'STEP 3 OF 5 · YOUR REPOS')
+            : step === 'knowledge' ? (plain ? 'STEP 4 OF 5 · SHARED KNOWLEDGE' : 'STEP 4 OF 5 · KNOWLEDGE BASE')
+            : step === 'permissions' ? 'STEP 5 OF 5 · PERMISSIONS & RELIABILITY'
             : 'ALL SET'
           }
           noPadding
@@ -594,6 +621,87 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               </>
             )}
 
+            {step === 'knowledge' && (
+              <>
+                <p style={{ margin: 0, lineHeight: '22px' }}>
+                  {plain ? (
+                    <>Give your agents a <strong>shared knowledge base</strong> — the team's notes,
+                    conventions, decisions, and how-tos. Agents read it before they work, so they
+                    follow your way of doing things instead of guessing. Add a folder of notes or a
+                    docs server, or skip this and add it later in Settings.</>
+                  ) : (
+                    <>Point your agents at a <strong>shared knowledge base</strong>: local
+                    <code style={{ fontFamily: 'var(--cth-font-mono)', background: 'var(--cth-paper-100)', padding: '0 4px' }}> .md/.txt</code>
+                    {' '}folders they grep/read, and/or MCP doc servers (Outline / custom) they query
+                    for conventions, decisions, and how-tos. Add as many as you like, or skip and set
+                    them up later in Settings → Memory &amp; Knowledge.</>
+                  )}
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {kbSources.length === 0 && (
+                    <div style={{
+                      padding: 12, fontSize: 13, color: 'var(--cth-ink-500)',
+                      background: 'var(--cth-paper-200)', textAlign: 'center'
+                    }}>
+                      {plain
+                        ? 'No sources yet. Optional — you can add one anytime.'
+                        : 'No sources yet — agents have no shared knowledge base. Optional.'}
+                    </div>
+                  )}
+                  {kbSources.map((src, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <select
+                        value={src.type}
+                        onChange={(e) => changeKbSourceType(idx, e.target.value as KbSourceType)}
+                        style={{ ...inputStyle, flex: '0 0 auto', width: 'auto', maxWidth: 150 }}
+                      >
+                        <option value="folder">Local Folder</option>
+                        <option value="outline-mcp">Outline MCP</option>
+                        <option value="custom-mcp">Custom MCP URL</option>
+                      </select>
+                      {src.type === 'folder' ? (
+                        <>
+                          <span style={{
+                            flex: 1, minWidth: 0, fontSize: 12, color: 'var(--cth-ink-700)',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                          }} title={src.value || undefined}>
+                            {src.value || 'No folder chosen'}
+                          </span>
+                          <PixelButton variant="secondary" size="sm" onClick={() => void pickKbFolder(idx)}>
+                            {src.value ? 'change…' : 'choose…'}
+                          </PixelButton>
+                        </>
+                      ) : (
+                        <input
+                          type="url"
+                          value={src.value}
+                          placeholder={src.type === 'outline-mcp' ? OUTLINE_DEFAULT_URL : 'https://…'}
+                          onChange={(e) => updateKbSource(idx, { value: e.target.value })}
+                          style={inputStyle}
+                        />
+                      )}
+                      <PixelButton variant="ghost" size="sm" onClick={() => removeKbSource(idx)}>
+                        <Icon name="x" />
+                      </PixelButton>
+                    </div>
+                  ))}
+                </div>
+
+                <PixelButton variant="secondary" size="md" onClick={addKbSource}>
+                  <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                    <Icon name="plus" /> add a source
+                  </span>
+                </PixelButton>
+
+                <div style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>
+                  {plain
+                    ? "This step is optional — skip it and your agents just won't have shared notes yet."
+                    : 'Optional. https only for MCP; an OAuth-gated server needs a one-time /mcp auth per agent.'}
+                </div>
+              </>
+            )}
+
             {step === 'permissions' && (
               <>
                 {/* AUTONOMY — merged from the old "auto mode" step (item 5). One choice
@@ -867,7 +975,7 @@ function ToggleRow({ icon, label, desc, on, tint, edge, onChange }: {
 }
 
 function Dots({ step }: { step: Step }) {
-  const order: Step[] = ['persona', 'welcome', 'home', 'orchestrator', 'repos', 'permissions'];
+  const order: Step[] = ['persona', 'welcome', 'home', 'orchestrator', 'repos', 'knowledge', 'permissions'];
   return (
     <div style={{ display: 'flex', gap: 4 }}>
       {order.map((s) => (
@@ -886,11 +994,13 @@ function nextStep(s: Step): Step {
     : s === 'welcome' ? 'home'
     : s === 'home' ? 'orchestrator'
     : s === 'orchestrator' ? 'repos'
-    : s === 'repos' ? 'permissions'
+    : s === 'repos' ? 'knowledge'
+    : s === 'knowledge' ? 'permissions'
     : 'done';
 }
 function prevStep(s: Step): Step {
-  return s === 'permissions' ? 'repos'
+  return s === 'permissions' ? 'knowledge'
+    : s === 'knowledge' ? 'repos'
     : s === 'repos' ? 'orchestrator'
     : s === 'orchestrator' ? 'home'
     : s === 'home' ? 'welcome'
