@@ -42,6 +42,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Remove the "join Discord" button from the Settings hero card; the remaining actions ("what's new", "star on GitHub", "report a problem", "full changelog →") already point at the correct GitHub repo
 - Fix the Monitor (floor) tab's load lag on every switch — the heavy roster/telemetry panel now mounts once on first open and stays mounted (hidden when inactive) instead of a full remount plus config/telemetry re-fetch each time
 - Fix generated agy/codex/Gemini lifecycle-hook commands failing on multi-user installs — the launcher and shim paths are now double-quoted when they contain whitespace (e.g. a hive under `C:\Users\First Last\...`); space-free paths are unchanged
 - Surface `compacting` as an agent status in `fleet.json` (and god's live roster line) while an agent runs `/compact`, driven by the `PreCompact`/`PostCompact` hooks with a 5-minute safety ceiling, so a mid-compaction agent no longer reads as frozen; documented in PROTOCOL.md
