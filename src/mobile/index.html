@@ -1235,31 +1235,49 @@ async function apiFetch(path, opts = {}) {
 // location.origin on first load IS that base URL, so a scanned token is
 // enough to register the machine and skip the setup form entirely.
 async function tryAutoPairFromQuery() {
-  const token = new URLSearchParams(location.search).get('token');
+  const params = new URLSearchParams(location.search);
+  const token = params.get('token');
   if (!token) return { paired: false };
-  const baseUrl = location.origin;
+  // The QR normally carries only ?token=, deriving the URL from the page origin
+  // and the label from the host. Honor explicit ?url= / ?label= too, so a QR that
+  // does encode them (e.g. a Tailscale override) fills every field.
+  const baseUrl = params.get('url') || location.origin;
+  const label = params.get('label') || location.hostname;
   history.replaceState({}, '', location.pathname);
   const existing = machines.find(m => m.baseUrl === baseUrl && m.secret === token);
   if (existing) { activeMachineId = existing.id; return { paired: true }; }
   const id = 'machine-' + Date.now();
-  const m = { id, label: location.hostname, baseUrl, secret: token, status: 'checking', lastConnectedAt: null };
+  const m = { id, label, baseUrl, secret: token, status: 'checking', lastConnectedAt: null };
   machines.push(m);
   const ok = await pingMachine(m);
   // Ping failed (server unreachable/rejected): surface the scanned values in the
   // setup form so the user can retry without re-typing, rather than a blank form.
-  if (!ok) { machines.pop(); saveMachines(); return { paired: false, prefill: { baseUrl, token } }; }
+  if (!ok) { machines.pop(); saveMachines(); return { paired: false, prefill: { baseUrl, token, label } }; }
   activeMachineId = id;
-  try { localStorage.setItem('hive_active', id); } catch {}
+  try {
+    localStorage.setItem('hive_active', id);
+    localStorage.setItem('hive_last_setup', JSON.stringify({ baseUrl, secret: token, label }));
+  } catch {}
   return { paired: true };
 }
 
 // ── Boot ─────────────────────────────────────────────────────────
 loadMachines();
-tryAutoPairFromQuery().then(({ paired, prefill }) => {
-  if (paired) { bootApp(); return; }
+tryAutoPairFromQuery().then((res) => {
+  if (res.paired) { bootApp(); return; }
+  let prefill = res.prefill;
+  // Opened without ?token= (bookmark / home-screen icon, not a fresh QR scan) and
+  // no machine saved yet: fall back to the last setup we persisted so the form
+  // isn't blank and the user needn't re-type the URL and secret.
+  if (!prefill && machines.length === 0) {
+    let last = null;
+    try { last = JSON.parse(localStorage.getItem('hive_last_setup') || 'null'); } catch {}
+    if (last && last.baseUrl) prefill = { baseUrl: last.baseUrl, token: last.secret, label: last.label };
+  }
   if (prefill) {
-    document.getElementById('setup-url').value = prefill.baseUrl;
-    document.getElementById('setup-secret').value = prefill.token;
+    document.getElementById('setup-url').value = prefill.baseUrl || '';
+    document.getElementById('setup-secret').value = prefill.token || '';
+    if (prefill.label) document.getElementById('setup-label').value = prefill.label;
   }
   if (machines.length === 0 || prefill) {
     document.getElementById('setup-screen').hidden = false;
@@ -1285,6 +1303,7 @@ document.getElementById('setup-connect-btn').addEventListener('click', async () 
   activeMachineId = id;
   const ok = await pingMachine(m);
   if (!ok) { machines.pop(); saveMachines(); errEl.textContent = 'Could not connect. Check URL and secret.'; errEl.hidden = false; return; }
+  try { localStorage.setItem('hive_last_setup', JSON.stringify({ baseUrl: url, secret, label })); } catch {}
   document.getElementById('setup-screen').hidden = true;
   bootApp();
 });
