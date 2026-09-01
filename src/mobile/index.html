@@ -1238,10 +1238,12 @@ async function tryAutoPairFromQuery() {
   const params = new URLSearchParams(location.search);
   const token = params.get('token');
   if (!token) return { paired: false };
-  // The QR normally carries only ?token=, deriving the URL from the page origin
-  // and the label from the host. Honor explicit ?url= / ?label= too, so a QR that
-  // does encode them (e.g. a Tailscale override) fills every field.
-  const baseUrl = params.get('url') || location.origin;
+  // The server that served this page IS the machine to pair with, so the URL
+  // ALWAYS comes from location.origin — never a query param. Honoring a ?url= here
+  // would let a crafted link (e.g. `…/mobile?token=…&url=https://attacker`) redirect
+  // the secret and every authenticated request to an attacker's server. The label
+  // is cosmetic, so a ?label= override is safe.
+  const baseUrl = location.origin;
   const label = params.get('label') || location.hostname;
   history.replaceState({}, '', location.pathname);
   const existing = machines.find(m => m.baseUrl === baseUrl && m.secret === token);
