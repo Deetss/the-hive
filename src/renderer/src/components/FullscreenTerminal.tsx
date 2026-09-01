@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { PixelBadge } from './PixelBadge';
+import { PixelBadge, type StatusKind } from './PixelBadge';
 import { PixelButton } from './PixelButton';
 import { PtyTerminalView } from './PtyTerminalView';
 import { terminalInstanceKey } from './terminalRecovery';
@@ -182,6 +182,26 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
   const reorderAgents = useStore(s => s.reorderAgents);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+
+  // Roster parity with the floor strip (AgentStrip → AgentCard): the QUOTA chip
+  // is fed by the PTY-parsed fleet snapshot, the profile chip by the runtime
+  // profile list. Same sources AgentStrip uses.
+  const [quotaById, setQuotaById] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!window.cth.onFleetTokens) return;
+    return window.cth.onFleetTokens((data) => {
+      const next: Record<string, boolean> = {};
+      for (const [id, v] of Object.entries(data)) if (v?.quotaLimited) next[id] = true;
+      setQuotaById(next);
+    });
+  }, []);
+  const profileNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const p of config?.runtimeProfiles ?? []) {
+      m[p.id] = p.name.includes('·') ? p.name.split('·').pop()!.trim() : p.name;
+    }
+    return m;
+  }, [config?.runtimeProfiles]);
   // Roster collapse. Persisted because it is a working preference, not a mode:
   // someone who hides the rail to read wide terminal output wants it still hidden
   // the next time they go fullscreen, not to re-hide it every single time.
@@ -453,6 +473,8 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                   onNoteChange={(note) => setAgentNote(a.id, note)}
                   drag={drag}
                   scale={scale}
+                  quotaLimited={quotaById[a.id]}
+                  profileLabel={a.profileId ? profileNameById[a.profileId] : undefined}
                 />
               </div>
             ))}
@@ -490,6 +512,8 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                     onNoteChange={(note) => setAgentNote(a.id, note)}
                     drag={drag}
                     scale={scale}
+                    quotaLimited={quotaById[a.id]}
+                    profileLabel={a.profileId ? profileNameById[a.profileId] : undefined}
                   />
                 ))}
               </div>
@@ -684,7 +708,9 @@ function SidebarRow({
   onClick,
   onNoteChange,
   drag,
-  scale
+  scale,
+  quotaLimited,
+  profileLabel
 }: {
   agent: Agent;
   active: boolean;
@@ -692,6 +718,10 @@ function SidebarRow({
   onNoteChange: (note: string) => void;
   drag: RowDrag;
   scale: ReturnType<typeof rosterScale>;
+  /** Parity with AgentCard: agent hit provider quota/rate limit. */
+  quotaLimited?: boolean;
+  /** Parity with AgentCard: resolved runtime-profile name (from profileId). */
+  profileLabel?: string;
 }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const noteRef = useRef<HTMLDivElement>(null);
@@ -712,6 +742,40 @@ function SidebarRow({
   const bullets = (agent.note ?? '').split('\n').map(s => s.trim()).filter(Boolean);
 
   const typing = useHasTerminalDraft(agent.ptyId);
+
+  // Parity with the floor roster (AgentCard): the identity row carries the same
+  // chips, badge derivation, and respawn control — the two rosters must agree on
+  // what they say about an agent.
+  const prov = inferAgentProvider(agent.command, agent.provider);
+  const isNonClaude = prov !== 'claude';
+  const preset = providerPreset(prov);
+  // #5C: a compacting agent reads as 'working' in the store until PostCompact —
+  // recover it here from the action text, exactly as AgentCard does.
+  const compacting = agent.status === 'compacting'
+    || ((agent.status === 'working' || agent.status === 'thinking') && /compact/i.test(agent.action ?? ''));
+  const badgeStatus: StatusKind = typing ? 'typing' : compacting ? 'compacting' : agent.status;
+  // Idle-with-no-activity past 2h = a reaping candidate; same threshold + label
+  // as AgentCard (which reads telemetry ts; the store's recentTextTs is the
+  // roster-local stand-in so no telemetry hook is needed here).
+  const IDLE_STALE_MS = 2 * 60 * 60 * 1000;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const idleMs = agent.status === 'idle' && !agent.isOvermind && agent.recentTextTs
+    ? Math.max(0, nowMs - agent.recentTextTs) : 0;
+  const idleStaleLabel = idleMs >= IDLE_STALE_MS ? `idle ${Math.floor(idleMs / 3_600_000)}h` : null;
+
+  const doRespawn = async () => {
+    if (!window.confirm(`Respawn ${agent.name}? This will archive the current session and start a fresh one. It will resume from memory.md.`)) return;
+    try {
+      const r = await window.cth.respawnAgent(agent.id);
+      if (r && !r.ok) console.error('[respawn] failed:', r.error);
+    } catch (e) {
+      console.error('[respawn] error:', e);
+    }
+  };
 
   /** The ✎ button opens the editor beside the row — the bullets on the row are
    *  the summary, this is where you write them. EXPLICIT open only (v0.3.4):
@@ -790,10 +854,45 @@ function SidebarRow({
               fontFamily: 'var(--cth-font-ui)',
               fontSize: scale.name, lineHeight: 1.5
             }}>{agent.name.toUpperCase()}</span>
+            {agent.isOvermind && (
+              <span style={{
+                flexShrink: 0,
+                fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
+                background: `var(--cth-${agent.accent})`, color: 'var(--cth-ink-900)',
+                padding: '1px 4px 0'
+              }}>BOSS</span>
+            )}
+            {isNonClaude && (
+              <span title={`Engine: ${preset.label}`} style={{
+                flexShrink: 0,
+                fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '11px',
+                background: 'var(--cth-sky-light)', color: 'var(--cth-ink-900)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-sky)',
+                padding: '1px 4px 0', textTransform: 'uppercase', fontWeight: 600
+              }}>{prov === 'antigravity' ? 'AGY' : preset.label}</span>
+            )}
             {/* Your unsent text outranks the agent's own state here: an idle
                 agent with a draft on its prompt is not idle-and-free, it is
                 idle-and-held, and nothing else on screen said so. */}
-            <PixelBadge status={typing ? 'typing' : agent.status} />
+            <PixelBadge status={badgeStatus} />
+            {quotaLimited && (
+              <span title="Hit provider quota / rate limit — re-route or respawn on another profile" style={{
+                flexShrink: 0,
+                fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
+                padding: '1px 4px 0', textTransform: 'uppercase', fontWeight: 600,
+                background: 'var(--cth-coral)', color: 'var(--cth-paper-100)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-ink-700)'
+              }}>⊘ quota</span>
+            )}
+            {idleStaleLabel && (
+              <span title={`Idle with no active task for ${idleStaleLabel.replace('idle ', '')} — reaping candidate (send home to save tokens)`} style={{
+                flexShrink: 0,
+                fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
+                padding: '1px 4px 0', textTransform: 'uppercase',
+                background: 'var(--cth-coral-light)', color: 'var(--cth-ink-900)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-coral)'
+              }}>{idleStaleLabel}</span>
+            )}
             {agent.onHold && (
               <span title="Human has this agent 1:1 — floor automation paused" style={{
                 flexShrink: 0,
@@ -802,6 +901,28 @@ function SidebarRow({
                 background: 'var(--cth-lemon)', color: 'var(--cth-ink-900)',
                 boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
               }}>1:1</span>
+            )}
+            {/* Respawn — parity with AgentCard's ↺. A span, not a <button>:
+                we're inside the row's button element. */}
+            {!agent.isOvermind && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); void doRespawn(); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); void doRespawn(); }
+                }}
+                title={`Respawn ${agent.name} (archive session & start fresh from memory.md)`}
+                aria-label={`Respawn ${agent.name}`}
+                style={{
+                  flexShrink: 0, width: 20, height: 20,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 13, lineHeight: 1, color: 'var(--cth-ink-500)',
+                  background: 'var(--cth-paper-100)',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                  cursor: 'pointer'
+                }}
+              >↺</span>
             )}
             {/* Explicit note edit — a real control instead of a hover surprise.
                 A span, not a <button>: we're inside the row's button element. */}
@@ -824,11 +945,11 @@ function SidebarRow({
               }}
             >✎</span>
           </div>
-          {/* WHAT this agent is, at a glance. */}
+          {/* WHAT this agent is, at a glance: account · engine/model · repo.
+              The profile chip mirrors AgentCard so both rosters name the account
+              each agent runs under. */}
           {(() => {
-            const prov = inferAgentProvider(agent.command, agent.provider);
-            const isClaude = prov === 'claude';
-            const preset = providerPreset(prov);
+            const isClaude = !isNonClaude;
             const modelLabel = agent.model ? shortModel(agent.model) : (isClaude ? 'CLI default' : preset.label);
             const engineTooltip = agent.model
               ? `Model: ${agent.model} (${preset.label})`
@@ -839,6 +960,16 @@ function SidebarRow({
                 fontSize: Math.max(11, scale.name - 2), lineHeight: 1.4,
                 color: 'var(--cth-ink-500)'
               }}>
+                {profileLabel && (
+                  <span title={`Profile: ${profileLabel}`} style={{
+                    flexShrink: 0, maxWidth: '46%',
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '11px',
+                    padding: '1px 4px 0', textTransform: 'uppercase', fontWeight: 600,
+                    background: 'var(--cth-sky-light)', color: 'var(--cth-ink-900)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-sky)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                  }}>{profileLabel}</span>
+                )}
                 <span style={{
                   flexShrink: 0, maxWidth: '52%',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
