@@ -1178,6 +1178,21 @@
       <div id="processes-list"><div class="spinner">⟳ loading…</div></div>
 
       <div style="margin-top:16px;padding:10px;background:var(--cth-paper-100);box-shadow:inset 0 0 0 1px var(--cth-ink-300);">
+        <div style="font-family:var(--cth-font-display);font-size:9px;color:var(--cth-lemon);margin-bottom:8px;">NEW AGENT</div>
+        <input type="text" id="new-agent-name" placeholder="Agent name (e.g. Kevin)" autocapitalize="none" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:6px;padding:4px;background:var(--cth-paper-200);border:1px solid var(--cth-ink-300);color:var(--cth-ink-900);font-family:var(--cth-font-mono);font-size:11px;">
+        <select id="new-agent-type" style="width:100%;margin-bottom:6px;padding:4px;background:var(--cth-paper-200);border:1px solid var(--cth-ink-300);color:var(--cth-ink-900);font-family:var(--cth-font-mono);font-size:11px;">
+          <option value="worker">Worker (isolated worktree)</option>
+          <option value="harness">Harness (shared repo)</option>
+        </select>
+        <select id="new-agent-profile" style="width:100%;margin-bottom:6px;padding:4px;background:var(--cth-paper-200);border:1px solid var(--cth-ink-300);color:var(--cth-ink-900);font-family:var(--cth-font-mono);font-size:11px;">
+          <option value="">Default profile</option>
+        </select>
+        <textarea id="new-agent-objective" placeholder="Objective (optional)" style="width:100%;box-sizing:border-box;margin-bottom:6px;padding:4px;background:var(--cth-paper-200);border:1px solid var(--cth-ink-300);color:var(--cth-ink-900);font-family:var(--cth-font-mono);font-size:11px;min-height:44px;"></textarea>
+        <button id="new-agent-spawn" class="btn btn-primary" style="width:100%;font-size:11px;">Spawn Agent</button>
+        <div id="new-agent-result" style="margin-top:6px;font-family:var(--cth-font-mono);font-size:11px;" hidden></div>
+      </div>
+
+      <div style="margin-top:16px;padding:10px;background:var(--cth-paper-100);box-shadow:inset 0 0 0 1px var(--cth-ink-300);">
         <div style="font-family:var(--cth-font-display);font-size:9px;color:var(--cth-lemon);margin-bottom:8px;">NEW TERMINAL</div>
         <select id="new-terminal-shell" style="width:100%;margin-bottom:6px;padding:4px;background:var(--cth-paper-200);border:1px solid var(--cth-ink-300);color:var(--cth-ink-900);font-family:var(--cth-font-mono);font-size:11px;">
           <option value="wsl-bash">WSL Bash</option>
@@ -1477,7 +1492,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (screen === 'askme') loadAskMe();
     if (screen === 'tasks') loadTasks();
     if (screen === 'fleet') loadFleet();
-    if (screen === 'workers') { loadWorkers(); loadProcesses(); }
+    if (screen === 'workers') { loadWorkers(); loadProcesses(); loadSpawnProfiles(); }
     if (screen === 'dispatch') populateDispatchRecipients();
   });
 });
@@ -2273,6 +2288,59 @@ document.getElementById('new-terminal-launch').addEventListener('click', async (
     btn.textContent = 'Launch Terminal';
   } finally {
     btn.disabled = false;
+  }
+});
+
+// ── New Agent (spawn from mobile) ─────────────────────────────────
+async function loadSpawnProfiles() {
+  const sel = document.getElementById('new-agent-profile');
+  if (!sel) return;
+  try {
+    const res = await apiFetch('/api/settings');
+    if (!res.ok) return;
+    const s = await res.json();
+    const opts = ['<option value="">Default profile</option>'];
+    (s.profiles || []).forEach(p => {
+      opts.push(`<option value="${esc(p.id)}">${esc(p.name)}${p.model ? ' (' + esc(p.model) + ')' : ''}</option>`);
+    });
+    sel.innerHTML = opts.join('');
+  } catch (e) { /* leave default option */ }
+}
+
+document.getElementById('new-agent-spawn').addEventListener('click', async () => {
+  const btn = document.getElementById('new-agent-spawn');
+  const resultEl = document.getElementById('new-agent-result');
+  const name = document.getElementById('new-agent-name').value.trim();
+  const type = document.getElementById('new-agent-type').value;
+  const profile = document.getElementById('new-agent-profile').value;
+  const objective = document.getElementById('new-agent-objective').value.trim();
+  const showResult = (msg, ok) => {
+    resultEl.textContent = msg;
+    resultEl.style.color = ok ? 'var(--cth-mint)' : 'var(--cth-coral)';
+    resultEl.hidden = false;
+  };
+  if (!name) { showResult('Agent name is required', false); return; }
+  btn.disabled = true;
+  btn.textContent = 'SPAWNING…';
+  try {
+    const res = await apiFetch('/api/agents/spawn', {
+      method: 'POST',
+      body: JSON.stringify({ name, objective, profile: profile || undefined, isolate: type === 'worker' })
+    });
+    if (res.ok) {
+      showResult(`✓ Queued "${name}" — it will appear in Fleet shortly.`, true);
+      document.getElementById('new-agent-name').value = '';
+      document.getElementById('new-agent-objective').value = '';
+      setTimeout(loadFleet, 1500);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      showResult('Spawn failed: ' + (data.error || 'unknown error'), false);
+    }
+  } catch (e) {
+    showResult('Spawn error: ' + e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Spawn Agent';
   }
 });
 

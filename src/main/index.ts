@@ -1153,6 +1153,7 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       cwd?: string;
       provider?: AgentProvider;
       model?: string;
+      profile?: string;
       isolate?: boolean;
       character?: string;
       accent?: string;
@@ -1190,6 +1191,7 @@ async function handleMobileApiRequest(req: IncomingMessage, res: ServerResponse,
       cwd,
       provider: body?.provider,
       model: body?.model,
+      profile: typeof body?.profile === 'string' && body.profile.trim() ? body.profile.trim() : undefined,
       isolate: body?.isolate !== false,
       character: body?.character,
       accent: body?.accent
