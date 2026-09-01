@@ -118,7 +118,7 @@ function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean;
         whiteSpace: 'nowrap',
         flex: '1 0 auto',
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-        padding: '4px 8px 3px', border: 'none', cursor: 'pointer',
+        padding: '3px 8px 2px', border: 'none', cursor: 'pointer',
         background: active ? `var(--cth-${accent})` : 'var(--cth-cream-200)',
         color: active ? 'var(--cth-on-accent)' : 'var(--cth-ink-900)',
         boxShadow: active ? 'inset 0 0 0 1px var(--cth-ink-300)' : 'inset 0 0 0 1px var(--cth-ink-100)',
@@ -335,36 +335,36 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         overflow: 'hidden'
       }}
     >
-      {/* Header */}
+      {/* Header — one dense row: identity + status + controls all inline, so the
+          panel spends its height on content, not chrome. */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: mobile ? 6 : 8,
         flexWrap: mobile ? 'wrap' : 'nowrap',
-        padding: '6px 8px', background: 'var(--cth-cream-100)',
+        padding: '3px 8px', background: 'var(--cth-cream-100)',
         borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
       }}>
         <div style={{
-          width: 32, height: 32, background: `var(--cth-${agent.accent}-light)`,
+          width: 24, height: 24, background: `var(--cth-${agent.accent}-light)`,
           boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-          display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', flexShrink: 0
+          display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0
         }}>
           <SpritePortrait character={agent.character} agentId={agent.id} isGod={agent.isOvermind} scale={1} />
         </div>
-        {/* Title + subtitle truncate; the control cluster never shrinks. At
-            sidebar width the old header wrapped its 24-char display-font title
-            onto three lines and "runs the floor" word-per-line under the two
-            wide buttons — everything here is single-line by construction. */}
-        <div style={{ flex: 1, minWidth: 0, order: mobile ? 1 : 0, marginTop: mobile ? 4 : 0 }}>
-          <div style={{
+        {/* Title stays fixed, badge fixed, subtitle truncates first. At sidebar
+            width everything here is single-line by construction. */}
+        <div style={{
+          flex: 1, minWidth: 0, order: mobile ? 1 : 0, marginTop: mobile ? 4 : 0,
+          display: 'flex', alignItems: 'center', gap: 6
+        }}>
+          <span style={{
             fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px', color: 'var(--cth-ink-900)',
+            whiteSpace: 'nowrap', flexShrink: 0
+          }}>COMMAND CENTER</span>
+          <PixelBadge status={agent.status} />
+          <span style={{
+            fontSize: 12, color: 'var(--cth-ink-500)', minWidth: 0,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-          }}>COMMAND CENTER</div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 1, minWidth: 0 }}>
-            <PixelBadge status={agent.status} />
-            <span style={{
-              fontSize: 12, color: 'var(--cth-ink-500)',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-            }}>BeeYoncé runs the hive</span>
-          </div>
+          }}>BeeYoncé runs the hive</span>
         </div>
         {/* v0.3.4: floor-wide auto-delivery lives HERE (one switch for every
             agent's queue), and the IDE opens from agent level, not the toolbar.
@@ -518,7 +518,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         display: 'flex', gap: 4,
         flexWrap: mobile ? 'nowrap' : (fullscreen ? 'nowrap' : 'wrap'),
         overflowX: mobile || fullscreen ? 'auto' : 'visible',
-        padding: '6px 8px', background: 'var(--cth-cream-100)',
+        padding: '4px 8px', background: 'var(--cth-cream-100)',
         borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
       }}>
         {visibleTabs.map((t) => (
