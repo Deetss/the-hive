@@ -351,7 +351,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
           boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
           display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', flexShrink: 0
         }}>
-          <SpritePortrait character={agent.character} scale={1} />
+          <SpritePortrait character={agent.character} agentId={agent.id} isGod={agent.isOvermind} scale={1} />
         </div>
         {/* Title + subtitle truncate; the control cluster never shrinks. At
             sidebar width the old header wrapped its 24-char display-font title
@@ -1221,7 +1221,7 @@ function FloorTab({ seed, onSeedConsumed }: { seed: { text: string; seq: number 
                 boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
                 display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', flexShrink: 0
               }}>
-                <SpritePortrait character={a.character} scale={1} />
+                <SpritePortrait character={a.character} agentId={a.id} isGod={a.isOvermind} scale={1} />
               </div>
               <button
                 onClick={() => select(a.id)}
