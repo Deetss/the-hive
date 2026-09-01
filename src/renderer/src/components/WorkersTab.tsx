@@ -177,7 +177,12 @@ export function WorkersTab() {
   const [terminalForm, setTerminalForm] = useState({
     cwd: 'C:\\Users\\dylan\\HarnessAgents',
     shell: 'wsl-bash' as 'wsl-bash' | 'powershell' | 'cmd',
-    label: ''
+    label: '',
+    // wsl-bash only: which distro, and an optional app command run via `bash -lc`.
+    // A command (e.g. the Lots app: `cd ~/lots && npm run dev`) turns the launch
+    // into a WSL app; blank keeps the historic interactive-bash behavior.
+    distro: 'Ubuntu',
+    wslCommand: ''
   });
 
   const refresh = useCallback(() => {
@@ -203,14 +208,19 @@ export function WorkersTab() {
   }, []);
 
   const launchTerminal = useCallback(() => {
-    const { cwd, shell, label } = terminalForm;
+    const { cwd, shell, label, distro, wslCommand } = terminalForm;
     if (!cwd.trim()) return;
-    const finalLabel = label.trim() || cwd.split(/[/\\]/).pop() || 'terminal';
-    window.cth.spawnProcess({ cmd: 'bash', args: [], cwd, label: finalLabel, shell })
+    const isWsl = shell === 'wsl-bash';
+    const wslCmd = isWsl ? wslCommand.trim() : '';
+    const finalLabel = label.trim() || wslCmd || cwd.split(/[/\\]/).pop() || 'terminal';
+    window.cth.spawnProcess({
+      cmd: 'bash', args: [], cwd, label: finalLabel, shell,
+      ...(isWsl ? { distro: distro.trim() || 'Ubuntu', wslCommand: wslCmd } : {})
+    })
       .then(() => {
         refresh();
         setShowTerminalForm(false);
-        setTerminalForm({ cwd: 'C:\\Users\\dylan\\HarnessAgents', shell: 'wsl-bash', label: '' });
+        setTerminalForm({ cwd: 'C:\\Users\\dylan\\HarnessAgents', shell: 'wsl-bash', label: '', distro: 'Ubuntu', wslCommand: '' });
       })
       .catch(console.error);
   }, [terminalForm, refresh]);
@@ -272,10 +282,36 @@ export function WorkersTab() {
                 boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', border: 'none'
               }}
             >
-              <option value="wsl-bash">WSL bash (Ubuntu)</option>
+              <option value="wsl-bash">WSL bash</option>
               <option value="powershell">PowerShell</option>
               <option value="cmd">cmd</option>
             </select>
+            {terminalForm.shell === 'wsl-bash' && (
+              <>
+                <input
+                  type="text"
+                  placeholder="Distro (default: Ubuntu)"
+                  value={terminalForm.distro}
+                  onChange={(e) => setTerminalForm({ ...terminalForm, distro: e.target.value })}
+                  style={{
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 12, padding: '4px 8px',
+                    background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', border: 'none'
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="WSL app command (optional, e.g. cd ~/lots && npm run dev)"
+                  value={terminalForm.wslCommand}
+                  onChange={(e) => setTerminalForm({ ...terminalForm, wslCommand: e.target.value })}
+                  style={{
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 12, padding: '4px 8px',
+                    background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', border: 'none'
+                  }}
+                />
+              </>
+            )}
             <input
               type="text"
               placeholder="Label (optional)"

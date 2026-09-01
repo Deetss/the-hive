@@ -8414,6 +8414,11 @@ interface ProcessSpawnOptions {
   cwd: string;
   label?: string;
   shell: 'wsl-bash' | 'powershell' | 'cmd' | 'bash';
+  /** wsl-bash only: which WSL distro to run in (defaults to Ubuntu). */
+  distro?: string;
+  /** wsl-bash only: a shell command to run inside WSL via `bash -lc` (e.g. a WSL
+   *  app like Lots: `cd ~/lots && npm run dev`). Blank means an interactive bash. */
+  wslCommand?: string;
 }
 
 function convertToWslPath(windowsPath: string): string {
@@ -8426,7 +8431,7 @@ function hasShellMetachars(s: string): boolean {
 
 ipcMain.handle('process:spawn', (_evt, opts: unknown): { ok: boolean; processId?: string; error?: string } => {
   if (!opts || typeof opts !== 'object') return { ok: false, error: 'invalid options' };
-  const { cmd, args = [], cwd, label, shell } = opts as ProcessSpawnOptions;
+  const { cmd, args = [], cwd, label, shell, distro, wslCommand } = opts as ProcessSpawnOptions;
   if (!cmd || !cwd || !shell) return { ok: false, error: 'missing required fields' };
 
   if (hasShellMetachars(cwd) || hasShellMetachars(cmd)) {
@@ -8434,6 +8439,13 @@ ipcMain.handle('process:spawn', (_evt, opts: unknown): { ok: boolean; processId?
   }
   if ((args as string[]).some(hasShellMetachars)) {
     return { ok: false, error: 'arguments contain shell metacharacters' };
+  }
+  // wslCommand is EXEMPT from the metachar guard on purpose: it is a shell command
+  // meant to run inside WSL bash, and it is handed to wsl.exe as a single argv
+  // element (spawn shell:false below), so it cannot reach the Windows shell. The
+  // distro name IS validated because it also becomes an argv element.
+  if (typeof distro === 'string' && distro && !/^[A-Za-z0-9._-]+$/.test(distro)) {
+    return { ok: false, error: 'invalid WSL distro name' };
   }
 
   const processId = `proc-${++processIdSeq}`;
@@ -8446,8 +8458,14 @@ ipcMain.handle('process:spawn', (_evt, opts: unknown): { ok: boolean; processId?
 
     if (shell === 'wsl-bash') {
       const wslPath = convertToWslPath(cwd);
+      const d = (typeof distro === 'string' && distro.trim()) ? distro.trim() : 'Ubuntu';
       spawnCmd = 'wsl.exe';
-      spawnArgs = ['-d', 'Ubuntu', '--cd', wslPath, '--', 'bash'];
+      spawnArgs = ['-d', d, '--cd', wslPath, '--', 'bash'];
+      // A WSL app runs its command in a login shell (-lc) so npm run dev etc.
+      // gets the user PATH; no wslCommand means an interactive bash as before.
+      if (typeof wslCommand === 'string' && wslCommand.trim()) {
+        spawnArgs.push('-lc', wslCommand);
+      }
       spawnOpts = { cwd, shell: false };
     } else if (shell === 'powershell') {
       spawnCmd = 'powershell.exe';

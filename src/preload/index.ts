@@ -919,7 +919,7 @@ const api = {
     ipcRenderer.invoke('workers:stop', workerId),
 
   // ─── Tracked processes (user-spawned terminals & long-running jobs) ──────
-  spawnProcess: (opts: { cmd: string; args?: string[]; cwd: string; label?: string; shell: 'wsl-bash' | 'powershell' | 'cmd' | 'bash' }): Promise<{ ok: boolean; processId?: string; error?: string }> =>
+  spawnProcess: (opts: { cmd: string; args?: string[]; cwd: string; label?: string; shell: 'wsl-bash' | 'powershell' | 'cmd' | 'bash'; distro?: string; wslCommand?: string }): Promise<{ ok: boolean; processId?: string; error?: string }> =>
     ipcRenderer.invoke('process:spawn', opts),
   killProcess: (processId: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('process:kill', processId),
