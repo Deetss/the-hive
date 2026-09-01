@@ -123,6 +123,9 @@ export interface VoiceMessage {
  *  the decision trail stays with the work it unblocked. */
 export interface HumanQA {
   q: string;
+  /** 'decision' = agent needs a freeform text answer (ASK ME shows a text box, not
+   *  PASS/FAIL; answering nudges a blocked card back to 'doing' without closing it). */
+  kind?: 'question' | 'action' | 'review' | 'decision';
   a?: string;
   askedAt?: string;
   answeredAt?: string;

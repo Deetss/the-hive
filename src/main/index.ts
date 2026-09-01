@@ -576,6 +576,7 @@ function buildAskMePayload(hiveRoot: string | null) {
     question: string;
     priority: 'urgent' | 'normal' | 'backlog';
     askedAt: string | null;
+    kind?: string;
   }> = [];
 
   for (const task of tasks) {
@@ -595,7 +596,8 @@ function buildAskMePayload(hiveRoot: string | null) {
             index,
             question: qa.q ?? '',
             priority: itemPriority,
-            askedAt: qa.askedAt ?? null
+            askedAt: qa.askedAt ?? null,
+            kind: qa.kind
           });
         }
       });
@@ -6305,6 +6307,7 @@ ipcMain.handle('tasks:openHumanQA', () => {
     question: string;
     priority?: 'urgent' | 'normal' | 'backlog';
     askedAt: string;
+    kind?: string;
   }> = [];
 
   for (const t of tasks) {
@@ -6323,7 +6326,8 @@ ipcMain.handle('tasks:openHumanQA', () => {
           assignee: t.assignee ?? null,
           question: qa.q,
           priority: itemPriority,
-          askedAt: qa.askedAt || t.createdAt || new Date().toISOString()
+          askedAt: qa.askedAt || t.createdAt || new Date().toISOString(),
+          kind: qa.kind
         });
       }
     }
@@ -6339,8 +6343,12 @@ ipcMain.handle('tasks:openHumanQA', () => {
 ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: unknown, verdict: unknown, note?: unknown) => {
   if (typeof taskId !== 'string' || !taskId) return { ok: false, error: 'invalid taskId' };
   if (typeof question !== 'string' || !question) return { ok: false, error: 'invalid question' };
-  const v = verdict === 'FAIL' ? 'FAIL' : 'PASS';
+  // ANSWER = freeform text reply to a decision-type ask (no PASS/FAIL). It records
+  // the text, nudges a blocked card back to 'doing', and pings the agent plainly.
+  const v: 'PASS' | 'FAIL' | 'ANSWER' =
+    verdict === 'FAIL' ? 'FAIL' : verdict === 'ANSWER' ? 'ANSWER' : 'PASS';
   const n = typeof note === 'string' && note.trim() ? note.trim() : undefined;
+  if (v === 'ANSWER' && !n) return { ok: false, error: 'answer text required' };
   if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
 
   const ledger = hive.tasks() as { tasks?: HiveTask[] };
@@ -6354,7 +6362,7 @@ ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: un
   if (qaIndex < 0) {
     qaIndex = qaList.findIndex((qa) => qa.q === question);
   }
-  const answerText = n ? `${v}: ${n}` : v;
+  const answerText = v === 'ANSWER' ? (n as string) : n ? `${v}: ${n}` : v;
   const nowIso = new Date().toISOString();
 
   if (qaIndex >= 0) {
@@ -6375,7 +6383,10 @@ ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: un
   task.humanQA = qaList;
   if (v === 'PASS') {
     task.status = 'done';
-  } else {
+  } else if (v === 'FAIL') {
+    task.status = 'doing';
+  } else if (task.status === 'blocked') {
+    // ANSWER: unblock without closing — the agent resumes with the answer in hand.
     task.status = 'doing';
   }
 
@@ -6392,12 +6403,19 @@ ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: un
           subject: 'UAT passed',
           body: `Your task "${task.title}" passed UAT. Task is closed.`
         }, 'human');
-      } else {
+      } else if (v === 'FAIL') {
         hive.send({
           to: task.assignee,
           act: 'warn',
           subject: 'UAT failed',
           body: `Your task "${task.title}" failed UAT: ${n || 'No details provided'}. Fix and report done again.`
+        }, 'human');
+      } else {
+        hive.send({
+          to: task.assignee,
+          act: 'inform',
+          subject: `Answer to your question — ${task.title}`,
+          body: `The human answered your ASK ME question on "${task.title}":\n\n${n}`
         }, 'human');
       }
     } catch (e) {

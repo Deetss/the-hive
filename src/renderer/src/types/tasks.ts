@@ -1,8 +1,10 @@
 export interface HumanQA {
   q: string;
   /** Default 'question'. 'action' = human must DO something (sets doneAt when complete).
-   *  'review' = human must approve a doc (sets approved). */
-  kind?: 'question' | 'action' | 'review';
+   *  'review' = human must approve a doc (sets approved). 'decision' = agent needs a
+   *  freeform text answer (which option? / yes please) — ASK ME shows a text box, not
+   *  PASS/FAIL, and answering moves a blocked card back to 'doing' without closing it. */
+  kind?: 'question' | 'action' | 'review' | 'decision';
   a?: string;
   askedAt?: string;
   answeredAt?: string;
@@ -25,6 +27,9 @@ export interface OpenHumanQAItem {
   question: string;
   priority?: 'urgent' | 'normal' | 'backlog';
   askedAt: string;
+  /** Carried from the qa entry so ASK ME can pick the answer UI: 'decision' gets a
+   *  text box, anything else keeps the PASS/FAIL UAT flow. */
+  kind?: HumanQA['kind'];
 }
 
 export interface HiveTask {

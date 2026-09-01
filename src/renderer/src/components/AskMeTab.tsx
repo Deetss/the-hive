@@ -39,6 +39,7 @@ export function AskMeTab() {
 
   const [failOpen, setFailOpen] = useState<Record<string, boolean>>({});
   const [failNotes, setFailNotes] = useState<Record<string, string>>({});
+  const [answerVals, setAnswerVals] = useState<Record<string, string>>({});
   const [busyTasks, setBusyTasks] = useState<Record<string, boolean>>({});
   const [sendingMsg, setSendingMsg] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -74,7 +75,7 @@ export function AskMeTab() {
   const handleAnswer = async (
     taskId: string,
     question: string,
-    verdict: 'PASS' | 'FAIL',
+    verdict: 'PASS' | 'FAIL' | 'ANSWER',
     note?: string
   ) => {
     if (busyTasks[taskId]) return;
@@ -89,6 +90,11 @@ export function AskMeTab() {
         return next;
       });
       setFailNotes((prev) => {
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+      setAnswerVals((prev) => {
         const next = { ...prev };
         delete next[taskId];
         return next;
@@ -275,6 +281,8 @@ export function AskMeTab() {
             const isFailing = !!failOpen[item.taskId];
             const noteVal = failNotes[item.taskId] ?? '';
             const isUrgent = item.priority === 'urgent';
+            const isDecision = item.kind === 'decision';
+            const answerVal = answerVals[item.taskId] ?? '';
 
             return (
               <div
@@ -342,6 +350,56 @@ export function AskMeTab() {
                     <Markdown text={item.question} />
                   </div>
 
+                  {isDecision ? (
+                    <>
+                      {/* Decision ask — freeform text reply, no PASS/FAIL */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
+                        <label style={{ fontSize: 12, color: 'var(--cth-ink-700)', fontWeight: 600 }}>
+                          Your answer for {nameFor(item.assignee)}:
+                        </label>
+                        <textarea
+                          value={answerVal}
+                          onChange={(e) => setAnswerVals((prev) => ({ ...prev, [item.taskId]: e.target.value }))}
+                          rows={2}
+                          placeholder="Type your reply (e.g. 'go with option B', 'yes, ship it')…"
+                          style={{
+                            width: '100%', boxSizing: 'border-box', padding: '6px 8px',
+                            background: 'var(--cth-paper-100)', border: 'none',
+                            boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                            fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none'
+                          }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <PixelButton
+                          variant="primary"
+                          size="sm"
+                          disabled={isBusy || !answerVal.trim()}
+                          onClick={() => void handleAnswer(item.taskId, item.question, 'ANSWER', answerVal.trim())}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            <Icon name="check" /> Send answer
+                          </span>
+                        </PixelButton>
+                        <PixelButton
+                          variant="secondary"
+                          size="sm"
+                          disabled={isBusy}
+                          onClick={() => void handleDismiss(item.taskId, item.question)}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            clear / dismiss
+                          </span>
+                        </PixelButton>
+                        {isBusy && (
+                          <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>
+                            processing…
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                  <>
                   {/* Failure note input field */}
                   {isFailing && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
@@ -432,6 +490,8 @@ export function AskMeTab() {
                       </span>
                     )}
                   </div>
+                  </>
+                  )}
                 </div>
               </div>
             );

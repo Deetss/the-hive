@@ -161,7 +161,7 @@ export interface AgentDirectory {
 /** One question→answer exchange with the human, recorded ON the task card. */
 export interface HumanQA {
   q: string;
-  kind?: 'question' | 'action' | 'review';
+  kind?: 'question' | 'action' | 'review' | 'decision';
   a?: string;
   askedAt?: string;
   answeredAt?: string;
@@ -178,6 +178,8 @@ export interface OpenHumanQAItem {
   question: string;
   priority?: 'urgent' | 'normal' | 'backlog';
   askedAt: string;
+  /** 'decision' => ASK ME shows a freeform text box instead of PASS/FAIL. */
+  kind?: HumanQA['kind'];
 }
 
 /** A card on the task kanban, persisted to hive/tasks.json. */
@@ -875,7 +877,7 @@ const api = {
   answerHumanQA: (
     taskId: string,
     question: string,
-    verdict: 'PASS' | 'FAIL',
+    verdict: 'PASS' | 'FAIL' | 'ANSWER',
     note?: string
   ): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('tasks:answerHumanQA', taskId, question, verdict, note),
