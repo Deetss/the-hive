@@ -29,6 +29,7 @@ All notable changes to this project are documented here. The format is based on
 - Fix procedural honeycomb office floor hex geometry and alignment to eliminate visible seams between tiles
 - Fix raw agent IDs like "god" displaying across For You, Activity, and Tasks UI by resolving to registry display names
 - Add clear and dismiss actions for open humanQA items in For You tab and top alert banner
+- Fix agent worker sprite placement to render only at occupied desks with aligned monitor geometry
 
 ## [0.4.5] — 2026-08-22
 

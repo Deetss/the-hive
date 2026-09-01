@@ -785,6 +785,24 @@ export function OfficeFloor() {
         const deskAssets = hiveDeskAssets;
         const agentSprites: { sprite: Sprite; phase: number }[] = [];
 
+        // Check which desk positions have an active agent assigned in the current fleet/scene data
+        const currentAgents = useStore.getState().agents;
+        const occupiedKeys = new Set<string>();
+        const primarySeats = theme.primarySeatNames;
+        let workerSlot = 1;
+        for (const agent of currentAgents) {
+          if (agent.isOvermind) {
+            const ceoPt = mapRenderer.getSpawnPoint(primarySeats[0] || 'desk-ceo');
+            if (ceoPt) occupiedKeys.add(`${ceoPt.x},${ceoPt.y}`);
+          } else {
+            if (workerSlot < primarySeats.length) {
+              const pt = mapRenderer.getSpawnPoint(primarySeats[workerSlot]);
+              if (pt) occupiedKeys.add(`${pt.x},${pt.y}`);
+              workerSlot++;
+            }
+          }
+        }
+
         spawnEntries
           .filter(([name]) => name.startsWith('desk-') || name.startsWith('pc-'))
           .sort((a, b) => a[1].y - b[1].y || a[1].x - b[1].x)
@@ -798,12 +816,15 @@ export function OfficeFloor() {
             deskSprite.zIndex = (point.y + 0.25) * tile;
             hiveDeskLayer.addChild(deskSprite);
 
-            if (hiveAgentFrames && hiveAgentFrames.length > 0) {
+            // Only render worker sprite if this desk position has an active agent assigned to it
+            const isOccupied = occupiedKeys.has(`${point.x},${point.y}`);
+            if (isOccupied && hiveAgentFrames && hiveAgentFrames.length > 0) {
               const marker = new Sprite(hiveAgentFrames[0]);
               marker.eventMode = 'none';
-              marker.anchor.set(0.5, 0.5);
-              marker.position.set((point.x + 0.5) * tile, (point.y + 0.5) * tile);
-              marker.zIndex = (point.y + 0.4) * tile;
+              // Monitor base rests on the desk surface (anchor to bottom of sprite y: 1.0, y-offset atop desk)
+              marker.anchor.set(0.5, 1.0);
+              marker.position.set((point.x + 0.5) * tile, (point.y - 0.65) * tile);
+              marker.zIndex = (point.y + 0.28) * tile;
               hiveDeskLayer.addChild(marker);
               agentSprites.push({ sprite: marker, phase: idx });
             }
