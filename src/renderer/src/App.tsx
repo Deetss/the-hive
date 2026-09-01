@@ -194,16 +194,47 @@ export function App() {
       // Ask Me stream: direct messages to the human. Quick-Ask replies are
       // routed to the Q&A store instead of the Ask Me inbox.
       if (e.needsHuman && e.body && e.id) {
-        if (e.conversation && state.quickAskConversations.includes(e.conversation)) {
-          // This is god's reply to a Quick-Ask query — resolve it in the store
-          // and cancel the timeout. Works even when QuickAskPanel is unmounted.
-          cancelQaTimer(e.conversation);
-          state.resolveQuickAskReply(e.conversation, e.body!);
+        const actStr = e.act as string;
+        const isQuickAsk = Boolean(
+          (e.conversation && (state.quickAskConversations.includes(e.conversation) || e.conversation.startsWith('qa-'))) ||
+          e.act === 'query' ||
+          actStr === 'reply' ||
+          (e.subject && /quick\s*ask/i.test(e.subject))
+        );
+
+        if (isQuickAsk) {
+          if (e.act === 'query' || e.from === 'human') {
+            const exists = state.quickAskEntries.some((q) => q.id === e.id || (e.conversation && q.currentConversation === e.conversation));
+            if (!exists) {
+              const convId = e.conversation || `qa-${e.id}`;
+              state.addQuickAskEntry({
+                id: e.id,
+                question: e.body!,
+                askedAt: Date.now(),
+                currentConversation: convId,
+                waiting: true,
+                timedOut: false
+              });
+              state.trackQuickAskConversation(convId);
+            }
+          } else {
+            let match = e.conversation
+              ? state.quickAskEntries.find((q) => q.currentConversation === e.conversation || q.id === e.conversation)
+              : undefined;
+            if (!match && (/quick\s*ask/i.test(e.subject ?? '') || actStr === 'reply')) {
+              match = [...state.quickAskEntries].reverse().find((q) => q.waiting || q.timedOut);
+            }
+            if (match) {
+              cancelQaTimer(match.currentConversation);
+              state.resolveQuickAskReply(match.currentConversation, e.body!);
+            }
+          }
         } else {
           state.addHumanMessage({
             id: e.id, from: e.from, subject: e.subject ?? '',
             body: e.body!, act: e.act,
-            arrivedAt: Date.now(), resolved: false, replyDraft: ''
+            arrivedAt: Date.now(), resolved: false, replyDraft: '',
+            conversation: e.conversation
           });
         }
       }

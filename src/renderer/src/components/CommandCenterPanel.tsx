@@ -93,7 +93,13 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
 type TabDef = { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] };
 
 function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean; accent: string; onClick: () => void }) {
-  const msgPending = useStore((s) => s.humanMessages.filter((m) => !m.resolved).length);
+  const isQueryThread = (m: { act?: string; subject?: string; conversation?: string }) => {
+    if (m.act === 'query' || m.act === 'reply') return true;
+    if (m.subject && /quick\s*ask/i.test(m.subject)) return true;
+    if (m.conversation?.startsWith('qa-')) return true;
+    return false;
+  };
+  const msgPending = useStore((s) => s.humanMessages.filter((m) => !m.resolved && !isQueryThread(m)).length);
   const activityUnread = useStore((s) => s.activityUnread);
   const assignedPending = useStore((s) => s.assignedPending);
   const pendingArtifacts = useStore((s) => s.pendingArtifacts);

@@ -103,7 +103,14 @@ export function AskMeTab() {
     }
   };
 
-  const unresolvedMessages = messages.filter((m) => !m.resolved);
+  const isQueryThread = (m: { act?: string; subject?: string; conversation?: string }) => {
+    if (m.act === 'query' || m.act === 'reply') return true;
+    if (m.subject && /quick\s*ask/i.test(m.subject)) return true;
+    if (m.conversation?.startsWith('qa-')) return true;
+    return false;
+  };
+
+  const unresolvedMessages = messages.filter((m) => !m.resolved && !isQueryThread(m));
   const hasDirectPings = unresolvedMessages.length > 0;
   const hasUatQuestions = openQA.length > 0;
   const isAllClear = !hasDirectPings && !hasUatQuestions;
@@ -156,7 +163,7 @@ export function AskMeTab() {
                   fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 600,
                   color: 'var(--cth-ink-900)', background: 'var(--cth-lemon)', padding: '1px 4px'
                 }}>
-                  {msg.act === 'query' ? 'QUERY' : msg.act === 'prompt' ? 'PROMPT' : 'MESSAGE'}
+                  {msg.act === 'prompt' ? 'PROMPT' : msg.act === 'request' ? 'REQUEST' : 'MESSAGE'}
                 </span>
                 <span style={{
                   flex: 1, fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 600,

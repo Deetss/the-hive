@@ -108,6 +108,7 @@ export interface HumanMessage {
   arrivedAt: number;
   resolved: boolean;
   replyDraft: string;
+  conversation?: string;
 }
 
 export interface QAEntry {
