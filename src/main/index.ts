@@ -1983,44 +1983,47 @@ function notifyAgentPtyActivity(ptyId: string, chunk?: string): void {
       }
     }
 
-    // Detect quota exhaustion
+    // Detect quota exhaustion. Act only on the RISING EDGE (the marker scrolls
+    // past on every subsequent PTY chunk, so without this guard the flag would be
+    // re-set and god's inbox spammed once per frame).
     const quotaMatch = PTY_QUOTA_RE.exec(plain);
-    if (quotaMatch) {
+    if (quotaMatch && !lastAgentQuotaLimited.get(agentId)) {
       lastAgentQuotaLimited.set(agentId, true);
       lastAgentTool.set(agentId, 'quota');
 
-      // Parse reset duration
+      // Parse reset duration when the message carries one ("Resets in 1h12m").
+      let resetTime = 'an unknown time';
       const resetMatch = PTY_QUOTA_RESET_RE.exec(plain);
-      if (resetMatch) {
+      if (resetMatch && (resetMatch[1] || resetMatch[2])) {
         const hours = resetMatch[1] ? parseInt(resetMatch[1], 10) : 0;
         const mins = resetMatch[2] ? parseInt(resetMatch[2], 10) : 0;
         const resetMs = Date.now() + (hours * 3600000) + (mins * 60000);
         lastAgentQuotaResetsAt.set(agentId, resetMs);
+        resetTime = new Date(resetMs).toLocaleString();
+      }
 
-        // Write warning to god's inbox
-        const resetTime = new Date(resetMs).toLocaleString();
-        const warnMsg = {
-          id: `quota-warn-${agentId}-${Date.now()}`,
-          conversation: 'god',
-          in_reply_to: null,
-          from: 'system',
-          to: 'god',
-          act: 'warn',
-          subject: `Agent quota — ${agentId}`,
-          body: `Hit quota. Resets ${resetTime}. Suggest: Stop agent or Respawn on different profile.`,
-          priority: 'normal',
-          hops: 0,
-          requires_reply: false,
-          needs_human: false,
-          created_at: new Date().toISOString()
-        };
-
-        const godInboxPath = join(HIVE_ROOT, 'agents', 'god', 'inbox', `${warnMsg.id}.json`);
-        try {
-          writeFileSync(godInboxPath, JSON.stringify(warnMsg, null, 2), 'utf8');
-        } catch (e) {
-          console.error('[quota-warn] Failed to write to god inbox:', e);
-        }
+      // No per-agent fallback profile is configured to auto-switch to, so route
+      // the agent back to the Overmind for a manual re-route (once, this edge).
+      const warnMsg = {
+        id: `quota-warn-${agentId}-${Date.now()}`,
+        conversation: 'god',
+        in_reply_to: null,
+        from: 'system',
+        to: 'god',
+        act: 'warn',
+        subject: `Agent quota — ${agentId}`,
+        body: `Hit quota. Resets ${resetTime}. No fallback profile configured — Stop the agent or Respawn it on a different profile.`,
+        priority: 'normal',
+        hops: 0,
+        requires_reply: false,
+        needs_human: false,
+        created_at: new Date().toISOString()
+      };
+      const godInboxPath = join(HIVE_ROOT, 'agents', 'god', 'inbox', `${warnMsg.id}.json`);
+      try {
+        writeFileSync(godInboxPath, JSON.stringify(warnMsg, null, 2), 'utf8');
+      } catch (e) {
+        console.error('[quota-warn] Failed to write to god inbox:', e);
       }
     }
 
@@ -3292,8 +3295,15 @@ function writeFleetSnapshot(): void {
           : isWorking ? 'working' : (lastAgentStatus.get(id) ?? (a.status || 'idle'));
         const agentLastTool = lastAgentTool.get(id) ?? (spans.length ? spans[spans.length - 1].tool : null);
         const ptyCtx = lastAgentPtyCtx.get(id);
-        const quotaLimited = lastAgentQuotaLimited.get(id) ?? false;
+        let quotaLimited = lastAgentQuotaLimited.get(id) ?? false;
         const quotaResetsAt = lastAgentQuotaResetsAt.get(id) ?? null;
+        // Auto-recover: once the parsed reset time passes, clear the flag so the
+        // badge and status drop on their own without waiting for fresh PTY output.
+        if (quotaLimited && quotaResetsAt && now >= quotaResetsAt) {
+          quotaLimited = false;
+          lastAgentQuotaLimited.delete(id);
+          lastAgentQuotaResetsAt.delete(id);
+        }
         return {
           id,
           name: a.name,
@@ -3321,9 +3331,9 @@ function writeFleetSnapshot(): void {
     // Push per-agent token data to renderer for non-Claude agents (Antigravity, Gemini)
     // that don't emit Claude Code hook events. The renderer uses this as fallback when
     // useFleetTelemetry samples are missing.
-    const fleetTokenMap: Record<string, { tokens: number; ctxPct: number | null; usd: number }> = {};
+    const fleetTokenMap: Record<string, { tokens: number; ctxPct: number | null; usd: number; quotaLimited?: boolean; quotaResetsAt?: number | null }> = {};
     for (const a of agents) {
-      fleetTokenMap[a.id] = { tokens: a.tokens, ctxPct: a.ctxPct, usd: a.sessionUsd };
+      fleetTokenMap[a.id] = { tokens: a.tokens, ctxPct: a.ctxPct, usd: a.sessionUsd, quotaLimited: a.quotaLimited, quotaResetsAt: a.quotaResetsAt };
     }
     try { liveWebContents()?.send('hive:fleetTokens', fleetTokenMap); } catch { /* window torn down */ }
   } catch (e) {
@@ -7638,9 +7648,21 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   let baseBranch = 'main';
   try { const br = await getBranch(cwd); if ('current' in br && br.current) baseBranch = br.current; } catch { /* keep default */ }
 
+  const displayName = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : `Worker ${reqId.slice(0, 12)}`;
+  // Duplicate-name guard: block a spawn whose display name matches an already-active
+  // (non-archived) agent, so we never end up with "3 Jims" on the floor. Respawns
+  // archive the outgoing agent before requeuing, so this never blocks them. god gets
+  // the reason and can route to the existing agent instead.
+  const nameClash = Object.entries(hive.registry().agents)
+    .find(([id, a]) => !a.archived && id !== workerId && (a.name ?? '').trim().toLowerCase() === displayName.toLowerCase());
+  if (nameClash) {
+    fail(`an active agent named "${displayName}" already exists (${nameClash[0]}) — route to it or rename this spawn`);
+    return;
+  }
+
   const meta: AgentMeta = {
     id: workerId,
-    name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : `Worker ${reqId.slice(0, 12)}`,
+    name: displayName,
     provider: effectiveProvider,
     profileId: profile?.id,
     role: 'worker',

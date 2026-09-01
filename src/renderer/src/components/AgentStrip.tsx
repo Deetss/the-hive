@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgentCard } from './AgentCard';
 import { PixelButton } from './PixelButton';
 import { Icon } from './Icon';
@@ -28,6 +28,15 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
   const { samples: telemetrySamples, lastTool } = useFleetTelemetry();
   // Quota-limited flags come from the PTY-parsed fleet snapshot (main pushes them
   // on hive:fleetTokens); the card renders a QUOTA chip so the floor can re-route.
+  // profileId → concise profile name, so each card can show which account it runs
+  // under. Long labels ("Claude · work account") collapse to their tail ("work account").
+  const profileNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const p of config?.runtimeProfiles ?? []) {
+      m[p.id] = p.name.includes('·') ? p.name.split('·').pop()!.trim() : p.name;
+    }
+    return m;
+  }, [config?.runtimeProfiles]);
   const [quotaById, setQuotaById] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (!window.cth.onFleetTokens) return;
@@ -179,6 +188,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
             provider={a.provider}
             model={a.model}
             profileId={a.profileId}
+            profileLabel={a.profileId ? profileNameById[a.profileId] : undefined}
           />
           {/* The note itself lives INSIDE the card (its own row above the gauge).
               This is the transient EDITOR: a fixed popover ABOVE the card —

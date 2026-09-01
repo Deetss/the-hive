@@ -65,11 +65,21 @@ export interface AgentCardProps {
   provider?: AgentProvider;
   model?: string;
   profileId?: string;
+  /** Resolved runtime-profile name (from profileId) — rendered as a chip so it's
+   *  obvious which account/profile the agent runs under. */
+  profileLabel?: string;
   /** Custom handler for respawn; defaults to window.cth.respawnAgent(agentId). */
   onRespawn?: (agentId: string) => void;
 }
 
 const fmtK = (n: number): string => `${Math.round(n / 1000)}k`;
+
+/** Trim a model id to the readable part: drop the `claude-` vendor prefix and any
+ *  `[1m]`-style context suffix so the chip shows `sonnet-4-6`, not the full id. */
+function shortModel(model: string | undefined): string | null {
+  if (!model) return null;
+  return model.replace(/^claude-/, '').replace(/\[[^\]]*\]$/, '').trim() || null;
+}
 
 /** An idle worker with no active task past this long is a reaping candidate:
  *  the floor flags it so the Overmind (or the human) can send it home and stop
@@ -112,7 +122,7 @@ export function AgentCard({
   name, agentId, character, accent, status, ptyId, project, action, progress = 0,
   contextTokens, contextLimit, selected, isOvermind, onClick, onRename,
   doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold, quotaLimited,
-  lastTool, lastActivityTs, cwd, worktreePath, command, provider, model, profileId,
+  lastTool, lastActivityTs, cwd, worktreePath, command, provider, model, profileId, profileLabel,
   onRespawn
 }: AgentCardProps) {
   const [hover, setHover] = useState(false);
@@ -193,6 +203,7 @@ export function AgentCard({
     : 0;
   const idleStaleLabel = idleMs >= IDLE_STALE_MS ? `idle ${Math.floor(idleMs / 3_600_000)}h` : null;
   const location = shortenPath(worktreePath ?? cwd);
+  const modelLabel = shortModel(model);
   const toolLabel = lastTool ?? ((status !== 'idle' && action) ? action : undefined);
   const prov = inferAgentProvider(command, provider);
   const isNonClaude = prov !== 'claude';
@@ -379,6 +390,33 @@ export function AgentCard({
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
               }}
             >{infoLine}</div>
+
+            {/* Profile + model chips: make the account and engine each agent runs
+                under obvious at a glance (no need to open the terminal). */}
+            {(profileLabel || modelLabel) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, minWidth: 0 }}>
+                {profileLabel && (
+                  <span title={`Profile: ${profileLabel}`} style={{
+                    flexShrink: 1, minWidth: 0,
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '11px',
+                    padding: '1px 4px 0', textTransform: 'uppercase', fontWeight: 600,
+                    background: 'var(--cth-sky-light)', color: 'var(--cth-ink-900)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-sky)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                  }}>{profileLabel}</span>
+                )}
+                {modelLabel && (
+                  <span title={`Model: ${model}`} style={{
+                    flexShrink: 1, minWidth: 0,
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '11px',
+                    padding: '1px 4px 0',
+                    background: 'var(--cth-cream-200)', color: 'var(--cth-ink-700)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                  }}>{modelLabel}</span>
+                )}
+              </div>
+            )}
 
             {(toolLabel || activityLabel || location) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
