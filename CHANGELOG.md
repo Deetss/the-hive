@@ -23,6 +23,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Fix generated agy/codex/Gemini lifecycle-hook commands failing on multi-user installs — the launcher and shim paths are now double-quoted when they contain whitespace (e.g. a hive under `C:\Users\First Last\...`); space-free paths are unchanged
 - Fix query routing bug where human query replies from god appeared in For You instead of Ask
 - Fix Overmind (Queen) respawn button flow to directly launch fresh session via `spawnAgentCore`
 - Fix macOS release workflow failure by disabling auto-discovered code signing when cert secrets are absent
