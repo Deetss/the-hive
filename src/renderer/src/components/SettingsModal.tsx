@@ -985,7 +985,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 840, maxWidth: '92vw', maxHeight: '88vh',
+          width: 1040, maxWidth: '92vw', maxHeight: '88vh',
           display: 'flex', flexDirection: 'column',
           filter: 'drop-shadow(4px 4px 0 rgba(26, 19, 32, 0.25))'
         }}
