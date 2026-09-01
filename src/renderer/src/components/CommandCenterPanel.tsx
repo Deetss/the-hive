@@ -117,8 +117,8 @@ function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean;
       style={{
         whiteSpace: 'nowrap',
         flex: '1 0 auto',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-        padding: '3px 8px 2px', border: 'none', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
+        padding: '4px 6px 3px', border: 'none', cursor: 'pointer',
         background: active ? `var(--cth-${accent})` : 'var(--cth-cream-200)',
         color: active ? 'var(--cth-on-accent)' : 'var(--cth-ink-900)',
         boxShadow: active ? 'inset 0 0 0 1px var(--cth-ink-300)' : 'inset 0 0 0 1px var(--cth-ink-100)',
@@ -338,9 +338,9 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
       {/* Header — one dense row: identity + status + controls all inline, so the
           panel spends its height on content, not chrome. */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: mobile ? 6 : 8,
+        display: 'flex', alignItems: 'center', gap: mobile ? 6 : 5,
         flexWrap: mobile ? 'wrap' : 'nowrap',
-        padding: '3px 8px', background: 'var(--cth-cream-100)',
+        padding: '5px 6px', background: 'var(--cth-cream-100)',
         borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
       }}>
         <div style={{
@@ -350,11 +350,12 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         }}>
           <SpritePortrait character={agent.character} agentId={agent.id} isGod={agent.isOvermind} scale={1} />
         </div>
-        {/* Title stays fixed, badge fixed, subtitle truncates first. At sidebar
-            width everything here is single-line by construction. */}
+        {/* Content-width, not flex:1 — the identity cluster hugs the sprite and the
+            controls hug the identity, so there is no dead gap mid-bar. Still
+            minWidth:0 + flex-shrink so the subtitle ellipsises at sidebar width. */}
         <div style={{
-          flex: 1, minWidth: 0, order: mobile ? 1 : 0, marginTop: mobile ? 4 : 0,
-          display: 'flex', alignItems: 'center', gap: 6
+          flex: '0 1 auto', minWidth: 0, order: mobile ? 1 : 0, marginTop: mobile ? 4 : 0,
+          display: 'flex', alignItems: 'center', gap: 5
         }}>
           <span style={{
             fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '14px', color: 'var(--cth-ink-900)',
@@ -371,7 +372,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
             Short labels — the tooltips carry the full explanation. */}
         <div style={{
           display: 'flex',
-          gap: 6,
+          gap: 5,
           alignItems: 'center',
           flexShrink: 0,
           flexWrap: mobile ? 'wrap' : 'nowrap',
@@ -515,10 +516,10 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
           and the grid's own reason for existing (keeping wrapped rows aligned)
           stops applying the moment there is only ever one row. */}
       <div className="cth-tabbar" style={{
-        display: 'flex', gap: 4,
+        display: 'flex', gap: 3,
         flexWrap: mobile ? 'nowrap' : (fullscreen ? 'nowrap' : 'wrap'),
         overflowX: mobile || fullscreen ? 'auto' : 'visible',
-        padding: '4px 8px', background: 'var(--cth-cream-100)',
+        padding: '5px 6px', background: 'var(--cth-cream-100)',
         borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
       }}>
         {visibleTabs.map((t) => (
