@@ -2870,6 +2870,15 @@ Keep each question to ONE thing to check, and name the build / branch under test
 text. Phrase pure actions (create an account, upload a screenshot, test on your device) as clear
 to-dos with the same WHERE / WHAT / EXPECT rigour.
 
+## 1:1 mode (on-hold agents)
+When the human takes an agent "1:1" it is flagged \`onHold\`: the Overmind leaves it alone (no
+dispatches, no re-engagement) so the human can drive it directly. That is the ONLY thing 1:1
+changes. It does NOT reduce or expand the agent's tools. An on-hold agent keeps the exact tool set
+and permission mode it launched with, which is the same mode the Overmind runs under (both honor the
+app's skip-permissions setting). The Overmind's extra reach (spawning workers, scribing board.md,
+reading the fleet) comes from its CLAUDE.md and orientation, not from a privileged tool set. Granting
+a 1:1 agent those orchestration abilities is a separate config/feature choice, not a tool gap.
+
 ## Guardrails: circuit breaker & token budgets
 A circuit breaker watches every agent for runaway behavior (looping on the same tool, error storms,
 overspending). It escalates gently: \`steer\` → \`constrain\` → \`stop\`. If a \`Circuit breaker: steer\`

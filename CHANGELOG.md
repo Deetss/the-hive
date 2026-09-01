@@ -24,6 +24,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- PROTOCOL.md now documents that 1:1 (on-hold) mode only pauses Overmind automation for an agent and does NOT change its tools — an on-hold agent keeps the same tool set and permission mode as the Overmind; granting a 1:1 agent orchestration reach (spawn, board scribe) is a separate config/feature choice, not a tool gap
 - Replace non-semantic monospace font usage with proportional UI typography across FullscreenTerminal, MessageQueueComposer, McpDefaultsSettings, and DelegationsTab
 - Default office theme is now **The Hive**, and TV-show themes ship enabled so new installs open straight into BeeYoncé's honeycomb floor.
 - Hive theme now ships a painted honeycomb floor, wax wall panels, and hex pod desks instead of the temporary overlay, while honey task boards keep the bursting pipe, honey vat, and comb-note visuals.
