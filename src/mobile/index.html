@@ -2913,8 +2913,12 @@ function fmtNum(n) {
 function refreshAll() {
   const active = document.querySelector('.screen.active');
   const screen = active ? active.id.replace('screen-', '') : 'fleet';
+  // Always refresh the shared surfaces, then whatever the visible screen owns.
   loadFleet(); loadAskMe(); loadTasks();
-  if (screen === 'workers') { loadWorkers(); loadProcesses(); }
+  if (screen === 'workers') { loadWorkers(); loadProcesses(); loadSpawnProfiles(); }
+  else if (screen === 'schedules') { populateScheduleTargets(); loadSchedules(); }
+  else if (screen === 'settings') loadSettings();
+  else if (screen === 'dispatch') populateDispatchRecipients();
 }
 
 (function initPullToRefresh() {
@@ -2928,26 +2932,35 @@ function refreshAll() {
   let pulling = false;
   let refreshing = false;
 
+  const clearIndicator = () => {
+    indicator.style.opacity = '';
+    indicator.style.transform = '';
+  };
+
   content.addEventListener('touchstart', e => {
     if (refreshing || content.scrollTop > 0) { pulling = false; return; }
     startY = e.touches[0].clientY;
     pulling = true;
   }, { passive: true });
 
+  // NOT passive: while actively pulling down at the top we preventDefault so the
+  // browser cannot hijack the gesture into its own overscroll (which fires
+  // touchcancel instead of touchend and skips the refresh). Only prevents while
+  // pulling — normal scrolling never reaches the preventDefault.
   content.addEventListener('touchmove', e => {
     if (!pulling || refreshing) return;
     const delta = e.touches[0].clientY - startY;
     if (delta <= 0 || content.scrollTop > 0) {
       pulling = false;
-      indicator.style.opacity = '';
-      indicator.style.transform = '';
+      clearIndicator();
       return;
     }
+    if (e.cancelable) e.preventDefault();
     const pull = Math.min(delta, MAX_PULL);
     indicator.style.opacity = String(Math.min(pull / THRESHOLD, 1));
     indicator.style.transform = 'translateY(' + (pull - 40) + 'px)' +
       (pull >= THRESHOLD ? ' scale(1.1)' : '');
-  }, { passive: true });
+  }, { passive: false });
 
   content.addEventListener('touchend', e => {
     if (!pulling || refreshing) return;
@@ -2961,14 +2974,20 @@ function refreshAll() {
       refreshAll();
       setTimeout(() => {
         indicator.classList.remove('spinning');
-        indicator.style.opacity = '';
-        indicator.style.transform = '';
+        clearIndicator();
         refreshing = false;
       }, 700);
     } else {
-      indicator.style.opacity = '';
-      indicator.style.transform = '';
+      clearIndicator();
     }
+  }, { passive: true });
+
+  // The browser can abort a touch (e.g. it takes over scrolling) with
+  // touchcancel instead of touchend; reset so the indicator never sticks.
+  content.addEventListener('touchcancel', () => {
+    if (refreshing) return;
+    pulling = false;
+    clearIndicator();
   }, { passive: true });
 })();
 
