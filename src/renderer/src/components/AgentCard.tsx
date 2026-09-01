@@ -205,6 +205,16 @@ export function AgentCard({
   const location = shortenPath(worktreePath ?? cwd);
   const modelLabel = shortModel(model);
   const toolLabel = lastTool ?? ((status !== 'idle' && action) ? action : undefined);
+  // #5C — surface `/compact` distinctly. The PreCompact hook sets status to
+  // 'compacting' (action 'compacting context'); recover it at render when a
+  // stray tool/turn event has flipped the stored status back to 'working' but
+  // the action/tool text still names the compaction, so the chip reads
+  // 'compacting' instead of a misleading 'working'. Mirrors the render-time
+  // derivation used for `typing`.
+  const compacting = status === 'compacting'
+    || ((status === 'working' || status === 'thinking')
+        && /compact/i.test(`${action ?? ''} ${lastTool ?? ''}`));
+  const badgeStatus: StatusKind = typing ? 'typing' : compacting ? 'compacting' : status;
   const prov = inferAgentProvider(command, provider);
   const isNonClaude = prov !== 'claude';
   const preset = providerPreset(prov);
@@ -316,7 +326,7 @@ export function AgentCard({
                   it was allowed to shrink, the browser resolved the overflow by
                   eating the NAME instead. Truncation should land on the longest,
                   most redundant thing, not on the identity. */}
-              <PixelBadge status={typing ? 'typing' : status} style={{ flexShrink: 0 }} />
+              <PixelBadge status={badgeStatus} style={{ flexShrink: 0 }} />
               {quotaLimited && (
                 <span title="Hit provider quota / rate limit — re-route or respawn on another profile" style={{
                   flexShrink: 0,
