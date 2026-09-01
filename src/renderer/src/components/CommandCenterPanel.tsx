@@ -100,12 +100,13 @@ function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean;
     return false;
   };
   const msgPending = useStore((s) => s.humanMessages.filter((m) => !m.resolved && !isQueryThread(m)).length);
+  const askMePending = useStore((s) => s.askMePending);
   const activityUnread = useStore((s) => s.activityUnread);
   const assignedPending = useStore((s) => s.assignedPending);
   const pendingArtifacts = useStore((s) => s.pendingArtifacts);
-  const badge = t.key === 'human' ? msgPending
+  const badge = t.key === 'human' ? (msgPending + askMePending)
     : t.key === 'activity' ? activityUnread
-    : t.key === 'tasks' ? assignedPending
+    : t.key === 'tasks' ? (assignedPending || askMePending)
     : t.key === 'review' ? pendingArtifacts.length
     : 0;
   const showBadge = badge > 0 && !active;
@@ -249,6 +250,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
   const updateAgent = useStore((s) => s.updateAgent);
   const setFullscreen = useStore((s) => s.setFullscreen);
   const fullscreenAgentId = useStore((s) => s.fullscreenAgentId);
+  const askMePending = useStore((s) => s.askMePending);
   const onPtyStream = usePtyParser(agent.id);
   // True only for the DOCKED panel while the overlay holds this agent.
   const isFullscreenedHere = fullscreenAgentId === agent.id && !fullscreen;
@@ -534,6 +536,35 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         display: 'flex',
         flexDirection: 'column'
       }}>
+        {/* Open UAT checklist alert banner — visible across all tabs except For You */}
+        {askMePending > 0 && tab !== 'human' && (
+          <div style={{
+            background: 'var(--cth-coral-light, #fde8e8)',
+            borderBottom: '1px solid var(--cth-coral)',
+            padding: '6px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontFamily: 'var(--cth-font-ui)',
+            fontSize: 12,
+            color: 'var(--cth-ink-900)',
+            flexShrink: 0
+          }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+              <span style={{ color: 'var(--cth-coral)', fontSize: 14 }}>📋</span>
+              <span>
+                <strong>{askMePending} open UAT checklist item{askMePending === 1 ? '' : 's'}</strong> awaiting your verification
+              </span>
+            </span>
+            <PixelButton
+              variant="primary"
+              size="sm"
+              onClick={() => setTab('human')}
+            >
+              Review in For You →
+            </PixelButton>
+          </div>
+        )}
         {tab === 'terminal' && (
           isFullscreenedHere ? (
             <Centered>Terminal is open in fullscreen. Press Esc to bring it back.</Centered>

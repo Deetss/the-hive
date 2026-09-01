@@ -3,7 +3,7 @@ import type { AccentColorName } from '@/design/tokens';
 import type { OfficeCharacterName } from '@/scene/office/cast';
 import type { ThemeId } from '@/scene/office/themeRegistry';
 import type { StatusKind } from '@/components/PixelBadge';
-import type { ActiveTaskSession, HiveTask, TaskSessionSnapshot } from '@/types/tasks';
+import type { ActiveTaskSession, HiveTask, OpenHumanQAItem, TaskSessionSnapshot } from '@/types/tasks';
 import type { AgentProvider } from '@shared/agentProvider';
 import type { HireManifest } from '@shared/hire';
 import type { ArtifactDescriptor } from '@shared/artifacts';
@@ -385,6 +385,8 @@ interface State {
    *  humanMessages.filter(!resolved).length on top of this via selector. */
   askMePending: number;
   setAskMePending: (n: number) => void;
+  openHumanQAItems: OpenHumanQAItem[];
+  setOpenHumanQA: (items: OpenHumanQAItem[]) => void;
   /** Count of pending 'Assigned to me' items (unanswered humanQA across all tasks). */
   assignedPending: number;
   setAssignedPending: (n: number) => void;
@@ -1024,6 +1026,12 @@ export const useStore = create<State>((set, get) => ({
   clearActivityUnread: () => set({ activityUnread: 0 }),
   askMePending: 0,
   setAskMePending: (n) => set({ askMePending: n }),
+  openHumanQAItems: [],
+  setOpenHumanQA: (items) => set({
+    openHumanQAItems: items,
+    askMePending: items.length,
+    assignedPending: items.length
+  }),
   assignedPending: 0,
   setAssignedPending: (n) => set({ assignedPending: n }),
   activeTaskSession: initialTaskSessions.active,

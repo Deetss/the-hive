@@ -31,7 +31,9 @@ export function AskMeTab() {
   const updateHumanMessageDraft = useStore((s) => s.updateHumanMessageDraft);
   const agents = useStore((s) => s.agents);
 
-  const [openQA, setOpenQA] = useState<OpenHumanQAItem[]>([]);
+  const openQA = useStore((s) => s.openHumanQAItems);
+  const setOpenHumanQA = useStore((s) => s.setOpenHumanQA);
+
   const [failOpen, setFailOpen] = useState<Record<string, boolean>>({});
   const [failNotes, setFailNotes] = useState<Record<string, string>>({});
   const [busyTasks, setBusyTasks] = useState<Record<string, boolean>>({});
@@ -47,12 +49,12 @@ export function AskMeTab() {
     try {
       if (window.cth?.openHumanQA) {
         const items = await window.cth.openHumanQA();
-        setOpenQA(Array.isArray(items) ? items : []);
+        setOpenHumanQA(Array.isArray(items) ? items : []);
       }
     } catch (e) {
       console.error('[AskMeTab] failed to load openHumanQA:', e);
     }
-  }, []);
+  }, [setOpenHumanQA]);
 
   useEffect(() => {
     void loadQA();

@@ -270,6 +270,32 @@ export function App() {
     return () => { cancelled = true; unsub?.(); };
   }, [setPendingArtifacts]);
 
+  // Open HumanQA / UAT checklist watcher: load open humanQA questions at App root,
+  // and refresh on every onHumanQAChanged push or periodic poll.
+  // Updates openHumanQAItems, askMePending, and assignedPending in the store so the
+  // "for you" and "tasks" badges and UAT alert banner are live across all tabs.
+  useEffect(() => {
+    if (!window.cth?.openHumanQA) return;
+    let cancelled = false;
+    const refresh = () => {
+      window.cth.openHumanQA()
+        .then((items) => {
+          if (!cancelled && Array.isArray(items)) {
+            useStore.getState().setOpenHumanQA(items);
+          }
+        })
+        .catch((err: unknown) => console.error('[humanQA] root list failed:', err));
+    };
+    refresh();
+    const unsub = window.cth.onHumanQAChanged?.(refresh);
+    const interval = setInterval(refresh, 4000);
+    return () => {
+      cancelled = true;
+      unsub?.();
+      clearInterval(interval);
+    };
+  }, []);
+
   // Shareable hires: a validated manifest arriving via the thehive://
   // deep link (or file import) pre-fills the Add-Agent modal. Never spawns by itself.
   const enqueuePendingHires = useStore(s => s.enqueuePendingHires);
