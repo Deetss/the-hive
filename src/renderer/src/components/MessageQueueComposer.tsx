@@ -268,10 +268,10 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     const tasksPath = harnessHome ? `${harnessHome}\\hive\\tasks.json` : 'hive/tasks.json';
     const priorityDirective =
       dispPriority === 'urgent'
-        ? `\n\n[PRIORITY: URGENT] Step 1: Write a task card to ${tasksPath} (id, title, status:"doing", assignee). Step 2: Delegate to the right worker NOW — spawn one if needed. Step 3: Do nothing else. You orchestrate; never implement.`
+        ? `\n\n[PRIORITY: URGENT] If the request is clear: write a task card to ${tasksPath} (id, title, status:"doing", assignee) and delegate to the right worker NOW — spawn one if needed. If the request is AMBIGUOUS or you would be guessing at intent/scope: do NOT create a card or delegate — ask the human ONE crisp clarifying question (ASK ME / AskUserQuestion) and wait for the answer, THEN card + delegate. You orchestrate; never implement.`
         : dispPriority === 'backlog'
-        ? `\n\n[PRIORITY: BACKLOG] Write a task card to ${tasksPath} (id, title, status:"todo") and stop. No delegation, no dispatch, no reply.`
-        : `\n\n[PRIORITY: NORMAL] Step 1: Write a task card to ${tasksPath} (id, title, status:"doing", assignee). Step 2: Delegate to an available worker. Step 3: Do nothing else. You orchestrate; never implement.`;
+        ? `\n\n[PRIORITY: BACKLOG] If the request is clear: write a task card to ${tasksPath} (id, title, status:"todo") and stop. No delegation, no dispatch, no reply. If the request is AMBIGUOUS: do NOT create a card — ask the human ONE crisp clarifying question (ASK ME / AskUserQuestion) and wait for the answer, THEN card.`
+        : `\n\n[PRIORITY: NORMAL] If the request is clear: write a task card to ${tasksPath} (id, title, status:"doing", assignee) and delegate to an available worker. If the request is AMBIGUOUS or you would be guessing at intent/scope: do NOT create a card or delegate — ask the human ONE crisp clarifying question (ASK ME / AskUserQuestion) and wait for the answer, THEN card + delegate. You orchestrate; never implement.`;
     const full = suggested
       ? `${body}${priorityDirective}\n\n(The human suggests ${suggested.name} (${suggested.id}) for this — your call as orchestrator.)`
       : `${body}${priorityDirective}`;
