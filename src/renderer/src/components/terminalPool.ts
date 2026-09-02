@@ -206,10 +206,18 @@ export function acquireTerminal(ptyId: string, theme?: ThemeMap, fontSize = 14):
   // fresh full-screen TUI is told the real cols/rows and repaints (a hardcoded
   // 100x30 spawn otherwise paints a misaligned frame that reads as "not
   // reconnected"). Same effect as the renderer-driven restart's resetTerminal.
+  // Then take keyboard focus — after a respawn the panel is visible but the
+  // xterm isn't focused, so the first keystrokes land on whatever else had
+  // focus (e.g. the dispatch Project field) instead of the terminal.
   entry.unsub.push(window.cth.onPtyRelaunch(ptyId, () => {
     console.debug('[pty:relaunch] re-arming terminal', ptyId);
     resetTerminal(ptyId);
-    setTimeout(() => reflowTerminal(ptyId), 50);
+    setTimeout(() => {
+      reflowTerminal(ptyId);
+      if (entry.opened && entry.host.isConnected) {
+        try { entry.term.focus(); } catch { /* not focusable yet */ }
+      }
+    }, 50);
   }));
 
   // ── Copy / paste ──────────────────────────────────────────────────────────
