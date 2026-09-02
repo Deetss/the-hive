@@ -899,6 +899,14 @@ const api = {
     question: string
   ): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('tasks:dismissHumanQA', taskId, question),
+  /** "Chat about this": send a message to the item's assigned agent and append it
+   *  to the item's thread. Additive to answerHumanQA. */
+  chatHumanQA: (
+    taskId: string,
+    question: string,
+    text: string
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('tasks:chatHumanQA', taskId, question, text),
   onHumanQAChanged: (cb: () => void): (() => void) => {
     const handler = () => cb();
     ipcRenderer.on('hive:humanQAChanged', handler);

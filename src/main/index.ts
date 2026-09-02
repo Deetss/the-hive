@@ -6547,6 +6547,7 @@ ipcMain.handle('tasks:openHumanQA', () => {
     priority?: 'urgent' | 'normal' | 'backlog';
     askedAt: string;
     kind?: string;
+    thread?: { from: 'human' | 'agent'; text: string; ts: string }[];
   }> = [];
 
   for (const t of tasks) {
@@ -6566,7 +6567,8 @@ ipcMain.handle('tasks:openHumanQA', () => {
           question: qa.q,
           priority: itemPriority,
           askedAt: qa.askedAt || t.createdAt || new Date().toISOString(),
-          kind: qa.kind
+          kind: qa.kind,
+          thread: Array.isArray(qa.thread) ? qa.thread : undefined
         });
       }
     }
@@ -6659,6 +6661,39 @@ ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: un
       }
     } catch (e) {
       console.error('[humanQA] failed to send notification to assignee:', e);
+    }
+  }
+
+  broadcastHumanQAChanged();
+  return { ok: true };
+});
+
+/** "Chat about this": append the human's message to the item's thread and route
+ *  the text to the item's ASSIGNED agent, tagged so it can reply into the same
+ *  thread. Additive to answerHumanQA — does not change the PASS/FAIL decision. */
+ipcMain.handle('tasks:chatHumanQA', async (_evt, taskId: unknown, question: unknown, text: unknown) => {
+  if (typeof taskId !== 'string' || !taskId) return { ok: false, error: 'invalid taskId' };
+  if (typeof question !== 'string' || !question) return { ok: false, error: 'invalid question' };
+  const body = typeof text === 'string' ? text.trim() : '';
+  if (!body) return { ok: false, error: 'message text required' };
+  if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
+
+  const res = hive.appendHumanQAThread(taskId, question, { from: 'human', text: body, ts: new Date().toISOString() });
+  if (!res.ok) return { ok: false, error: 'humanQA item not found' };
+
+  if (res.assignee) {
+    try {
+      const title = res.title ?? taskId;
+      hive.send({
+        to: res.assignee,
+        act: 'inform',
+        subject: `Chat on your ASK ME item — ${title}`,
+        body: `The human is chatting about your ASK ME item on "${title}":\n\n${body}\n\n`
+          + `Reply by dropping a JSON file in your outbox: `
+          + `{"act":"humanQA-chat","taskId":"${taskId}","question":${JSON.stringify(question)},"text":"<your reply>"}`
+      }, 'human');
+    } catch (e) {
+      console.error('[humanQA] chat notify to assignee failed:', e);
     }
   }
 

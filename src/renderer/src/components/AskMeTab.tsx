@@ -42,6 +42,11 @@ export function AskMeTab() {
   const [comments, setComments] = useState<Record<string, string>>({});
   const [answerVals, setAnswerVals] = useState<Record<string, string>>({});
   const [busyTasks, setBusyTasks] = useState<Record<string, boolean>>({});
+  // "Chat about this" — thread drafts / open / sending, keyed by `${taskId}::${question}`
+  // (NOT taskId alone: one card can carry several open items).
+  const [chatDrafts, setChatDrafts] = useState<Record<string, string>>({});
+  const [chatOpen, setChatOpen] = useState<Record<string, boolean>>({});
+  const [chatSending, setChatSending] = useState<Record<string, boolean>>({});
   const [sendingMsg, setSendingMsg] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -104,6 +109,24 @@ export function AskMeTab() {
         delete next[taskId];
         return next;
       });
+    }
+  };
+
+  const handleChat = async (taskId: string, question: string) => {
+    const key = `${taskId}::${question}`;
+    const text = (chatDrafts[key] ?? '').trim();
+    if (!text || chatSending[key]) return;
+    setChatSending((p) => ({ ...p, [key]: true }));
+    try {
+      if (window.cth?.chatHumanQA) {
+        await window.cth.chatHumanQA(taskId, question, text);
+      }
+      setChatDrafts((p) => { const n = { ...p }; delete n[key]; return n; });
+      await loadQA();
+    } catch (e) {
+      console.error('[AskMeTab] failed to send chat:', e);
+    } finally {
+      setChatSending((p) => { const n = { ...p }; delete n[key]; return n; });
     }
   };
 
@@ -464,6 +487,75 @@ export function AskMeTab() {
                   </div>
                   </>
                   )}
+
+                  {/* Chat about this — a back-and-forth with the assigned agent,
+                      additive to the PASS/FAIL/comment decision above. */}
+                  {(() => {
+                    const chatKey = `${item.taskId}::${item.question}`;
+                    const thread = item.thread ?? [];
+                    const isOpen = !!chatOpen[chatKey] || thread.length > 0;
+                    const draft = chatDrafts[chatKey] ?? '';
+                    const sending = !!chatSending[chatKey];
+                    return (
+                      <div style={{ borderTop: '1px solid var(--cth-ink-100)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => setChatOpen((p) => ({ ...p, [chatKey]: !isOpen }))}
+                          style={{
+                            alignSelf: 'flex-start', border: 'none', background: 'transparent', cursor: 'pointer',
+                            fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-700)',
+                            display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0
+                          }}
+                        >
+                          💬 Chat about this{thread.length ? ` (${thread.length})` : ''} {isOpen ? '▾' : '▸'}
+                        </button>
+                        {isOpen && (
+                          <>
+                            {thread.length > 0 && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {thread.map((m, mi) => (
+                                  <div key={mi} style={{
+                                    alignSelf: m.from === 'human' ? 'flex-end' : 'flex-start',
+                                    maxWidth: '85%',
+                                    background: m.from === 'human' ? 'var(--cth-sky-light, #e3f0fb)' : 'var(--cth-cream-100)',
+                                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', padding: '5px 8px'
+                                  }}>
+                                    <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-500)', marginBottom: 2 }}>
+                                      {m.from === 'human' ? 'you' : nameFor(item.assignee)} · {formatAgo(m.ts, now)}
+                                    </div>
+                                    <Markdown text={m.text} style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-900)', maxWidth: '72ch' }} />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <input
+                                type="text"
+                                value={draft}
+                                onChange={(e) => setChatDrafts((p) => ({ ...p, [chatKey]: e.target.value }))}
+                                onKeyDown={(e) => { if (e.key === 'Enter') void handleChat(item.taskId, item.question); }}
+                                placeholder={`ask ${nameFor(item.assignee)}…`}
+                                disabled={sending}
+                                style={{
+                                  flex: 1, padding: '4px 8px', border: 'none', outline: 'none',
+                                  background: 'var(--cth-paper-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)',
+                                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)'
+                                }}
+                              />
+                              <PixelButton
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => void handleChat(item.taskId, item.question)}
+                                disabled={sending || !draft.trim()}
+                              >
+                                {sending ? '…' : 'send'}
+                              </PixelButton>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             );

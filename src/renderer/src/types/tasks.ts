@@ -18,6 +18,15 @@ export interface HumanQA {
   docPath?: string;
   /** review entries: true = approved, false = changes requested. undefined = pending. */
   approved?: boolean;
+  /** "Chat about this": a back-and-forth between the human and the assigned agent
+   *  on this item, additive to the PASS/FAIL/comment decision. */
+  thread?: HumanQAThreadMsg[];
+}
+
+export interface HumanQAThreadMsg {
+  from: 'human' | 'agent';
+  text: string;
+  ts: string;
 }
 
 export interface OpenHumanQAItem {
@@ -30,6 +39,8 @@ export interface OpenHumanQAItem {
   /** Carried from the qa entry so ASK ME can pick the answer UI: 'decision' gets a
    *  text box, anything else keeps the PASS/FAIL UAT flow. */
   kind?: HumanQA['kind'];
+  /** The chat thread for this item, carried through so ASK ME can render it. */
+  thread?: HumanQAThreadMsg[];
 }
 
 export interface HiveTask {

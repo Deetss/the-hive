@@ -130,6 +130,10 @@ export interface HumanQA {
   askedAt?: string;
   answeredAt?: string;
   dismissedAt?: string;
+  /** "Chat about this": a back-and-forth between the human and the assigned agent,
+   *  additive to the answer. Appended by tasks:chatHumanQA (human) and the
+   *  humanQA-chat outbox intercept in routeOnce (agent). */
+  thread?: { from: 'human' | 'agent'; text: string; ts: string }[];
 }
 
 export interface HiveTask {
@@ -1960,6 +1964,22 @@ export class HiveManager {
             routed++;
             continue;
           }
+          // Control message: the assigned agent replying into a humanQA chat
+          // thread. Drop {act:'humanQA-chat', taskId, question, text} in the
+          // outbox; append it to the item's thread (main is the single writer)
+          // and archive without delivering as mail. The tasks.json watcher then
+          // refreshes the ASK ME board.
+          if ((partial.act as string) === 'humanQA-chat') {
+            const taskId = typeof partial.taskId === 'string' ? partial.taskId : '';
+            const question = typeof partial.question === 'string' ? partial.question : '';
+            const text = typeof partial.text === 'string' ? partial.text.trim() : '';
+            if (taskId && question && text) {
+              this.appendHumanQAThread(taskId, question, { from: 'agent', text, ts: new Date().toISOString() });
+            }
+            renameSync(full, join(outbox, '.sent', f));
+            routed++;
+            continue;
+          }
           const msg = this.normalize(partial, id);
           msg.from = id; // sender is authoritative — the owning directory
           this.routeMessage(msg);
@@ -1973,6 +1993,35 @@ export class HiveManager {
     }
     if (routed > 0) this.commit(`hive: routed ${routed} message(s)`);
     return routed;
+  }
+
+  /** Append one message to a humanQA item's chat thread and persist. Main is the
+   *  single writer for both sides (human via tasks:chatHumanQA, agent via the
+   *  routeOnce intercept), so this read-modify-write never races the ledger.
+   *  Locates the entry by taskId + question (open first, then any match), and
+   *  spreads the entry so existing fields survive. */
+  appendHumanQAThread(
+    taskId: string,
+    question: string,
+    msg: { from: 'human' | 'agent'; text: string; ts: string }
+  ): { ok: boolean; assignee?: string | null; title?: string } {
+    const ledger = this.tasks() as { tasks?: HiveTask[] };
+    const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+    const ti = tasks.findIndex((t) => t?.id === taskId);
+    if (ti < 0) return { ok: false };
+    const task = { ...tasks[ti] };
+    const qaList = Array.isArray(task.humanQA) ? [...task.humanQA] : [];
+    let qi = qaList.findIndex((qa) => qa.q === question && !qa.a);
+    if (qi < 0) qi = qaList.findIndex((qa) => qa.q === question);
+    if (qi < 0) return { ok: false };
+    const entry = qaList[qi];
+    const thread = Array.isArray(entry.thread) ? [...entry.thread, msg] : [msg];
+    qaList[qi] = { ...entry, thread };
+    task.humanQA = qaList;
+    const updated = [...tasks];
+    updated[ti] = task;
+    this.writeTasks(updated);
+    return { ok: true, assignee: task.assignee ?? null, title: task.title };
   }
 
   // — read helpers (for IPC / UI) —
@@ -3075,6 +3124,13 @@ The harness surfaces open \`humanQA\` on the office floor's ASK ME board with a 
 with your task title so the human has context. The answer lands back in the same entry (\`a\`) and
 also arrives as an inbox message to you: read it, act on it, and move the card off \`blocked\` so
 work continues. While you wait, pick up other work rather than sitting idle.
+
+The human may also **chat** on one of your open \`humanQA\` items to ask a follow-up before
+deciding. It arrives as an \`inform\` in your inbox tagged with the \`taskId\` and \`question\`. Reply
+into that thread by dropping a JSON file in your outbox:
+\`{"act":"humanQA-chat","taskId":"<id>","question":"<the exact question text>","text":"<your reply>"}\`.
+The harness appends your reply to the item's thread on the ASK ME board. This does NOT answer the
+ask — PASS / FAIL / the decision is still the human's to make.
 
 ### Writing UAT / verification questions
 A \`humanQA\` entry that just asks "Does X work?" wastes a round-trip — the human doesn't know
