@@ -2459,7 +2459,11 @@ export function OfficeFloor() {
               c.cheer();
               c.showThought(CHEER_LINES[Math.floor(Math.random() * CHEER_LINES.length)]);
             }
-            else { c.startWandering(); c.showThought(liveActivity(agent, 'idle')); }
+            else {
+              c.startWandering();
+              if (!isHiveTheme) c.showThought(liveActivity(agent, 'idle'));
+              else c.hideThought();
+            }
             break;
         }
       };

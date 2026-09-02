@@ -368,6 +368,9 @@ export class Character {
    *  Empty text renders an animated "…" (thinking); `tool` adds a small glyph. */
   showThought(text: string, tool?: string): void {
     this.thoughtBubble.show(text, tool);
+    if (this.isHiveKit) {
+      this.sprite.setChipVisible(false);
+    }
   }
 
   /** Fade the thought cloud out after a short linger — the agent went quiet. */
@@ -575,6 +578,9 @@ export class Character {
     }
 
     this.thoughtBubble.update(dt);
+    if (this.isHiveKit) {
+      this.sprite.setChipVisible(this.thoughtBubble.isHidden());
+    }
     if (!this.isVisible) return;
 
     // Working agents stay seated; between tasks they wander the office.
