@@ -82,6 +82,17 @@ interface IdeTarget {
  *      opens on *something* browsable instead of an empty shell.
  *  Everything past (1) is marked `inferred`, because those paths are exactly the
  *  ones that can disagree with what the user was actually looking at. */
+/** Resolves `abs` relative to `root`, comparing separator-agnostically since
+ *  absolute paths recorded on Windows (e.g. from the touched-files ledger)
+ *  come back backslash-separated while `root` is joined with `/` elsewhere.
+ *  Returns null when `abs` falls outside `root`. */
+function relativeToRoot(abs: string, root: string): string | null {
+  const a = abs.replace(/\\/g, '/');
+  const r = root.replace(/\\/g, '/').replace(/\/$/, '');
+  if (!a.startsWith(r + '/')) return null;
+  return a.slice(r.length + 1);
+}
+
 function pickIdeTarget(): IdeTarget {
   const s = useStore.getState();
   const byId = (id: string | null): Agent | null => (id ? s.agents.find((a) => a.id === id) ?? null : null);
@@ -243,9 +254,8 @@ export function IdePanel({ embedded, onClose }: { embedded?: boolean; onClose?: 
     const abs = useStore.getState().ideInitialFile;
     if (!abs) return;
     useStore.getState().setIdeInitialFile(null);
-    const prefix = root.endsWith('/') ? root : `${root}/`;
-    if (!abs.startsWith(prefix)) return; // different workspace — tree still lets them browse
-    const rel = abs.slice(prefix.length);
+    const rel = relativeToRoot(abs, root);
+    if (rel === null) return; // different workspace — tree still lets them browse
     // Same routing as a tree click — an "open in IDE" on a screenshot must land
     // on the preview, not on a tab that refuses to display it.
     openEdit(rel);
@@ -256,9 +266,8 @@ export function IdePanel({ embedded, onClose }: { embedded?: boolean; onClose?: 
     const abs = useStore.getState().ideInitialDiff;
     if (!abs) return;
     useStore.getState().setIdeInitialDiff(null);
-    const prefix = root.endsWith('/') ? root : `${root}/`;
-    if (!abs.startsWith(prefix)) return;
-    const rel = abs.slice(prefix.length);
+    const rel = relativeToRoot(abs, root);
+    if (rel === null) return;
     ensureDiff(rel, true);
     openTab('diff', rel);
   }, [root, ensureDiff, openTab]);

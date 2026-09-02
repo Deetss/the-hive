@@ -21,6 +21,15 @@ const ACTIVITY_CAP = 50;
 const TASK_SESSION_LS_KEY = 'cth.tasks.sessions.v1';
 const TASK_SESSION_HISTORY_LIMIT = 20;
 
+/** Compares absolute paths separator-agnostically: entries recorded by the
+ *  main process (Node's `path.normalize`) come back backslash-separated on
+ *  Windows, while agent.cwd and callers built here mix in forward slashes. */
+function isPathWithin(absPath: string, root: string): boolean {
+  const a = absPath.replace(/\\/g, '/');
+  const r = root.replace(/\\/g, '/').replace(/\/$/, '');
+  return a === r || a.startsWith(r + '/');
+}
+
 /** One entry in the Activity/Updates feed — a tagged insight from god/agents. */
 export interface ActivityEntry {
   id: string;
@@ -1299,12 +1308,12 @@ export const useStore = create<State>((set, get) => ({
     // Resolve the OWNING agent here rather than in each caller: a terminal link
     // or a Files-tab click often has nothing selected, and the IDE would
     // otherwise fall back to the selection and open the wrong workspace.
-    const owner = s.agents.find((a) => absPath === a.cwd || absPath.startsWith(a.cwd + '/'));
+    const owner = s.agents.find((a) => isPathWithin(absPath, a.cwd));
     set({ ideInitialFile: absPath, ideOpen: true, ideAgentId: owner?.id ?? null });
   },
   openDiffInIde: (absPath) => {
     const s = get();
-    const owner = s.agents.find((a) => absPath === a.cwd || absPath.startsWith(a.cwd + '/'));
+    const owner = s.agents.find((a) => isPathWithin(absPath, a.cwd));
     set({ ideInitialDiff: absPath, ideOpen: true, ideAgentId: owner?.id ?? null });
   },
   // Closing CLEARS the target: the id is scoped to one IDE session, and a stale
