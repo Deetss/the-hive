@@ -390,6 +390,9 @@ interface State {
    *  humanMessages.filter(!resolved).length on top of this via selector. */
   askMePending: number;
   setAskMePending: (n: number) => void;
+  /** Spawn-requests awaiting human approve/decline — drives the Workers tab badge. */
+  pendingSpawns: number;
+  setPendingSpawns: (n: number) => void;
   openHumanQAItems: OpenHumanQAItem[];
   setOpenHumanQA: (items: OpenHumanQAItem[]) => void;
   /** Count of pending 'Assigned to me' items (unanswered humanQA across all tasks). */
@@ -1031,6 +1034,8 @@ export const useStore = create<State>((set, get) => ({
   clearActivityUnread: () => set({ activityUnread: 0 }),
   askMePending: 0,
   setAskMePending: (n) => set({ askMePending: n }),
+  pendingSpawns: 0,
+  setPendingSpawns: (n) => set({ pendingSpawns: n }),
   openHumanQAItems: [],
   setOpenHumanQA: (items) => set({
     openHumanQAItems: items,

@@ -7995,6 +7995,9 @@ const WORKER_TICK_MS = 1500;
 let workerWatchTimer: ReturnType<typeof setInterval> | null = null;
 /** Re-entrancy guard so a slow tick (await spawn / git checks) never overlaps. */
 let workerTickRunning = false;
+/** Spawn-request filenames already surfaced to the human, so the approval toast
+ *  fires once per file, not every tick. Pruned as files leave the queue. */
+const seenPendingRequests = new Set<string>();
 
 /** HIVE_ROOT/spawn-requests — the queue dir god drops requests into. */
 function spawnRequestsDir(): string | null {
@@ -8003,7 +8006,7 @@ function spawnRequestsDir(): string | null {
 }
 
 /** Move a processed request out of the queue so it's never reprocessed. */
-function archiveRequest(filePath: string, sub: '.done' | '.failed'): void {
+function archiveRequest(filePath: string, sub: '.done' | '.failed' | '.declined'): void {
   const queue = spawnRequestsDir();
   try {
     if (!queue) throw new Error('no hive root');
@@ -8434,6 +8437,36 @@ async function ephemeralWorkerTick(): Promise<void> {
       }
     }
 
+    // (2a) Surface pending spawn-requests the human must act on. Runs every tick
+    //      regardless of the toggle: when auto-spawn is OFF a request would else
+    //      sit unseen, so toast once per newly-seen file (deduped). Files are
+    //      marked seen even when the toggle is ON so flipping it OFF later does
+    //      not re-toast the ones already handled.
+    try {
+      const pendingDir = spawnRequestsDir();
+      if (pendingDir && existsSync(pendingDir)) {
+        let pendingNames: string[] = [];
+        try { pendingNames = readdirSync(pendingDir).filter((f) => f.endsWith('.json')); } catch { pendingNames = []; }
+        const present = new Set(pendingNames);
+        for (const name of seenPendingRequests) if (!present.has(name)) seenPendingRequests.delete(name);
+        const spawnOn = readConfig().orchestratorMaySpawn;
+        for (const name of pendingNames) {
+          if (seenPendingRequests.has(name)) continue;
+          seenPendingRequests.add(name);
+          if (!spawnOn && readConfig().notifications && Notification.isSupported()) {
+            try {
+              const req = JSON.parse(readFileSync(join(pendingDir, name), 'utf8')) as SpawnRequest;
+              const who = req.slack ? 'Slack' : 'the hive';
+              showFocusNotification({
+                title: 'Worker approval needed',
+                body: `${req.name ?? 'A worker'} from ${who}: ${req.objective ?? 'no objective'}`.slice(0, 180)
+              }, mainWindow);
+            } catch { /* malformed — the list handler logs it; skip the toast */ }
+          }
+        }
+      }
+    } catch { /* best-effort surfacing */ }
+
     // (2) Process new requests, honoring the concurrency cap (backpressure: leave
     //     the rest in the queue for a later tick).
     //
@@ -8507,12 +8540,54 @@ interface PreservedSnapshot {
   baseBranch: string;
   preservedAt: number;
 }
+/** A spawn-request awaiting human approve/decline. Mirrors the preload type. */
+interface PendingSpawnSnapshot {
+  filename: string;
+  id: string;
+  name: string | null;
+  objective: string | null;
+  cwd: string | null;
+  hasSlack: boolean;
+  createdAt: number;
+}
+
+/** Read the on-disk spawn-request queue for the approval UI. Pure listing — never
+ *  consumes, and runs regardless of the auto-spawn toggle. Malformed files are
+ *  skipped (logged), never allowed to break the list. */
+function readPendingSpawnRequests(): PendingSpawnSnapshot[] {
+  const dir = spawnRequestsDir();
+  if (!dir || !existsSync(dir)) return [];
+  let files: string[] = [];
+  try { files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort(); } catch { return []; }
+  const out: PendingSpawnSnapshot[] = [];
+  for (const f of files) {
+    const full = join(dir, f);
+    try {
+      const req = JSON.parse(readFileSync(full, 'utf8')) as SpawnRequest;
+      let createdAt = Date.now();
+      try { createdAt = statSync(full).mtimeMs; } catch { /* keep now */ }
+      out.push({
+        filename: f,
+        id: req.id ?? f.replace(/\.json$/, ''),
+        name: req.name ?? null,
+        objective: req.objective ?? null,
+        cwd: req.cwd ?? null,
+        hasSlack: !!req.slack,
+        createdAt
+      });
+    } catch (e) {
+      console.warn('[workers] skipping malformed spawn-request', f, e);
+    }
+  }
+  return out;
+}
 
 /** List live ephemeral workers (+ preserved worktrees awaiting GC) for the tab. */
 ipcMain.handle('workers:list', (): {
   live: WorkerSnapshot[];
   recent: RecentWorkerSnapshot[];
   preserved: PreservedSnapshot[];
+  pending: PendingSpawnSnapshot[];
   maxWorkers: number;
 } => {
   const cfg = readConfig();
@@ -8545,7 +8620,43 @@ ipcMain.handle('workers:list', (): {
   const preserved: PreservedSnapshot[] = [...preservedWorktrees.values()].map((e) => ({
     workerId: e.workerId, wtPath: e.wtPath, baseBranch: e.baseBranch, preservedAt: e.preservedAt
   }));
-  return { live, recent: recentWorkers, preserved, maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4) };
+  return { live, recent: recentWorkers, preserved, pending: readPendingSpawnRequests(), maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4) };
+});
+
+/** Approve ONE pending spawn-request: bypass the global gate for just this file,
+ *  respecting the concurrency cap. At capacity we return a friendly error and
+ *  leave the file untouched (never eat it). */
+ipcMain.handle('workers:approveSpawn', async (_evt, filename: unknown): Promise<{ ok: boolean; error?: string }> => {
+  if (typeof filename !== 'string' || !filename) return { ok: false, error: 'invalid request' };
+  const dir = spawnRequestsDir();
+  if (!dir) return { ok: false, error: 'hive disabled' };
+  const full = join(dir, basename(filename));
+  if (!existsSync(full)) return { ok: false, error: 'That request is no longer in the queue.' };
+  const maxWorkers = Math.max(1, readConfig().maxConcurrentWorkers ?? 4);
+  if (liveWorkers.size >= maxWorkers) {
+    return { ok: false, error: `At capacity (${liveWorkers.size}/${maxWorkers} workers). Stop one first.` };
+  }
+  try {
+    await processSpawnRequest(full);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+
+/** Decline ONE pending spawn-request: move it to .declined (retained, not deleted). */
+ipcMain.handle('workers:declineSpawn', (_evt, filename: unknown): { ok: boolean; error?: string } => {
+  if (typeof filename !== 'string' || !filename) return { ok: false, error: 'invalid request' };
+  const dir = spawnRequestsDir();
+  if (!dir) return { ok: false, error: 'hive disabled' };
+  const full = join(dir, basename(filename));
+  if (!existsSync(full)) return { ok: false, error: 'That request is no longer in the queue.' };
+  try {
+    archiveRequest(full, '.declined');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 });
 
 /** Return the rolling PTY buffer for a worker / agent. */

@@ -305,6 +305,23 @@ export function App() {
     };
   }, []);
 
+  // Pending spawn-requests feed the Workers tab badge, live across all tabs (the
+  // WorkersTab poll only runs while that tab is mounted).
+  useEffect(() => {
+    if (!window.cth?.listWorkers) return;
+    let cancelled = false;
+    const refresh = () => {
+      window.cth.listWorkers()
+        .then((data) => {
+          if (!cancelled) useStore.getState().setPendingSpawns(data?.pending?.length ?? 0);
+        })
+        .catch(() => { /* main not ready */ });
+    };
+    refresh();
+    const interval = setInterval(refresh, 4000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
   // Shareable hires: a validated manifest arriving via the thehive://
   // deep link (or file import) pre-fills the Add-Agent modal. Never spawns by itself.
   const enqueuePendingHires = useStore(s => s.enqueuePendingHires);

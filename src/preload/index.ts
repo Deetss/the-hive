@@ -640,6 +640,16 @@ export interface PreservedWorktreeSnapshot {
   baseBranch: string;
   preservedAt: number;
 }
+/** A spawn-request sitting on disk awaiting human approve/decline. */
+export interface PendingSpawnSnapshot {
+  filename: string;
+  id: string;
+  name: string | null;
+  objective: string | null;
+  cwd: string | null;
+  hasSlack: boolean;
+  createdAt: number;
+}
 
 /** One delegation decision logged by the LDA pre-tool hook. */
 export interface DelegationEntry {
@@ -911,9 +921,9 @@ const api = {
 
   // ─── Ephemeral workers (P4 — Slack-triggered isolated workers) ───────────
   /** Live ephemeral workers + worktrees preserved awaiting integration/GC. */
-  listWorkers: (): Promise<{ live: WorkerSnapshot[]; recent: RecentWorkerSnapshot[]; preserved: PreservedWorktreeSnapshot[]; maxWorkers: number }> =>
+  listWorkers: (): Promise<{ live: WorkerSnapshot[]; recent: RecentWorkerSnapshot[]; preserved: PreservedWorktreeSnapshot[]; pending: PendingSpawnSnapshot[]; maxWorkers: number }> =>
     ipcRenderer.invoke('workers:list'),
-  workersList: (): Promise<{ live: WorkerSnapshot[]; recent: RecentWorkerSnapshot[]; preserved: PreservedWorktreeSnapshot[]; maxWorkers: number }> =>
+  workersList: (): Promise<{ live: WorkerSnapshot[]; recent: RecentWorkerSnapshot[]; preserved: PreservedWorktreeSnapshot[]; pending: PendingSpawnSnapshot[]; maxWorkers: number }> =>
     ipcRenderer.invoke('workers:list'),
   workersGetTail: (agentId: string): Promise<string[]> =>
     ipcRenderer.invoke('workers:getTail', agentId),
@@ -922,6 +932,13 @@ const api = {
     ipcRenderer.invoke('workers:stop', workerId),
   workersStop: (workerId: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('workers:stop', workerId),
+  /** Approve ONE pending spawn-request by filename (bypasses the global gate for
+   *  just that file; respects the concurrency cap). */
+  workersApproveSpawn: (filename: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('workers:approveSpawn', filename),
+  /** Decline ONE pending spawn-request by filename (moves it to .declined, not deleted). */
+  workersDeclineSpawn: (filename: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('workers:declineSpawn', filename),
 
   // ─── Tracked processes (user-spawned terminals & long-running jobs) ──────
   spawnProcess: (opts: { cmd: string; args?: string[]; cwd: string; label?: string; shell: 'wsl-bash' | 'powershell' | 'cmd' | 'bash'; distro?: string; wslCommand?: string }): Promise<{ ok: boolean; processId?: string; error?: string }> =>

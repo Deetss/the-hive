@@ -185,6 +185,9 @@ export function WorkersTab() {
     wslCommand: ''
   });
 
+  const [pendingBusy, setPendingBusy] = useState<Record<string, boolean>>({});
+  const [pendingError, setPendingError] = useState<string | null>(null);
+
   const refresh = useCallback(() => {
     window.cth.listWorkers().then(setData).catch(() => { /* main not ready */ });
     window.cth.listProcesses().then(setProcesses).catch(() => { /* main not ready */ });
@@ -206,6 +209,30 @@ export function WorkersTab() {
   const toggleLog = useCallback((workerId: string) => {
     setExpanded((e) => ({ ...e, [workerId]: !e[workerId] }));
   }, []);
+
+  const runPendingAction = useCallback((
+    filename: string,
+    action: (f: string) => Promise<{ ok: boolean; error?: string }>,
+    verb: string
+  ) => {
+    setPendingBusy((b) => ({ ...b, [filename]: true }));
+    setPendingError(null);
+    action(filename)
+      .then((res) => { if (res && !res.ok) setPendingError(res.error ?? `${verb} failed.`); })
+      .catch(() => setPendingError(`${verb} failed.`))
+      .finally(() => {
+        setPendingBusy((b) => { const n = { ...b }; delete n[filename]; return n; });
+        refresh();
+      });
+  }, [refresh]);
+
+  const approveSpawn = useCallback((filename: string) => {
+    runPendingAction(filename, (f) => window.cth.workersApproveSpawn(f), 'Approve');
+  }, [runPendingAction]);
+
+  const declineSpawn = useCallback((filename: string) => {
+    runPendingAction(filename, (f) => window.cth.workersDeclineSpawn(f), 'Decline');
+  }, [runPendingAction]);
 
   const launchTerminal = useCallback(() => {
     const { cwd, shell, label, distro, wslCommand } = terminalForm;
@@ -232,6 +259,7 @@ export function WorkersTab() {
   const live = data?.live ?? [];
   const preserved = data?.preserved ?? [];
   const history = data?.recent ?? [];
+  const pending = data?.pending ?? [];
   const max = data?.maxWorkers ?? 4;
   const completedHistory = history.filter((h) => h.status === 'done' || h.status === 'stopped');
   const reapedHistory = history.filter((h) => h.status === 'reaped' || h.status === 'failed');
@@ -324,6 +352,63 @@ export function WorkersTab() {
               }}
             />
             <PixelButton onClick={launchTerminal}>launch</PixelButton>
+          </div>
+        </div>
+      )}
+
+      {filter === 'running' && pending.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <span style={sectionHead}>Pending approval</span>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)' }}>
+              {pending.length}
+            </span>
+          </div>
+          <p style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)', margin: '2px 0 8px' }}>
+            Spawn requests waiting for you. Auto-spawn is off, so nothing runs until you approve it.
+          </p>
+          {pendingError && (
+            <div style={{ ...card, color: 'var(--cth-ink-900)', background: 'var(--cth-coral-light)', boxShadow: 'inset 0 0 0 1px var(--cth-coral)', fontFamily: 'var(--cth-font-ui)', fontSize: 13, marginBottom: 8 }}>
+              {pendingError}
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {pending.map((p) => (
+              <div key={p.filename} style={card}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <span style={{
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 600, color: 'var(--cth-ink-900)',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                    }}>{p.name ?? 'unnamed worker'}</span>
+                    {p.hasSlack && (
+                      <span title="requested from a Slack thread" style={{
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
+                        boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', padding: '0 5px'
+                      }}>slack</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <PixelButton onClick={() => approveSpawn(p.filename)} disabled={!!pendingBusy[p.filename]}>
+                      {pendingBusy[p.filename] ? '…' : 'approve'}
+                    </PixelButton>
+                    <PixelButton onClick={() => declineSpawn(p.filename)} disabled={!!pendingBusy[p.filename]}>
+                      decline
+                    </PixelButton>
+                  </div>
+                </div>
+                {p.objective && (
+                  <div style={{
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                  }}>{p.objective}</div>
+                )}
+                <div style={metaRow}>
+                  {p.cwd && <span title="working directory">{p.cwd}</span>}
+                  <span title="waiting since">{relAge(Math.max(0, Date.now() - p.createdAt))}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
