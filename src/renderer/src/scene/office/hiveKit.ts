@@ -176,12 +176,12 @@ export async function getHiveProps(): Promise<HiveProps> {
   if (propsCache) return propsCache;
   const base = await getPropsBase();
   propsCache = {
-    desk: new Texture({ source: base.source, frame: new Rectangle(0, 0, 32, 26) }),
-    vat: new Texture({ source: base.source, frame: new Rectangle(32, 0, 32, 40) }),
-    cabinet: new Texture({ source: base.source, frame: new Rectangle(64, 0, 24, 32) }),
-    plant: new Texture({ source: base.source, frame: new Rectangle(88, 0, 16, 28) }),
-    whiteboard: new Texture({ source: base.source, frame: new Rectangle(104, 0, 32, 28) }),
-    mug: new Texture({ source: base.source, frame: new Rectangle(136, 0, 8, 8) })
+    desk: new Texture({ source: base.source, frame: new Rectangle(0, 40, 32, 32) }),
+    vat: new Texture({ source: base.source, frame: new Rectangle(36, 0, 38, 52) }),
+    cabinet: new Texture({ source: base.source, frame: new Rectangle(76, 44, 20, 36) }),
+    plant: new Texture({ source: base.source, frame: new Rectangle(96, 50, 18, 30) }),
+    whiteboard: new Texture({ source: base.source, frame: new Rectangle(116, 56, 30, 24) }),
+    mug: new Texture({ source: base.source, frame: new Rectangle(148, 64, 14, 14) })
   };
   return propsCache;
 }

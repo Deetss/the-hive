@@ -817,7 +817,7 @@ export function OfficeFloor() {
         const wallInsertIndex = mapContainer.getChildIndex(charLayer);
         mapContainer.addChildAt(hiveWallLayer, wallInsertIndex >= 0 ? wallInsertIndex : mapContainer.children.length);
 
-        // 3. Hive desk pods
+        // 3. Hive desk pods & props
         const hiveDeskLayer = new Container();
         hiveDeskLayer.sortableChildren = true;
         const charInsertIndex = mapContainer.getChildIndex(charLayer);
@@ -842,6 +842,62 @@ export function OfficeFloor() {
         for (let i = 0; i < HIVE_DESK_COUNT; i++) placePod(hiveDeskTile(i));
         const ceoTile = mapRenderer.getSpawnPoint('desk-ceo');
         if (ceoTile) placePod(ceoTile);
+
+        // 4. Props matching scene_frame.png
+        if (hiveProps) {
+          // Honey vat in top left corner
+          const vat = new Sprite(hiveProps.vat);
+          vat.eventMode = 'none';
+          vat.position.set(1.5 * tile, 3.5 * tile);
+          vat.zIndex = 5 * tile;
+          hiveDeskLayer.addChild(vat);
+
+          // Filing cabinets
+          const cab1 = new Sprite(hiveProps.cabinet);
+          cab1.eventMode = 'none';
+          cab1.position.set(4.5 * tile, 3.8 * tile);
+          cab1.zIndex = 5 * tile;
+          hiveDeskLayer.addChild(cab1);
+
+          const cab2 = new Sprite(hiveProps.cabinet);
+          cab2.eventMode = 'none';
+          cab2.position.set(24.5 * tile, 8.5 * tile);
+          cab2.zIndex = 9.5 * tile;
+          hiveDeskLayer.addChild(cab2);
+
+          // Potted plants
+          const plant1 = new Sprite(hiveProps.plant);
+          plant1.eventMode = 'none';
+          plant1.position.set(13.5 * tile, 4.5 * tile);
+          plant1.zIndex = 5.5 * tile;
+          hiveDeskLayer.addChild(plant1);
+
+          const plant2 = new Sprite(hiveProps.plant);
+          plant2.eventMode = 'none';
+          plant2.position.set(24 * tile, 13 * tile);
+          plant2.zIndex = 14 * tile;
+          hiveDeskLayer.addChild(plant2);
+
+          const plant3 = new Sprite(hiveProps.plant);
+          plant3.eventMode = 'none';
+          plant3.position.set(25.5 * tile, 13.5 * tile);
+          plant3.zIndex = 14.5 * tile;
+          hiveDeskLayer.addChild(plant3);
+
+          // Whiteboards / charts
+          const wb1 = new Sprite(hiveProps.whiteboard);
+          wb1.eventMode = 'none';
+          wb1.position.set(7.5 * tile, 1.2 * tile);
+          wb1.zIndex = 2 * tile;
+          hiveDeskLayer.addChild(wb1);
+
+          const wb2 = new Sprite(hiveProps.whiteboard);
+          wb2.eventMode = 'none';
+          wb2.position.set(17.5 * tile, 1.2 * tile);
+          wb2.zIndex = 2 * tile;
+          hiveDeskLayer.addChild(wb2);
+        }
+
         hiveDeskLayer.sortChildren();
       };
 
