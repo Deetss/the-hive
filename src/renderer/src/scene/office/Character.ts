@@ -623,6 +623,15 @@ export class Character {
 
   /** Carried-cup offset from the feet anchor, per facing direction. */
   private carryOffset(): { x: number; y: number } {
+    if (this.isHiveKit) {
+      // For bees, carry the cup below the body with front legs, clear of the face/antennae
+      switch (this.direction) {
+        case 'left':  return { x: -8, y: -2 };
+        case 'right': return { x: 4, y: -2 };
+        case 'up':    return { x: 5, y: -4 };
+        default:      return { x: 5, y: -2 };
+      }
+    }
     switch (this.direction) {
       case 'left':  return { x: -7, y: -9 };
       case 'right': return { x: 7, y: -9 };
@@ -633,6 +642,14 @@ export class Character {
 
   /** Hand position while watering, per facing direction. */
   private handOffset(): { x: number; y: number } {
+    if (this.isHiveKit) {
+      switch (this.direction) {
+        case 'left':  return { x: -8, y: -2 };
+        case 'right': return { x: 6, y: -2 };
+        case 'up':    return { x: 0, y: -6 };
+        default:      return { x: 0, y: -2 };
+      }
+    }
     switch (this.direction) {
       case 'left':  return { x: -6, y: -9 };
       case 'right': return { x: 6, y: -9 };
