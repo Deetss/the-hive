@@ -55,6 +55,7 @@ import {
 } from './git';
 import { HiveManager, type AgentMeta, type HiveMessage, type HiveTask, type PromptOverrides } from './hive';
 import { HookServer } from './hooks';
+import { showFocusNotification } from './notify';
 import { CircuitBreaker, type BreakerInput } from './breaker';
 import type { UsageProvider } from './usage';
 import { MemoryManager } from './memory';
@@ -3474,7 +3475,7 @@ function reengageGod(digest: string): void {
 /** A native toast for breaker constrain/stop, gated on the notifications setting. */
 function breakerToast(title: string, body: string): void {
   if (!readConfig().notifications) return;
-  try { if (Notification.isSupported()) new Notification({ title, body }).show(); }
+  try { if (Notification.isSupported()) showFocusNotification({ title, body }, mainWindow); }
   catch { /* unsupported platform */ }
 }
 
@@ -6980,10 +6981,10 @@ hive.setRoutedObserver((msg, targets) => {
     if (readConfig().notifications) {
       try {
         if (Notification.isSupported()) {
-          new Notification({
+          showFocusNotification({
             title: msg.activity_headline ?? msg.subject,
             body: msg.body.slice(0, 200)
-          }).show();
+          }, mainWindow);
         }
       } catch { /* notification unsupported */ }
     }
@@ -7806,7 +7807,7 @@ const completionWatcher = initCompletionWatcher({
         const agentName = reg.agents[evt.targetAgentId]?.name ?? (evt.targetAgentId === 'god' || evt.targetAgentId === reg.godId ? (reg.agents[reg.godId ?? 'god']?.name ?? 'BeeYoncé') : evt.targetAgentId);
         const title = agentName || 'Agent';
         const body = evt.summary || (evt.objective ? `Finished "${evt.objective}"` : 'Task completed');
-        new Notification({ title, body }).show();
+        showFocusNotification({ title, body }, mainWindow);
       }
     } catch { /* best-effort */ }
   }

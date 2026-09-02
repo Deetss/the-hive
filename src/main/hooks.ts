@@ -13,6 +13,7 @@
 import { createServer, type Server } from 'node:net';
 import { existsSync, rmSync } from 'node:fs';
 import { Notification, type WebContents } from 'electron';
+import { showFocusNotification } from './notify';
 import type { HiveManager } from './hive';
 import type { HarnessConfig } from './config';
 import type { ControlRegistry } from './control';
@@ -455,7 +456,7 @@ export class HookServer {
     if (!this.getConfig().notifications) return;
     try {
       if (!Notification.isSupported()) return;
-      new Notification({ title, body }).show();
+      showFocusNotification({ title, body });
     } catch { /* notifications unsupported on this platform — ignore */ }
   }
 
