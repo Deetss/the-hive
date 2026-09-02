@@ -1619,15 +1619,18 @@ export function OfficeFloor() {
 
       // Hive board props (pipe + vat) ride a sibling container so boardG.clear()
       // in drawTaskBoard doesn't wipe them — the draw fns just swap the frame.
+      // Local coords, same origin as boardG: the TODO comb's background hex spans
+      // x ~34..78, so the BLOCKED pipe tucks just left of it and the DONE vat
+      // sits clear to its right, giving a left-to-right blocked → todo → done read.
       const boardProps = new Container();
       boardProps.eventMode = 'none';
       boardProps.position.copyFrom(boardG.position);
       boardProps.zIndex = boardG.zIndex + 0.5;
       const pipeSprite = new Sprite();
-      pipeSprite.position.set(0, -14);
+      pipeSprite.position.set(16, -12);
       pipeSprite.visible = false;
       const vatSprite = new Sprite();
-      vatSprite.position.set(62, 0);
+      vatSprite.position.set(82, 0);
       vatSprite.visible = false;
       if (isHiveTheme) {
         boardProps.addChild(pipeSprite, vatSprite);
