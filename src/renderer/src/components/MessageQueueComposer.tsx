@@ -205,9 +205,16 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     setAttachments([]);
   };
 
+  // There is no message-payload field for project, so both paths carry it as a
+  // leading body tag the recipient can read to route / prioritise by project.
+  const withProject = (b: string) => {
+    const project = dispProject.trim();
+    return project ? `[PROJECT: ${project}]\n\n${b}` : b;
+  };
+
   const queueIt = () => {
     if (!canSend) return;
-    enqueueMessage(agent.id, buildBody(), { userDraft: true });
+    enqueueMessage(agent.id, withProject(buildBody()), { userDraft: true });
     resetComposer();
   };
 
@@ -219,10 +226,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     if (!canSend) return;
     const raw = buildBody().trim();
     if (!raw) return;
-    const project = dispProject.trim();
-    // No message-payload field for project, so carry it as a body tag the
-    // Overmind can read to route by project context.
-    const body = project ? `[PROJECT: ${project}]\n\n${raw}` : raw;
+    const body = withProject(raw);
     const subject = raw.split('\n')[0].slice(0, 60);
     const suggested = target !== 'god' ? agents.find((a) => a.id === target) : undefined;
     const tasksPath = harnessHome ? `${harnessHome}\\hive\\tasks.json` : 'hive/tasks.json';
@@ -396,30 +400,26 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
             <option key={a.id} value={a.id}>Dispatch · suggest {a.name}</option>
           ))}
         </select>
-        {!sendLater && (
-          <select className="cth-input" value={dispAct} onChange={(e) => setDispAct(e.target.value as 'request' | 'query' | 'inform')} style={selectStyle}>
-            <option value="request">Request</option>
-            <option value="query">Query</option>
-            <option value="inform">Inform</option>
-          </select>
-        )}
-        {!sendLater && (
-          <>
-            <input
-              className="cth-input"
-              list="cth-dispatch-projects"
-              value={dispProject}
-              onChange={(e) => setDispProject(e.target.value)}
-              placeholder="Project (optional)"
-              style={{ ...selectStyle, width: 130 }}
-            />
-            <datalist id="cth-dispatch-projects">
-              {[...new Set(agents.map((a) => a.project).filter(Boolean))].map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
-          </>
-        )}
+        {/* Type + project apply to a queued message too (routing / context), so
+            they stay visible in "send later" mode. */}
+        <select className="cth-input" value={dispAct} onChange={(e) => setDispAct(e.target.value as 'request' | 'query' | 'inform')} style={selectStyle}>
+          <option value="request">Request</option>
+          <option value="query">Query</option>
+          <option value="inform">Inform</option>
+        </select>
+        <input
+          className="cth-input"
+          list="cth-dispatch-projects"
+          value={dispProject}
+          onChange={(e) => setDispProject(e.target.value)}
+          placeholder="Project (optional)"
+          style={{ ...selectStyle, width: 130 }}
+        />
+        <datalist id="cth-dispatch-projects">
+          {[...new Set(agents.map((a) => a.project).filter(Boolean))].map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
         {/* Priority still matters for a queued message (an urgent one delivers
             ahead of others), so these stay active in "send later" mode too. */}
         {(['urgent', 'normal', 'backlog'] as const).map((p) => (
