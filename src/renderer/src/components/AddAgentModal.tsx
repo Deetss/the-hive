@@ -73,6 +73,21 @@ const DESCRIPTION_TEMPLATES: { label: string; description: string; goal: string 
     label: 'Release manager',
     description: 'prepares and ships releases',
     goal: 'Track what has shipped since the last release, update the changelog and version, and draft clear release notes.'
+  },
+  {
+    label: 'PR reviewer',
+    description: 'reviews changes before they merge',
+    goal: 'Review the staged or proposed diff: flag correctness bugs, missing edge cases, and unclear names, and suggest concrete fixes. Call out anything risky explicitly and approve only what you have actually read.'
+  },
+  {
+    label: 'Test writer',
+    description: 'writes tests for existing code',
+    goal: 'Write focused unit and integration tests for the code you are pointed at. Cover the happy path plus the edge and failure cases, match the existing test style in the repo, and make each test name state the behavior under test.'
+  },
+  {
+    label: 'Security auditor',
+    description: 'hunts for security weaknesses',
+    goal: 'Scan for injection risks, unvalidated input, auth and authz gaps, hardcoded secrets, and unsafe output handling. Report each finding with its location, the risk, and a minimal fix. Never change behavior without flagging it.'
   }
 ];
 
