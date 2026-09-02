@@ -28,6 +28,14 @@ export type {
  *  write-only secret contract (spec §2): a secret value is NEVER returned over IPC. */
 export type IntegrationRecordView = Omit<IntegrationRecord, 'secretRef'> & { hasSecret: boolean };
 
+export interface TouchedLedgerEntry {
+  path: string;
+  verb: 'create' | 'write' | 'edit' | 'delete';
+  ts: string;
+  insideRepo: boolean;
+  relativePath?: string;
+}
+
 /** A The Hive instance discovered on the local network (see main/hiveDiscovery). */
 export interface DiscoveredHive {
   hiveId: string;
@@ -932,6 +940,8 @@ const api = {
   /** Consolidated per-agent directory (registry + telemetry + context), incl.
    *  archived agents. Backs Realtime Abathur's get_agent_detail / list_agents. */
   hiveAgentDirectory: (): Promise<AgentDirectory> => ipcRenderer.invoke('hive:agentDirectory'),
+  hiveTouchedLedger: (agentId: string): Promise<TouchedLedgerEntry[]> =>
+    ipcRenderer.invoke('hive:getTouchedLedger', agentId),
 
   // ─── Ephemeral workers (P4 — Slack-triggered isolated workers) ───────────
   /** Live ephemeral workers + worktrees preserved awaiting integration/GC. */
@@ -1091,6 +1101,13 @@ const api = {
     const listener = (_e: IpcRendererEvent, payload: { agentId: string; tokens: number; limit: number }) => cb(payload);
     ipcRenderer.on('hive:contextUpdate', listener);
     return () => ipcRenderer.removeListener('hive:contextUpdate', listener);
+  },
+  onTouchedLedger: (
+    cb: (e: { agentId: string; entries: TouchedLedgerEntry[] }) => void
+  ): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: { agentId: string; entries: TouchedLedgerEntry[] }) => cb(payload);
+    ipcRenderer.on('hive:touchedUpdate', listener);
+    return () => ipcRenderer.removeListener('hive:touchedUpdate', listener);
   },
   /** Push-based model id from the status line: reflects a live /model change in
    *  the terminal onto the roster card. Same pattern as onHiveContextUpdate. */
