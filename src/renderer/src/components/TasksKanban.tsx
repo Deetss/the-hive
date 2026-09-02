@@ -23,24 +23,7 @@ export function openQuestion(t: HiveTask): HumanQA | undefined {
   return undefined;
 }
 
-/** True if this humanQA entry is still pending the human's action. */
-function isPendingHumanQA(e: HumanQA): boolean {
-  if (e.dismissedAt) return false;
-  const kind = e.kind ?? 'question';
-  if (kind === 'question') return !e.a;
-  if (kind === 'action') return !e.doneAt;
-  if (kind === 'review') return e.approved === undefined;
-  return false;
-}
 
-function fmtAge(iso?: string): string {
-  if (!iso) return '';
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 60_000) return '<1m';
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
-  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h`;
-  return `${Math.floor(ms / 86_400_000)}d`;
-}
 
 function fmtSessionTimestamp(ts: number): string {
   return new Date(ts).toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -135,7 +118,6 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
   const [tasks, setTasks] = useState<HiveTask[]>([]);
   const lastTasksSerialized = useRef<string>('');
   const openTaskDetail = useStore((s) => s.openTaskDetail);
-  const setAssignedPending = useStore((s) => s.setAssignedPending);
   const activeTaskSession = useStore((s) => s.activeTaskSession);
   const taskSessionHistory = useStore((s) => s.taskSessionHistory);
   const viewedTaskSessionId = useStore((s) => s.viewedTaskSessionId);
@@ -144,10 +126,6 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
   const renameTaskSession = useStore((s) => s.renameTaskSession);
   const deleteTaskSession = useStore((s) => s.deleteTaskSession);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [atmeCollapsed, setAtmeCollapsed] = useState(false);
-  const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
-  const [acting, setActing] = useState<string | null>(null);
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'tasks' | 'uat'>('tasks');
   const [uatPending, setUatPending] = useState(0);
   const [dragOverColumn, setDragOverColumn] = useState<Status | null>(null);
@@ -195,57 +173,6 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
     }
   }, [loadLiveTasks, readOnly]);
 
-  const patchQA = useCallback(async (taskId: string, qa: HumanQA[]) => {
-    if (readOnly) return;
-    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, humanQA: qa } : t));
-    try {
-      await window.cth.hivePatchTask(taskId, { humanQA: qa });
-    } catch {
-      void loadLiveTasks();
-    }
-  }, [loadLiveTasks, readOnly]);
-
-  const sendAnswer = useCallback(async (task: HiveTask, e: HumanQA, draftKey: string) => {
-    if (readOnly) return;
-    const text = (answerDrafts[draftKey] ?? '').trim();
-    if (!text || acting) return;
-    setActing(draftKey);
-    try {
-      const qa = (task.humanQA ?? []).map((q) => q === e ? { ...q, a: text, answeredAt: new Date().toISOString() } : q);
-      await patchQA(task.id, qa);
-      await window.cth.hiveSend({ to: 'god', act: 'inform', subject: `HUMAN ANSWER on task "${task.title}"`, body: `Q: ${e.q}\nA: ${text}` }, 'human');
-      setAnswerDrafts((d) => { const n = { ...d }; delete n[draftKey]; return n; });
-    } catch {
-      /* leave draft */
-    }
-    setActing(null);
-  }, [acting, answerDrafts, patchQA, readOnly]);
-
-  const markDone = useCallback(async (task: HiveTask, e: HumanQA, draftKey: string) => {
-    if (readOnly || acting) return;
-    setActing(draftKey);
-    try {
-      const qa = (task.humanQA ?? []).map((q) => q === e ? { ...q, doneAt: new Date().toISOString() } : q);
-      await patchQA(task.id, qa);
-    } catch {
-      void loadLiveTasks();
-    }
-    setActing(null);
-  }, [acting, loadLiveTasks, patchQA, readOnly]);
-
-  const reviewDecide = useCallback(async (task: HiveTask, e: HumanQA, approved: boolean, draftKey: string) => {
-    if (readOnly || acting) return;
-    setActing(draftKey);
-    try {
-      const qa = (task.humanQA ?? []).map((q) => q === e ? { ...q, approved, answeredAt: new Date().toISOString() } : q);
-      await patchQA(task.id, qa);
-      await window.cth.hiveSend({ to: 'god', act: 'inform', subject: `REVIEW ${approved ? 'APPROVED' : 'CHANGES REQUESTED'} on task "${task.title}"`, body: `${approved ? 'Approved' : 'Changes requested'}: ${e.docPath ?? e.q}` }, 'human');
-    } catch {
-      void loadLiveTasks();
-    }
-    setActing(null);
-  }, [acting, loadLiveTasks, patchQA, readOnly]);
-
   const handleSelectActive = useCallback(() => {
     if (!viewingActive) selectTaskSession(null);
   }, [selectTaskSession, viewingActive]);
@@ -285,9 +212,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
     const latest = await loadLiveTasks();
     const snapshot = latest ?? tasks;
     startNewTaskSession(snapshot);
-    setAnswerDrafts({});
-    setExpandedKeys(new Set());
-  }, [loadLiveTasks, setAnswerDrafts, setExpandedKeys, startNewTaskSession, tasks]);
+  }, [loadLiveTasks, startNewTaskSession, tasks]);
 
   const moveTaskToStatus = useCallback(async (taskId: string, newStatus: Status) => {
     if (readOnly) return;
@@ -316,16 +241,6 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
       if (timer.current) { clearInterval(timer.current); timer.current = null; }
     };
   }, [loadLiveTasks, selectedArchivedSession, viewingActive]);
-
-  const pendingItems = useMemo(() => tasks
-    .flatMap((t) => (t.humanQA ?? [])
-      .map((qa, qi) => ({ task: t, qa, key: `${t.id}:${qi}` }))
-      .filter((item) => isPendingHumanQA(item.qa)))
-    .sort((a, b) => (a.qa.askedAt ?? '') < (b.qa.askedAt ?? '') ? -1 : 1), [tasks]);
-
-  useEffect(() => {
-    if (viewingActive) setAssignedPending(pendingItems.length);
-  }, [pendingItems.length, setAssignedPending, viewingActive]);
 
   const restorableAgents = useStore((s) => s.restorableAgents);
   /** Resolve an assignee id to a display name — falls back to the restorable
@@ -483,174 +398,6 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
       <div style={{
         flex: 1, minHeight: 0, display: view === 'tasks' ? 'flex' : 'none', flexDirection: 'column'
       }}>
-        {/* Assigned to me — pending humanQA items across all tasks */}
-        {pendingItems.length > 0 && (
-        <div style={{ flexShrink: 0, borderBottom: '2px solid var(--cth-ink-300)' }}>
-          <button
-            onClick={() => setAtmeCollapsed((v) => !v)}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-              padding: '5px 10px', border: 'none', cursor: 'pointer',
-              background: 'var(--cth-coral-light, #fde8e8)',
-              fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)',
-              textAlign: 'left'
-            }}
-          >
-            <span>ASSIGNED TO ME</span>
-            <span style={{
-              minWidth: 16, height: 16, borderRadius: 8,
-              background: 'var(--cth-coral)', color: '#fff',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, padding: '0 4px', boxSizing: 'border-box'
-            }}>{pendingItems.length}</span>
-            <span style={{ marginLeft: 'auto', fontSize: 13, opacity: 0.6 }}>
-              {atmeCollapsed ? '▶' : '▼'}
-            </span>
-          </button>
-          {!atmeCollapsed && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {pendingItems.map(({ task, qa, key }) => {
-                const kind = qa.kind ?? 'question';
-                const chipColor = kind === 'question' ? 'var(--cth-lilac)'
-                  : kind === 'action' ? 'var(--cth-lemon)'
-                  : 'var(--cth-sky)';
-                const chipLabel = kind === 'question' ? 'QUESTION' : kind === 'action' ? 'ACTION' : 'REVIEW';
-                const isActing = acting === key;
-                return (
-                  <div key={key} style={{
-                    padding: '7px 10px',
-                    borderBottom: '1px solid var(--cth-ink-100)',
-                    background: 'var(--cth-cream-100)',
-                    display: 'flex', flexDirection: 'column', gap: 4
-                  }}>
-                    {/* Header row */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{
-                        fontFamily: 'var(--cth-font-ui)', fontSize: 7, padding: '1px 5px 0',
-                        background: chipColor, color: 'var(--cth-ink-900)',
-                        boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0
-                      }}>{chipLabel}</span>
-                      <span style={{
-                        fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1
-                      }}>{task.title}</span>
-                      <span style={{ flexShrink: 0, fontSize: 13, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
-                        {fmtAge(qa.askedAt)}
-                      </span>
-                    </div>
-                    {/* Ask text — markdown, click to expand/collapse when long */}
-                    <div
-                      onClick={() => setExpandedKeys((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(key)) next.delete(key); else next.add(key);
-                        return next;
-                      })}
-                      title={expandedKeys.has(key) ? 'Click to collapse' : 'Click to expand'}
-                      style={{
-                        cursor: 'pointer',
-                        ...(expandedKeys.has(key) ? {} : { maxHeight: 34, overflow: 'hidden' })
-                      }}
-                    >
-                      {kind === 'review' && qa.docPath ? (
-                        <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px', color: 'var(--cth-ink-800)' }}>
-                          {qa.docPath}
-                        </div>
-                      ) : (
-                        <Markdown text={qa.q} style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px', color: 'var(--cth-ink-800)', maxWidth: '72ch' }} />
-                      )}
-                    </div>
-                    {/* Action row */}
-                    {kind === 'question' && (
-                      <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
-                        <input
-                          type="text"
-                        value={answerDrafts[key] ?? ''}
-                        onChange={(e) => setAnswerDrafts((d) => ({ ...d, [key]: e.target.value }))}
-                        onKeyDown={(e) => { if (e.key === 'Enter') void sendAnswer(task, qa, key); }}
-                        placeholder="your answer…"
-                          disabled={readOnly || isActing}
-                          style={{
-                            flex: 1, padding: '3px 6px', border: 'none', outline: 'none',
-                            background: 'var(--cth-paper-100)',
-                            boxShadow: 'inset 0 0 0 1px var(--cth-ink-200)',
-                            fontFamily: 'var(--cth-font-ui)', fontSize: 13,
-                            color: 'var(--cth-ink-900)'
-                          }}
-                        />
-                        <button
-                          onClick={() => void sendAnswer(task, qa, key)}
-                          disabled={readOnly || isActing || !(answerDrafts[key] ?? '').trim()}
-                          style={{
-                            padding: '3px 8px', border: 'none', cursor: 'pointer',
-                            background: 'var(--cth-mint)', color: 'var(--cth-ink-900)',
-                            boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                            fontFamily: 'var(--cth-font-ui)', fontSize: 13,
-                            opacity: isActing ? 0.5 : 1
-                          }}
-                        >SEND</button>
-                      </div>
-                    )}
-                    {kind === 'action' && (
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 2 }}>
-                        <button
-                          onClick={() => void markDone(task, qa, key)}
-                          disabled={readOnly || isActing}
-                          style={{
-                            padding: '3px 8px', border: 'none', cursor: 'pointer',
-                            background: 'var(--cth-mint)', color: 'var(--cth-ink-900)',
-                            boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                            fontFamily: 'var(--cth-font-ui)', fontSize: 13,
-                            opacity: isActing ? 0.5 : 1
-                          }}
-                        >MARK DONE</button>
-                      </div>
-                    )}
-                    {kind === 'review' && (
-                      <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
-                        {qa.docPath && (
-                          <button
-                            onClick={() => window.cth.openExternal?.(qa.docPath!)}
-                            style={{
-                              padding: '3px 8px', border: 'none', cursor: 'pointer',
-                              background: 'var(--cth-paper-100)', color: 'var(--cth-ink-700)',
-                              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                              fontFamily: 'var(--cth-font-ui)', fontSize: 13
-                            }}
-                          >OPEN</button>
-                        )}
-                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-                          <button
-                            onClick={() => void reviewDecide(task, qa, false, key)}
-                            disabled={readOnly || isActing}
-                            style={{
-                              padding: '3px 8px', border: 'none', cursor: 'pointer',
-                              background: 'var(--cth-coral-light, #fde8e8)', color: 'var(--cth-ink-900)',
-                              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                              fontFamily: 'var(--cth-font-ui)', fontSize: 13,
-                              opacity: isActing ? 0.5 : 1
-                            }}
-                          >CHANGES</button>
-                          <button
-                            onClick={() => void reviewDecide(task, qa, true, key)}
-                            disabled={readOnly || isActing}
-                            style={{
-                              padding: '3px 8px', border: 'none', cursor: 'pointer',
-                              background: 'var(--cth-mint)', color: 'var(--cth-ink-900)',
-                              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                              fontFamily: 'var(--cth-font-ui)', fontSize: 13,
-                              opacity: isActing ? 0.5 : 1
-                            }}
-                          >APPROVE</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
       {/* Toolbar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', flexShrink: 0,
