@@ -8256,16 +8256,27 @@ async function processSpawnRequest(filePath: string): Promise<void> {
     console.error('[worker] dispatch send failed:', e);
   }
 
-  // The renderer's inbox-wake can fire too early (Claude still booting) and
-  // ack the nudge out of the queue before Claude's readline is ready.  Fire a
-  // main-process nudge at 10s — well past Claude's boot — so the task actually
-  // lands.  The watchdog's 35s boot grace is too long for a first wake.
-  setTimeout(() => {
-    if (!liveWorkers.has(workerId)) return;
+  // Deliver the objective as soon as the worker is actually ready, not on a fixed
+  // timer. A nudge fired while Claude is still booting is acked out of the queue
+  // before its readline exists (wasted turn), which is why the old code waited a
+  // blanket 10s; but that also made every worker sit idle for 10s, and if boot
+  // ran long the nudge still missed and the task waited for unrelated inbox
+  // traffic. Poll instead: fire once the TUI has printed something and then gone
+  // quiet (readline settled), with a hard fallback so a silent boot still lands.
+  const FIRST_WAKE_QUIET_MS = 2500;
+  const FIRST_WAKE_MAX_MS = 14_000;
+  const firstWakeStart = Date.now();
+  const firstWakeTimer = setInterval(() => {
+    if (!liveWorkers.has(workerId)) { clearInterval(firstWakeTimer); return; }
     const pending = hive.inbox(workerId).map((m) => m.id).filter(Boolean);
-    if (!pending.length) return;
-    nudgeWorker(workerId, pending);
-  }, 10_000);
+    if (!pending.length) { clearInterval(firstWakeTimer); return; }
+    const sess = ptyManager.list().find((p) => p.id === workerId);
+    const booted = !!sess?.hasOutput && Date.now() - (sess.lastOutputAt || 0) >= FIRST_WAKE_QUIET_MS;
+    if (booted || Date.now() - firstWakeStart >= FIRST_WAKE_MAX_MS) {
+      clearInterval(firstWakeTimer);
+      nudgeWorker(workerId, pending);
+    }
+  }, 1000);
 
   console.log(`[worker] spawned ${workerId} (cwd=${cwd}, base=${baseBranch}${slack ? ', slack' : ''})`);
   archiveRequest(filePath, '.done');
