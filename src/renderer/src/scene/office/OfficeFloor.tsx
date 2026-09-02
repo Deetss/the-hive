@@ -9,6 +9,9 @@ import { Character, paintCup } from './Character';
 import { DeskScreen } from './DeskScreen';
 import workEntityUrl from '@/assets/hive/agent-work-entity.png?url';
 import workEntityAnimUrl from '@/assets/hive/agent-work-entity-anim.png?url';
+import blockedPipeUrl from '@/assets/hive/blocked-pipe.png?url';
+import honeyVatUrl from '@/assets/hive/honey-vat.png?url';
+import { loadFrameStrip } from './spriteSheet';
 import { MessageEnvelope, type MessageAct } from './MessageEnvelope';
 import { hexToNumber, getDefaultCharacter } from './cast';
 import { pickSoloLine, pickExchange, type BreakSpot } from './cafeteriaLines';
@@ -21,6 +24,14 @@ import type { Tile, Facing, ErrandKind, ErrandSpot } from './themeRegistry';
 // tiles, prop anchors, monitor gids and palette all come from the active
 // ThemeConfig now (see themeRegistry.ts / themeLoader.ts). Phase 0 ships the
 // existing office unchanged as `theme: 'office'`.
+
+// Hive task-board props: authored 7-frame strips (state level 0..6). Loaded once
+// on module import; the board's draw fns fall back to their procedural geometry
+// until the strips resolve.
+let blockedPipeFrames: Texture[] | null = null;
+let honeyVatFrames: Texture[] | null = null;
+loadFrameStrip(blockedPipeUrl, 7, 'y').then((f) => { blockedPipeFrames = f; }).catch(() => { /* fallback */ });
+loadFrameStrip(honeyVatUrl, 7, 'y').then((f) => { honeyVatFrames = f; }).catch(() => { /* fallback */ });
 
 /** A cafeteria break in progress for one agent — set by the coffee-break
  *  director, cleared when the agent leaves or gets pulled back to work. */
@@ -1605,6 +1616,24 @@ export function OfficeFloor() {
         st.requestCommandCenterTab('tasks');
       });
       charLayer.addChild(boardG);
+
+      // Hive board props (pipe + vat) ride a sibling container so boardG.clear()
+      // in drawTaskBoard doesn't wipe them — the draw fns just swap the frame.
+      const boardProps = new Container();
+      boardProps.eventMode = 'none';
+      boardProps.position.copyFrom(boardG.position);
+      boardProps.zIndex = boardG.zIndex + 0.5;
+      const pipeSprite = new Sprite();
+      pipeSprite.position.set(0, -14);
+      pipeSprite.visible = false;
+      const vatSprite = new Sprite();
+      vatSprite.position.set(62, 0);
+      vatSprite.visible = false;
+      if (isHiveTheme) {
+        boardProps.addChild(pipeSprite, vatSprite);
+        charLayer.addChild(boardProps);
+      }
+
       // One small Graphics per desk currently holding a taken note.
       const deskNoteG = new Map<string, Graphics>();
       const clearDeskNotes = (): void => {
@@ -1632,6 +1661,12 @@ export function OfficeFloor() {
       };
 
       const drawHiveBlockedPipe = (count: number): void => {
+        // Authored sprite: a wax-rimmed drain, one frame per blocked count 0..6.
+        if (blockedPipeFrames) {
+          pipeSprite.texture = blockedPipeFrames[Math.min(count, 6)];
+          pipeSprite.visible = true;
+          return;
+        }
         const pipeX = 4;
         const pipeWidth = 12;
         const pipeHeight = 26;
@@ -1719,6 +1754,12 @@ export function OfficeFloor() {
       };
 
       const drawHiveHoneyVat = (doneCount: number): void => {
+        // Authored sprite: a coopered barrel filling with honey, frame per count 0..6.
+        if (honeyVatFrames) {
+          vatSprite.texture = honeyVatFrames[Math.min(doneCount, 6)];
+          vatSprite.visible = true;
+          return;
+        }
         const vatX = 68;
         const vatWidth = 18;
         const vatHeight = 14;
