@@ -122,11 +122,15 @@ import {
 } from '../shared/codexRemote';
 
 // First executable statement in the main process, ahead of any window or
-// Notification. Windows attributes every toast to the process AppUserModelId;
-// left unset, dev builds (electron.exe) fall back to "electron.app.Electron".
-// Pin it to the exact name the user should see. electron-builder.yml sets the
-// same string as the NSIS shortcut's AUMID so packaged builds also get the icon.
-app.setAppUserModelId('The Hive');
+// Notification. Windows attributes every toast AND taskbar group to the
+// process AppUserModelId; left unset, dev builds (electron.exe) fall back to
+// "electron.app.Electron". A dotted id (e.g. "dev.thehive.app") failed UAT
+// here before (07edf8c2): Windows shows the raw AUMID as the toast/taskbar
+// name when there's no registered shortcut to resolve a friendly name from,
+// which happens for the unpackaged dev binary. So both ids stay human-
+// readable; only dev gets a distinct suffix so it no longer groups with the
+// packaged app in the taskbar.
+app.setAppUserModelId(app.isPackaged ? 'The Hive' : 'The Hive (Dev)');
 app.name = 'The Hive';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
@@ -3881,6 +3885,15 @@ function skillsResourceDir(): string {
     : join(app.getAppPath(), 'resources', 'skills');
 }
 
+/** Packaged builds inherit the Hive icon from the exe itself (electron-builder.yml
+ *  `win.icon`), so BrowserWindow needs nothing extra there. Dev runs through the
+ *  stock `electron.exe` binary, which shows Electron's default icon unless the
+ *  window icon is set explicitly — `build/icon.ico` isn't packaged as a resource,
+ *  so this only resolves from the repo checkout. */
+function windowIconPath(): string | undefined {
+  return app.isPackaged ? undefined : join(app.getAppPath(), 'build', 'icon.ico');
+}
+
 /** Where the helper discovers `{ port, token }` for the loopback endpoint. Kept
  *  under userData (NOT the git repo, NOT mined into MemPalace). */
 function slackReplyConfigPath(): string {
@@ -4755,6 +4768,7 @@ function createWindow(opts: { floor?: boolean } = {}): BrowserWindow {
     minWidth: MIN_WIN.width,
     minHeight: MIN_WIN.height,
     title: isFloor ? 'The Hive — Floor' : 'The Hive',
+    icon: windowIconPath(),
     backgroundColor: '#FFF8E7',
     titleBarStyle: 'hiddenInset',
     show: false,
