@@ -79,3 +79,66 @@ Pushed as a `humanQA` ask on the task card (see below) rather than guessed.
 Should this session build the missing `baseUrl`/`apiKeyRef` UI fields into
 `AiEnginesSettings.tsx` as a follow-up task once Dylan confirms the Foundry
 endpoint, or is that already someone else's card? Flagged to Abathur separately.
+
+## Update, 2026-09-02: the "unverified" path resolves without a code change
+
+Dylan's answer ("this was all in my existing config") checks out literally.
+`~/.codex/config.toml` (his real, personal one — not anything Hive-specific)
+already has the full Azure Foundry wiring:
+
+```
+model = "gpt-5-mini"
+model_provider = "azure-foundry"
+
+[model_providers.azure-foundry]
+name = "Azure AI Foundry"
+base_url = "https://lots-open-ai.services.ai.azure.com/openai/v1"
+env_key = "AZURE_OPENAI_KEY"
+wire_api = "responses"
+requires_openai_auth = false
+
+[[models]]
+id = "gpt-5-mini"
+name = "gpt-5-mini (Azure)"
+model_provider = "azure-foundry"
+```
+
+Two things this changes about the plan:
+
+1. **`installCodexHooks` (`hive.ts:~2463`) already copies this file verbatim**
+   into every per-agent `CODEX_HOME/config.toml` before appending the hive
+   `[hooks]`/`approval_policy`/trust sections — it reads
+   `join(userHome, 'config.toml')` as the seed, not a stripped-down template.
+   So `model_provider`/`model_providers`/`[[models]]` all survive into a hive
+   codex worker's config untouched. Nothing to wire here.
+2. **The API key needs no `apiKeyRef`/`safeStorage` plumbing at all.**
+   `AZURE_OPENAI_KEY` is set as a Windows **User**-level environment variable
+   (`setx`-style, persisted — confirmed via `[Environment]::GetEnvironmentVariable(...,"User")`),
+   so it's already in the Electron main process's `process.env`, and
+   `buildPtyEnv` (`ptyEnv.ts`) forwards the full parent env to every agent PTY
+   except Claude-identity-prefixed keys. It reaches a codex worker for free.
+
+Net: the `RuntimeProfile.baseUrl`/`apiKeyRef` → `OPENAI_BASE_URL`/`OPENAI_API_KEY`
+injection (`index.ts:~5559`) is real and works, but it's the wrong mechanism for
+this setup — it only overrides the *default* `openai` provider. Dylan's config
+uses a **named custom provider** (`azure-foundry`), which Codex resolves
+entirely from `config.toml`, ignoring `OPENAI_BASE_URL`. Setting
+`baseUrl`/`apiKeyRef` on the two existing "Azure gpt-5-mini" / "Azure
+gpt-5-codex" `RuntimeProfile`s (`the-hive/config.json`) would be a no-op at
+best. Skipped it. The `AiEnginesSettings.tsx` UI gap above is still real but
+now looks like a separate, lower-priority feature (redirecting the *default*
+provider), not a blocker for Dylan's actual ask.
+
+**One real gap found:** the personal `config.toml`'s `[[models]]` table only
+maps `gpt-5-mini` → `azure-foundry`. The "Azure gpt-5-codex" `RuntimeProfile`
+(`the-hive/config.json`, id `dd196bb7-...`) has no matching entry. The
+top-level `model_provider = "azure-foundry"` default may still route an
+unmapped model id there correctly — genuinely unverified, not guessed at.
+Raised as humanQA on the task card rather than either assuming it's fine or
+editing Dylan's personal codex config on spec.
+
+**Not done, deliberately:** no live `codex exec` call against the real Foundry
+endpoint. That's a network request to an external system per the worker
+external-action gate, and this task's dispatch didn't name that command
+explicitly — left for Dylan (or an Overmind-approved follow-up) to trigger by
+just using the existing "Azure gpt-5-mini" profile.
