@@ -446,6 +446,10 @@ export class HiveManager {
   enabled(): boolean {
     return this.root() !== null;
   }
+  agentDirectory(id: string): string | null {
+    const root = this.root();
+    return root ? join(root, 'agents', id) : null;
+  }
   private agentDir(id: string): string {
     return join(this.root()!, 'agents', id);
   }

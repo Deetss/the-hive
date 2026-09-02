@@ -7306,6 +7306,11 @@ ipcMain.handle('hive:agentDirectory', () => {
   return { godId: reg.godId, agents };
 });
 
+ipcMain.handle('hive:getTouchedLedger', (_evt, agentId: unknown) => {
+  if (typeof agentId !== 'string') return [];
+  return hookServer.touchedLedger(agentId);
+});
+
 // ─── IPC: live telemetry (the OTel collector — the locked usage-provider seam) ─
 // The fleet grid + span waterfall (#7B) read these; Lane A's breaker (#6)
 // consumes getAgentUsage in-process via the provider, not over IPC.

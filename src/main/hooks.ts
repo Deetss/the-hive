@@ -11,7 +11,8 @@
  * Runs in the Electron main process.
  */
 import { createServer, type Server } from 'node:net';
-import { existsSync, rmSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { Notification, type WebContents } from 'electron';
 import { showFocusNotification } from './notify';
 import type { HiveManager } from './hive';
@@ -53,6 +54,18 @@ interface HookPayload {
   cache_creation?: number;
 }
 
+export type TouchedVerb = 'create' | 'write' | 'edit' | 'delete';
+
+export interface TouchedLedgerEntry {
+  path: string;
+  verb: TouchedVerb;
+  ts: string;
+  insideRepo: boolean;
+  relativePath?: string;
+}
+
+const MAX_TOUCHED_ENTRIES = 200;
+
 export class HookServer {
   private server: Server | null = null;
   /** agentId → the live session's transcript file, learned from hook payloads.
@@ -80,6 +93,10 @@ export class HookServer {
   /** agentId → last model id seen on the statusline; dedupes hive:modelUpdate so
    *  the store is written only when a manual /model change actually flips it. */
   private lastModelById = new Map<string, string>();
+  /** agentId → most recent touched-ledger entries (bounded) */
+  private touchedLedgerById = new Map<string, TouchedLedgerEntry[]>();
+  /** agentIds whose touched-ledger file has been loaded into memory */
+  private touchedLoaded = new Set<string>();
 
   constructor(
     private hive: HiveManager,
@@ -141,6 +158,11 @@ export class HookServer {
    *  window size), or undefined if no statusLine tick has fired for it yet. */
   contextFor(agentId: string): { tokens: number; limit: number; ts: number } | undefined {
     return this.contextById.get(agentId);
+  }
+
+  touchedLedger(agentId: string): TouchedLedgerEntry[] {
+    const list = this.loadTouchedLedger(agentId);
+    return [...list].sort((a, b) => (a.ts < b.ts ? 1 : (a.ts > b.ts ? -1 : 0)));
   }
 
   /** All agents' most-recent rate-limit entries, keyed by agent id. */
@@ -297,6 +319,7 @@ export class HookServer {
     if (event === 'PostToolUse' && agentId) {
       if (p.tool_name) this.lastToolById.set(agentId, p.tool_name);
       this.breaker?.recordToolUse(agentId, p.tool_name, p.tool_input);
+      this.captureTouched(agentId, typeof p.tool_name === 'string' ? p.tool_name : undefined, p.tool_input);
 
       // Tool call counter enforcement: track total tool calls per session and
       // enforce repeatedToolLimit to prevent runaway sessions (e.g. 21k+ tool calls).
@@ -510,5 +533,445 @@ export class HookServer {
       message: p.message,
       blocked
     });
+  }
+
+  private recordTouchedEntries(agentId: string, entries: TouchedLedgerEntry[]): void {
+    if (!entries.length) return;
+    const list = this.loadTouchedLedger(agentId);
+    list.push(...entries);
+    if (list.length > MAX_TOUCHED_ENTRIES) {
+      list.splice(0, list.length - MAX_TOUCHED_ENTRIES);
+    }
+    this.touchedLedgerById.set(agentId, list);
+    this.appendTouchedFile(agentId, entries);
+    this.getWebContents()?.send('hive:touchedUpdate', { agentId, entries });
+  }
+
+  private appendTouchedFile(agentId: string, entries: TouchedLedgerEntry[]): void {
+    const file = this.touchedFilePath(agentId);
+    if (!file) return;
+    try {
+      mkdirSync(dirname(file), { recursive: true });
+      const payload = entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n';
+      appendFileSync(file, payload, 'utf8');
+    } catch (err) {
+      console.error('[hooks] failed to append touched ledger for', agentId, err);
+    }
+  }
+
+  private loadTouchedLedger(agentId: string): TouchedLedgerEntry[] {
+    const existing = this.touchedLedgerById.get(agentId);
+    if (this.touchedLoaded.has(agentId)) {
+      return existing ?? [];
+    }
+
+    let entries: TouchedLedgerEntry[] = existing ?? [];
+    const file = this.touchedFilePath(agentId);
+    if (file && existsSync(file)) {
+      try {
+        const raw = readFileSync(file, 'utf8');
+        if (raw) {
+          const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
+          const start = lines.length > MAX_TOUCHED_ENTRIES ? lines.length - MAX_TOUCHED_ENTRIES : 0;
+          const parsed: TouchedLedgerEntry[] = [];
+          for (let i = start; i < lines.length; i++) {
+            try {
+              const entry = JSON.parse(lines[i]) as TouchedLedgerEntry;
+              if (entry && typeof entry.path === 'string' && typeof entry.verb === 'string' && typeof entry.ts === 'string' && typeof entry.insideRepo === 'boolean') {
+                parsed.push(entry);
+              }
+            } catch { /* ignore malformed lines */ }
+          }
+          entries = parsed;
+        }
+      } catch (err) {
+        console.error('[hooks] failed to read touched ledger for', agentId, err);
+      }
+    }
+
+    this.touchedLedgerById.set(agentId, entries);
+    this.touchedLoaded.add(agentId);
+    return entries;
+  }
+
+  private touchedFilePath(agentId: string): string | null {
+    const dir = this.hive.agentDirectory(agentId);
+    return dir ? join(dir, 'touched.jsonl') : null;
+  }
+
+  private agentWorkspace(agentId: string): string | null {
+    try {
+      const reg = this.hive.registry();
+      const agent = reg.agents?.[agentId] as { worktreePath?: string; cwd?: string } | undefined;
+      if (!agent) return null;
+      const root = agent.worktreePath || agent.cwd;
+      return (typeof root === 'string' && root) ? root : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private computeInside(workspace: string, target: string): { inside: boolean; relative?: string } {
+    const normWorkspace = normalize(workspace);
+    const normTarget = normalize(target);
+    const ensureSuffix = (value: string, sep: string): string => (value.endsWith(sep) ? value : `${value}${sep}`);
+
+    if (process.platform === 'win32') {
+      const base = normWorkspace.toLowerCase();
+      const targetLower = normTarget.toLowerCase();
+      if (targetLower === base) return { inside: true, relative: '.' };
+      const baseWithSep = ensureSuffix(base, '\\');
+      if (targetLower.startsWith(baseWithSep)) {
+        const rel = normTarget.slice(baseWithSep.length).replace(/\\/g, '/');
+        return { inside: true, relative: rel }; // rel never empty here
+      }
+      return { inside: false };
+    }
+
+    if (normTarget === normWorkspace) return { inside: true, relative: '.' };
+    const baseWithSep = ensureSuffix(normWorkspace, '/');
+    if (normTarget.startsWith(baseWithSep)) {
+      const rel = normTarget.slice(baseWithSep.length).replace(/\\/g, '/');
+      return { inside: true, relative: rel };
+    }
+    return { inside: false };
+  }
+
+  private resolveTouchedPath(agentId: string, candidate: string): (Omit<TouchedLedgerEntry, 'verb' | 'ts'>) | null {
+    if (!candidate.trim()) return null;
+    const workspace = this.agentWorkspace(agentId);
+    let absolute: string;
+    try {
+      if (isAbsolute(candidate)) {
+        absolute = normalize(candidate);
+      } else if (workspace) {
+        absolute = normalize(resolve(workspace, candidate));
+      } else {
+        return null;
+      }
+    } catch {
+      return null;
+    }
+
+    if (!workspace) {
+      return { path: absolute, insideRepo: false };
+    }
+
+    const { inside, relative: rel } = this.computeInside(workspace, absolute);
+    if (inside) {
+      return rel && rel !== '.'
+        ? { path: absolute, insideRepo: true, relativePath: rel }
+        : { path: absolute, insideRepo: true, relativePath: '.' };
+    }
+    return { path: absolute, insideRepo: false };
+  }
+
+  private extractFilePath(input: Record<string, unknown>): string | null {
+    const paths = ['file_path', 'path', 'filepath'];
+    for (const key of paths) {
+      const value = input[key];
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+    return null;
+  }
+
+  private captureTouched(agentId: string, toolName: string | undefined, toolInput: unknown): void {
+    if (!toolName) return;
+
+    const name = toolName.toLowerCase();
+    const now = new Date().toISOString();
+    const entries: TouchedLedgerEntry[] = [];
+    const input = (toolInput && typeof toolInput === 'object') ? toolInput as Record<string, unknown> : {};
+
+    const WRITE_TOOLS = new Set([
+      'write', 'writefile', 'write_file', 'writetofile', 'createfile', 'create_file',
+      'appendfile', 'savefile', 'overwritefile', 'applyedit'
+    ]);
+    const EDIT_TOOLS = new Set([
+      'edit', 'editfile', 'edit_file', 'updatefile', 'update_file', 'rewritefile',
+      'replacefile', 'modifyfile', 'notebookedit'
+    ]);
+    const DELETE_TOOLS = new Set(['deletefile', 'delete_file', 'removefile', 'remove_file', 'rmfile']);
+    const CREATE_TOOLS = new Set(['createfile', 'create_file', 'touchfile', 'touch_file']);
+
+    const isApplyPatch = name === 'applypatch' || name === 'apply_patch' || name === 'patch';
+    const isBash = name === 'bash' || name === 'shell';
+
+    const collectFilePath = (verb: TouchedVerb) => {
+      const path = this.extractFilePath(input);
+      if (!path) return;
+      const resolved = this.resolveTouchedPath(agentId, path);
+      if (resolved) entries.push({ ...resolved, verb, ts: now });
+    };
+
+    if (WRITE_TOOLS.has(name) || CREATE_TOOLS.has(name)) {
+      collectFilePath(name === 'createfile' || name === 'create_file' || CREATE_TOOLS.has(name) ? 'create' : 'write');
+    } else if (EDIT_TOOLS.has(name)) {
+      collectFilePath('edit');
+    } else if (DELETE_TOOLS.has(name)) {
+      collectFilePath('delete');
+    } else if (isApplyPatch) {
+      entries.push(...this.parsePatchTouched(agentId, input, now));
+    } else if (isBash) {
+      const command = typeof input.command === 'string' ? input.command : '';
+      entries.push(...this.parseBashTouched(agentId, command, now));
+    }
+
+    if (entries.length > 0) {
+      this.recordTouchedEntries(agentId, entries);
+    }
+  }
+
+  private parsePatchTouched(agentId: string, input: Record<string, unknown>, ts: string): TouchedLedgerEntry[] {
+    const entries: TouchedLedgerEntry[] = [];
+    const addPath = (candidate: string) => {
+      const resolved = this.resolveTouchedPath(agentId, candidate);
+      if (resolved) entries.push({ ...resolved, verb: 'edit', ts });
+    };
+
+    const patchStrings: string[] = [];
+    if (typeof input.patch === 'string') patchStrings.push(input.patch);
+    if (Array.isArray(input.patches)) {
+      for (const p of input.patches) {
+        if (typeof p === 'string') patchStrings.push(p);
+      }
+    }
+
+    for (const patch of patchStrings) {
+      const lines = patch.split(/\r?\n/);
+      for (const line of lines) {
+        if (line.startsWith('+++ ')) {
+          const path = line.slice(4).trim();
+          if (!path || path === '/dev/null') continue;
+          const normal = path.startsWith('b/') ? path.slice(2) : path;
+          addPath(normal);
+        }
+      }
+    }
+
+    return entries;
+  }
+
+  private parseBashTouched(agentId: string, command: string, ts: string): TouchedLedgerEntry[] {
+    if (!command || !command.trim()) return [];
+    const entries: TouchedLedgerEntry[] = [];
+    const pushPath = (candidate: string, verb: TouchedVerb): void => {
+      const resolved = this.resolveTouchedPath(agentId, candidate);
+      if (resolved) entries.push({ ...resolved, verb, ts });
+    };
+
+    const redirectRegex = /(?:^|\s)(?:\d*>|>>?)(?:\s*)('([^']+)'|"([^"]+)"|([^\s&|;<>]+))/g;
+    let match: RegExpExecArray | null;
+    while ((match = redirectRegex.exec(command)) !== null) {
+      const candidate = (match[2] ?? match[3] ?? match[4] ?? '').trim();
+      if (!candidate) continue;
+      const lower = candidate.toLowerCase();
+      if (lower === '/dev/null' || lower === 'nul') continue;
+      if (candidate.startsWith('&')) continue;
+      pushPath(candidate, 'write');
+    }
+
+    const tokens = this.tokenizeCommand(command);
+    if (tokens.length === 0) return entries;
+    const cmdRaw = tokens[0];
+    const cmd = cmdRaw.toLowerCase();
+    const rest = tokens.slice(1);
+
+    const { positional, named } = this.parsePowerShellArgs(rest);
+    const args = this.dropOptionArgs(rest);
+
+    const firstNamed = (...keys: string[]): string | undefined => {
+      for (const key of keys) {
+        const value = named.get(key);
+        if (value && value.length) return value[0];
+      }
+      return undefined;
+    };
+
+    switch (cmd) {
+      case 'mv':
+      case 'move':
+      case 'move-item': {
+        if (args.length >= 2) {
+          const dest = args[args.length - 1];
+          const sources = args.slice(0, -1);
+          if (sources.length > 0) {
+            pushPath(dest, 'write');
+            for (const src of sources) pushPath(src, 'delete');
+          }
+        }
+        if (cmd === 'move-item') {
+          const src = firstNamed('path', 'literalpath', 'source', 'inputpath');
+          const dest = firstNamed('destination', 'dest');
+          if (dest) pushPath(dest, 'write');
+          if (src) pushPath(src, 'delete');
+        }
+        break;
+      }
+      case 'cp':
+      case 'copy':
+      case 'copy-item': {
+        if (args.length >= 2) {
+          const dest = args[args.length - 1];
+          pushPath(dest, 'write');
+        }
+        if (cmd === 'copy-item') {
+          const dest = firstNamed('destination', 'dest');
+          if (dest) pushPath(dest, 'write');
+        }
+        break;
+      }
+      case 'rm':
+      case 'del':
+      case 'erase':
+      case 'remove-item': {
+        if (cmd === 'remove-item') {
+          const target = firstNamed('path', 'literalpath', 'inputobject');
+          if (target) pushPath(target, 'delete');
+        }
+        for (const target of args) pushPath(target, 'delete');
+        break;
+      }
+      case 'touch': {
+        for (const target of args) pushPath(target, 'write');
+        break;
+      }
+      case 'mkdir':
+      case 'md':
+      case 'new-item': {
+        for (const target of args) pushPath(target, 'create');
+        if (cmd === 'new-item') {
+          const target = firstNamed('path', 'literalpath', 'name');
+          if (target) pushPath(target, 'create');
+        }
+        break;
+      }
+      case 'tee': {
+        for (const target of args) {
+          if (target === '-' || target === '|') break;
+          pushPath(target, 'write');
+        }
+        break;
+      }
+      case 'sed': {
+        if (args.length > 0) {
+          const candidate = args[args.length - 1];
+          pushPath(candidate, 'edit');
+        }
+        break;
+      }
+      case 'set-content':
+      case 'setcontent':
+      case 'add-content':
+      case 'addcontent':
+      case 'clear-content':
+      case 'clearcontent':
+      case 'out-file':
+      case 'outfile': {
+        const target = firstNamed('path', 'literalpath', 'filepath', 'file', 'inputobject') ?? positional[0];
+        if (target) {
+          const verb: TouchedVerb = (cmd === 'clear-content' || cmd === 'clearcontent') ? 'edit' : 'write';
+          pushPath(target, verb);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i] !== 'tee') continue;
+      if (i === 0) continue; // already handled above
+      const teeArgs = this.dropOptionArgs(tokens.slice(i + 1));
+      for (const target of teeArgs) {
+        if (target === '-' || target === '|') break;
+        pushPath(target, 'write');
+      }
+    }
+
+    return entries;
+  }
+
+  private dropOptionArgs(args: string[]): string[] {
+    const result: string[] = [];
+    let acceptOptions = true;
+    for (const arg of args) {
+      if (acceptOptions && arg === '--') {
+        acceptOptions = false;
+        continue;
+      }
+      if (arg === '|' || arg === ';') break;
+      if (acceptOptions && arg.startsWith('-')) continue;
+      result.push(arg);
+    }
+    return result;
+  }
+
+  private parsePowerShellArgs(args: string[]): { positional: string[]; named: Map<string, string[]> } {
+    const positional: string[] = [];
+    const named = new Map<string, string[]>();
+    for (let i = 0; i < args.length; i++) {
+      const token = args[i];
+      if (token === '|' || token === ';') break;
+      if (token.startsWith('-')) {
+        const key = token.replace(/^-+/, '').toLowerCase();
+        const next = args[i + 1];
+        if (next && !next.startsWith('-') && next !== '|' && next !== ';') {
+          const list = named.get(key) ?? [];
+          list.push(next);
+          named.set(key, list);
+          i++;
+        } else {
+          named.set(key, named.get(key) ?? []);
+        }
+      } else {
+        positional.push(token);
+      }
+    }
+    return { positional, named };
+  }
+
+  private tokenizeCommand(command: string): string[] {
+    const tokens: string[] = [];
+    let current = '';
+    let quote: '"' | "'" | null = null;
+    for (let i = 0; i < command.length; i++) {
+      const ch = command[i];
+      if (quote) {
+        if (ch === quote) {
+          quote = null;
+        } else {
+          current += ch;
+        }
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        continue;
+      }
+      if (ch === '|' || ch === ';') {
+        if (current) {
+          tokens.push(current);
+          current = '';
+        }
+        tokens.push(ch);
+        continue;
+      }
+      if (/\s/.test(ch)) {
+        if (current) {
+          tokens.push(current);
+          current = '';
+        }
+        continue;
+      }
+      current += ch;
+    }
+    if (quote) {
+      // unterminated quote — treat as literal
+      tokens.push(current);
+    } else if (current) {
+      tokens.push(current);
+    }
+    return tokens;
   }
 }
