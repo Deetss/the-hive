@@ -89,7 +89,7 @@ export function AppChromeControls() {
 
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-      <UpdateBadge placement="up" />
+      <UpdateBadge placement="down" />
       {autoMode !== null && (
         <span
           title={autoMode ? 'Auto-delivery is on for the floor' : 'Auto-delivery is off'}

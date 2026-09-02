@@ -19,6 +19,7 @@ import { useRestoreTeam } from '@/hooks/useRestoreTeam';
 import { useTerminalFontSize } from './terminalFontSize';
 import { useHasTerminalDraft, disposeTerminal, reflowTerminal, notifyThemeChangeAll } from './terminalPool';
 import { StatusBar } from './StatusBar';
+import { AppChromeControls } from './AppChromeControls';
 import { GitTab } from './GitTab';
 import { FilesTab } from './FilesTab';
 import { useAppTheme, toggleAppTheme } from '@/design/theme';
@@ -842,6 +843,7 @@ function Header({ agent, onEdit }: { agent: Agent; onEdit: () => void }) {
           status={typing ? 'typing' : agent.status}
           style={{ height: 24, padding: '0 8px', lineHeight: '24px' }}
         />
+        <AppChromeControls />
         {!agent.isOvermind && (
           <PixelButton variant="destructive" size="sm" onClick={onKill}>
             {/* inline-flex + center: the other buttons hold TEXT, whose line box

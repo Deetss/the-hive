@@ -20,6 +20,7 @@ import { UpdateToast } from '@/components/UpdateToast';
 import { SettingsModal, type Section as SettingsSection } from '@/components/SettingsModal';
 import { PixelPanel } from '@/components/PixelPanel';
 import { PixelButton } from '@/components/PixelButton';
+import { AppChromeControls } from '@/components/AppChromeControls';
 import { Icon } from '@/components/Icon';
 import { SidebarSplitter } from '@/components/SidebarSplitter';
 import { acquireTerminal } from '@/components/terminalPool';
@@ -524,6 +525,12 @@ export function App() {
           position: 'relative'
         }}>
           <OfficeFloor />
+          <div style={{
+            position: 'absolute', top: 10, right: 10, zIndex: 40,
+            display: 'flex', alignItems: 'center'
+          }}>
+            <AppChromeControls />
+          </div>
           <MemoryPanel />
           {agentCount === 0 && godStatus === 'booting' && <AbathurBooting />}
           {agentCount === 0 && godStatus !== 'booting' && (
