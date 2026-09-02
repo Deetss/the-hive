@@ -4962,20 +4962,11 @@ function maybeScheduleResumeNudge(opts: AgentSpawnOptions): void {
   const ptyId = opts.id;
   const rememberPath = join(opts.cwd, '.remember', 'remember.md');
   setTimeout(() => {
-    try {
-      if (!existsSync(rememberPath)) return;
-      // Text first, Enter a tick later (the submitToPty pattern): a single-chunk
-      // write lands the "\r" inside the input box and never submits (see nudgeWorker).
-      const wrote = ptyManager.write(ptyId, '\nYour last session handoff is in .remember/remember.md. Read it now and resume your previous work.\n');
-      if (!wrote.ok) { console.warn(`[resume-nudge] write failed for ${ptyId}: ${wrote.error}`); return; }
-      setTimeout(() => {
-        try { ptyManager.write(ptyId, '\r'); }
-        catch (e) { console.error('[resume-nudge] submit threw:', e); }
-      }, 140);
-    } catch (e) {
-      console.error('[resume-nudge] failed:', e);
-    }
-  }, 15_000);
+    if (!existsSync(rememberPath)) return;
+    // typeAndSubmit waits for the readline to be idle before it types + submits,
+    // so a slow boot no longer leaves the nudge sitting unsubmitted.
+    void typeAndSubmit(ptyId, 'Your last session handoff is in .remember/remember.md. Read it now and resume your previous work.');
+  }, 5_000);
 }
 
 ipcMain.handle('pty:spawn', async (evt, opts: AgentSpawnOptions) => {
@@ -5603,11 +5594,12 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
       const rearm = () => { try { webContents?.send(`pty:relaunch:${overmindPtyId}`); } catch { /* window gone */ } };
       rearm();
       setTimeout(rearm, 600);
-      setTimeout(() => {
-        try {
-          ptyManager.write(overmindPtyId, `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.\r`);
-        } catch { /* best-effort */ }
-      }, 1500);
+      // Type + submit the re-orientation only once the fresh Claude readline is
+      // idle. The old code wrote the prompt AND a trailing "\r" in one chunk at a
+      // fixed 1.5s — the TUI took that as a paste, so the "\r" was a newline in
+      // the box and the prompt just sat there unsubmitted until the next inbox
+      // nudge's Enter ran it.
+      void typeAndSubmit(overmindPtyId, `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.`);
       return { ok: true };
     }
 
@@ -8256,27 +8248,16 @@ async function processSpawnRequest(filePath: string): Promise<void> {
     console.error('[worker] dispatch send failed:', e);
   }
 
-  // Deliver the objective as soon as the worker is actually ready, not on a fixed
-  // timer. A nudge fired while Claude is still booting is acked out of the queue
-  // before its readline exists (wasted turn), which is why the old code waited a
-  // blanket 10s; but that also made every worker sit idle for 10s, and if boot
-  // ran long the nudge still missed and the task waited for unrelated inbox
-  // traffic. Poll instead: fire once the TUI has printed something and then gone
-  // quiet (readline settled), with a hard fallback so a silent boot still lands.
-  const FIRST_WAKE_QUIET_MS = 2500;
-  const FIRST_WAKE_MAX_MS = 14_000;
-  const firstWakeStart = Date.now();
-  const firstWakeTimer = setInterval(() => {
-    if (!liveWorkers.has(workerId)) { clearInterval(firstWakeTimer); return; }
+  // Deliver the objective as soon as the worker is ready. nudgeWorker →
+  // typeAndSubmit waits for the readline to be idle before it types + submits,
+  // so the first nudge can't be swallowed mid-boot; here we only decide WHEN to
+  // attempt it (a short beat after spawn) and skip it entirely if the worker
+  // drains its own inbox first.
+  setTimeout(() => {
+    if (!liveWorkers.has(workerId)) return;
     const pending = hive.inbox(workerId).map((m) => m.id).filter(Boolean);
-    if (!pending.length) { clearInterval(firstWakeTimer); return; }
-    const sess = ptyManager.list().find((p) => p.id === workerId);
-    const booted = !!sess?.hasOutput && Date.now() - (sess.lastOutputAt || 0) >= FIRST_WAKE_QUIET_MS;
-    if (booted || Date.now() - firstWakeStart >= FIRST_WAKE_MAX_MS) {
-      clearInterval(firstWakeTimer);
-      nudgeWorker(workerId, pending);
-    }
-  }, 1000);
+    if (pending.length) nudgeWorker(workerId, pending);
+  }, 2000);
 
   console.log(`[worker] spawned ${workerId} (cwd=${cwd}, base=${baseBranch}${slack ? ', slack' : ''})`);
   archiveRequest(filePath, '.done');
@@ -8815,22 +8796,53 @@ function bootstrapHiveServices(): void {
 const WORKER_WAKE_POLL_MS = 15_000;
 let workerWakeTimer: ReturnType<typeof setInterval> | null = null;
 
-/** Type the renderer's guarded nudge into one worker's PTY — text first, Enter a
- *  tick later (the exact submitToPty pattern: a single-chunk write would land the
- *  "\r" inside the input box and never submit). Best-effort + never throws. */
+/** Resolve once a PTY's TUI has printed something and then been quiet for
+ *  `quietMs` — its readline is up and idle, ready to accept a submitted line.
+ *  `minMs` guards against an early-boot pause reading as "settled". Best-effort:
+ *  resolves anyway after `maxMs`, or immediately if the pty is gone. The
+ *  main-process analogue of the renderer's waitForTerminalReady. */
+function whenPtyReadlineIdle(ptyId: string, quietMs = 2500, maxMs = 15_000, minMs = 3000): Promise<void> {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const tick = (): void => {
+      const s = ptyManager.list().find((p) => p.id === ptyId);
+      if (!s) { resolve(); return; }
+      const elapsed = Date.now() - start;
+      const idle = elapsed >= minMs && s.hasOutput && Date.now() - (s.lastOutputAt || 0) >= quietMs;
+      if (idle || elapsed >= maxMs) { resolve(); return; }
+      setTimeout(tick, 250);
+    };
+    tick();
+  });
+}
+
+/** Type `text` into a PTY's TUI and SUBMIT it, once the readline is confirmed
+ *  idle. The text and the trailing Enter go as SEPARATE writes: a single chunk
+ *  containing "\r" is treated as a paste, so the "\r" lands as a newline inside
+ *  the input box and the line never submits (the crux of the "prompt typed but
+ *  not run" bug). Multi-line text is bracketed-paste wrapped so its own newlines
+ *  don't submit early. Best-effort + never throws. */
+async function typeAndSubmit(ptyId: string, text: string): Promise<void> {
+  try {
+    await whenPtyReadlineIdle(ptyId);
+    if (!ptyManager.list().some((p) => p.id === ptyId)) return; // pty gone while waiting
+    const payload = text.includes('\n') ? `\x1b[200~${text}\x1b[201~` : text;
+    const wrote = ptyManager.write(ptyId, payload);
+    if (!wrote.ok) { console.warn(`[pty-submit] write failed for ${ptyId}: ${wrote.error}`); return; }
+    await new Promise((r) => setTimeout(r, 160));
+    const submitted = ptyManager.write(ptyId, '\r');
+    if (!submitted.ok) console.warn(`[pty-submit] submit failed for ${ptyId}: ${submitted.error}`);
+  } catch (e) { console.error('[pty-submit] threw:', e); }
+}
+
+/** Type the renderer's guarded nudge into one worker's PTY and submit it once
+ *  the readline is ready. Best-effort + never throws. */
 function nudgeWorker(ptyId: string, ids: string[] = []): void {
   // Same text the renderer queues (#187's inboxNudgeText), so the two wake paths
   // produce byte-identical nudges: the queue's one-pending rule recognises either
   // via isInboxNudge, and a watchdog nudge names its ids so the agent can still
   // tell "I filed this last turn" from "woken for nothing".
-  const wrote = ptyManager.write(ptyId, inboxNudgeText(ids));
-  if (!wrote.ok) { console.warn(`[worker-wake] write failed for ${ptyId}: ${wrote.error}`); return; }
-  setTimeout(() => {
-    try {
-      const submitted = ptyManager.write(ptyId, '\r');
-      if (!submitted.ok) console.warn(`[worker-wake] submit failed for ${ptyId}: ${submitted.error}`);
-    } catch (e) { console.error('[worker-wake] submit threw:', e); }
-  }, 140);
+  void typeAndSubmit(ptyId, inboxNudgeText(ids));
 }
 
 /** Main-process inbox-wake beat (issue #151, fix A): the renderer's idle nudge
