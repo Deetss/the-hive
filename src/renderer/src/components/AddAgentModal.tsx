@@ -113,6 +113,31 @@ const DESCRIPTION_TEMPLATES: { label: string; description: string; goal: string 
     label: 'Perf profiler',
     description: 'finds and fixes bottlenecks',
     goal: 'Measure before changing anything: profile the hot path, identify the real bottleneck with evidence, then propose concrete optimizations and confirm they actually help.'
+  },
+  {
+    label: 'Software engineer',
+    description: 'implements features end-to-end',
+    goal: 'Take a feature or change from requirements to a working commit: understand what is being asked, write the code, cover the edge cases, run the build and tests, and leave the tree green. Ask before expanding scope.'
+  },
+  {
+    label: 'Senior engineer',
+    description: 'weighs the approach before coding',
+    goal: 'Start by asking whether this is the right approach: consider the architecture, the maintenance cost, and simpler alternatives, then implement the option you would defend in review. Keep changes small and reversible.'
+  },
+  {
+    label: 'Pair programmer',
+    description: 'thinks through problems with you',
+    goal: 'Work through the problem out loud with the user: restate the goal, talk through the logic and the tradeoffs, spot the flaw before it ships, and only then write the code together. Rubber-duck freely.'
+  },
+  {
+    label: 'Frontend dev',
+    description: 'builds and polishes the UI',
+    goal: 'Own the interface: build and refine React components, styling, and interaction, keep the layout responsive and accessible, and check behavior across browsers. Match the existing component patterns in the repo.'
+  },
+  {
+    label: 'Backend dev',
+    description: 'builds server-side logic',
+    goal: 'Own the server side: API endpoints, data models and migrations, business logic, and performance. Validate input at the boundary, use parameterized queries, and keep error handling explicit.'
   }
 ];
 
