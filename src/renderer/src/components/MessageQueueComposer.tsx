@@ -99,11 +99,11 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
 
-  // The composer always dispatches through BeeYoncé now; "send later" is the one
-  // exception — it parks the message in this agent's own queue instead. The
-  // act / project controls only apply to a real dispatch, so they hide when
-  // "send later" is on; priority still matters for a queued message.
-  const [target, setTarget] = useState('god');
+  // Default target is this agent's own queue — a direct message to whoever's
+  // composer you're looking at. Picking "BeeYoncé decides" or another agent's
+  // name from TO flips this into a structured dispatch routed through the
+  // Overmind instead; "send later" queues for this agent regardless of TO.
+  const [target, setTarget] = useState(agent.id);
   const [sendLater, setSendLater] = useState(false);
   const [dispAct, setDispAct] = useState<'request' | 'query' | 'inform'>('request');
   const [dispProject, setDispProject] = useState('');
@@ -304,7 +304,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     setTimeout(() => setDispMsg(null), 4000);
   };
 
-  const handleSend = () => { if (sendLater) queueIt(); else void dispatchIt(); };
+  const handleSend = () => { if (sendLater || target === agent.id) queueIt(); else void dispatchIt(); };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -441,6 +441,9 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)', flexShrink: 0 }}>TO</span>
         <select className="cth-input" value={target} onChange={(e) => setTarget(e.target.value)} style={selectStyle}>
+          {!agent.isOvermind && (
+            <option value={agent.id}>{agent.name} — direct message</option>
+          )}
           <option value="god">Dispatch · BeeYoncé decides</option>
           {agents.filter((a) => !a.isOvermind && a.id !== 'god' && a.id !== agent.id).map((a) => (
             <option key={a.id} value={a.id}>Dispatch · suggest {a.name}</option>
@@ -581,7 +584,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
           onPaste={onPaste}
           rows={5}
           placeholder={
-            sendLater
+            sendLater || target === agent.id
               ? `Message ${agent.name}… (queued — delivers when ready)`
               : 'Describe the task for BeeYoncé… (Enter to dispatch)'
           }
@@ -620,7 +623,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
           {freeflowEnabled && <FreeFlowButton agentId={agent.id} hasGroqKey={hasGroqKey} />}
           <PixelButton variant="primary" size="sm" onClick={handleSend} disabled={!canSend}>
             <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-              {sendLater ? 'send later' : 'dispatch'} <Icon name="arrow-right" />
+              {sendLater ? 'send later' : target === agent.id ? 'send' : 'dispatch'} <Icon name="arrow-right" />
             </span>
           </PixelButton>
         </div>
