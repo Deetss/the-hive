@@ -2185,8 +2185,13 @@ export function OfficeFloor() {
         // where an agent actually carried one).
         if (mapRenderer.gidAt('furniture-above', seatTile.x, seatTile.y - 2) === theme.monitor.offTopLeftGid) {
           const top = { x: seatTile.x, y: seatTile.y - 2 };
-          rt.screen = new DeskScreen(mapRenderer, top, theme.monitor);
-          charLayer.addChild(rt.screen.container);
+          // The hive theme paints its own honeycomb desks over the office ones and
+          // has no screen surface where DeskScreen draws, so its content lands on
+          // bare desk. Deferred to the hive-tileset pass — skip it here for now.
+          if (!isHiveTheme) {
+            rt.screen = new DeskScreen(mapRenderer, top, theme.monitor);
+            charLayer.addChild(rt.screen.container);
+          }
           const ts2 = mapRenderer.tileSize;
           character.setCupSpot({ x: top.x * ts2 + 18, y: top.y * ts2 + 23 });
         }
@@ -2404,16 +2409,20 @@ export function OfficeFloor() {
             for (const target of e.targets) spawnHandoff(e.from, target, e.act, e.needsHuman);
           })
         : () => { /* onHiveMessage unavailable — real handoffs disabled this session */ };
-      // Demo path: with no live hive, the mock loop dispatches synthetic handoffs
-      // so the animation is still visible. Clearly demo-only, fed by mockEvents.ts.
-      const onDemoHandoff = (ev: Event) => {
+      // Window-event handoffs, for envelopes that don't come from the hive
+      // router: `cth:demo-handoff` from the mock loop (no live hive), and
+      // `cth:handoff` from useHive when a human "send later" is delivered
+      // straight into an agent's PTY (never routed, so emitMessage never ran).
+      const onHandoffEvent = (ev: Event) => {
         const d = (ev as CustomEvent<{ from: string; to: string; act: MessageAct }>).detail;
         if (d) spawnHandoff(d.from, d.to, d.act, false);
       };
-      window.addEventListener('cth:demo-handoff', onDemoHandoff);
+      window.addEventListener('cth:demo-handoff', onHandoffEvent);
+      window.addEventListener('cth:handoff', onHandoffEvent);
       (app as any).__offMessage = () => {
         offMessage();
-        window.removeEventListener('cth:demo-handoff', onDemoHandoff);
+        window.removeEventListener('cth:demo-handoff', onHandoffEvent);
+        window.removeEventListener('cth:handoff', onHandoffEvent);
       };
 
       // Keep two nearby thought clouds from covering each other: stack the

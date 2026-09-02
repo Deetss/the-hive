@@ -253,6 +253,11 @@ export interface QueuedMessage {
    *  ONLY the pause gate in the drain loop — idle/draft/picker safety still hold,
    *  so it delivers the moment the terminal is actually free. */
   manual?: boolean;
+  /** This is a "send later" message the human typed straight into the composer
+   *  (not a hive route wrapped as terminal input). The drain flies a floor
+   *  envelope from the door to the agent when it's delivered, since it never
+   *  went through hive.route()/emitMessage the way a dispatch does. */
+  userDraft?: boolean;
   /** Delivery-time precondition, re-checked by the drain immediately before the
    *  message is typed; a message whose precondition no longer holds is DROPPED
    *  rather than deferred (deferring would park it at the queue head forever and
@@ -464,7 +469,7 @@ interface State {
   /** Park a message for an agent. Returns nothing; the flush loop delivers it.
    *  `meta.instruction`, when set, is what gets typed into the PTY instead of
    *  `text` (UI/card surfaces still show `text`). */
-  enqueueMessage: (agentId: string, text: string, meta?: { slack?: { channel: string; thread_ts: string }; instruction?: string; precondition?: QueuedMessage['precondition'] }) => void;
+  enqueueMessage: (agentId: string, text: string, meta?: { slack?: { channel: string; thread_ts: string }; instruction?: string; precondition?: QueuedMessage['precondition']; userDraft?: boolean }) => void;
   /** Drop a single queued message (user removed it, or it was just delivered). */
   updateQueuedMessage: (agentId: string, messageId: string, text: string) => void;
   removeQueuedMessage: (agentId: string, messageId: string) => void;
@@ -1181,7 +1186,8 @@ export const useStore = create<State>((set, get) => ({
         id: newQueuedId(), text: trimmed, ts: Date.now(),
         ...(meta?.slack ? { slack: meta.slack } : {}),
         ...(meta?.instruction ? { instruction: meta.instruction } : {}),
-        ...(meta?.precondition ? { precondition: meta.precondition } : {})
+        ...(meta?.precondition ? { precondition: meta.precondition } : {}),
+        ...(meta?.userDraft ? { userDraft: true } : {})
       };
       const messageQueues = { ...s.messageQueues, [agentId]: [...(s.messageQueues[agentId] ?? []), msg] };
       persistQueues(messageQueues);

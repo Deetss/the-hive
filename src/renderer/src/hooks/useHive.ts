@@ -882,6 +882,15 @@ export function useHive(config: HarnessConfig | null): void {
           ),
           () => {
             removeQueuedMessage(srcId, next.id);
+            // A "send later" the human typed straight into the composer never went
+            // through hive.route()/emitMessage, so nothing flew a floor envelope
+            // for it. Fly one now, door → agent, on the same hook the mock loop
+            // and the real hive:message handler feed.
+            if (next.userDraft) {
+              window.dispatchEvent(new CustomEvent('cth:handoff', {
+                detail: { from: 'human', to: target.id, act: 'request' as const },
+              }));
+            }
             // Zero the gauge on a DELIVERED /clear — the new session's context
             // isn't known until statusLine fires after the first post-clear
             // response, so leaving it at the old value shows a stale-full bar.

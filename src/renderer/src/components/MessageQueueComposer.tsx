@@ -98,12 +98,12 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
 
   // The composer always dispatches through BeeYoncé now; "send later" is the one
   // exception — it parks the message in this agent's own queue instead. The
-  // act/subject/priority controls only apply to a real dispatch, so they hide
-  // when "send later" is on.
+  // act / project controls only apply to a real dispatch, so they hide when
+  // "send later" is on; priority still matters for a queued message.
   const [target, setTarget] = useState('god');
   const [sendLater, setSendLater] = useState(false);
   const [dispAct, setDispAct] = useState<'request' | 'query' | 'inform'>('request');
-  const [dispSubject, setDispSubject] = useState('');
+  const [dispProject, setDispProject] = useState('');
   const [dispPriority, setDispPriority] = useState<'urgent' | 'normal' | 'backlog'>('normal');
   const [dispMsg, setDispMsg] = useState<string | null>(null);
   const [harnessHome, setHarnessHome] = useState<string | null>(null);
@@ -119,8 +119,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
 
   // A task-card / setup / GitHub-issue "assign" seeds a dispatch (shared store
   // action, previously consumed by the Floor form). The composer for the FOCUSED
-  // agent picks it up and prefills the body + subject from the task. The subject
-  // is taken fresh each time so a re-seed never carries the previous task's title.
+  // agent picks it up and prefills the body from the task.
   useEffect(() => {
     if (!dispatchSeedRequest) return;
     if (selectedId && agent.id !== selectedId) return;
@@ -132,7 +131,6 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     // whatever the user has already typed.
     if (dispatchSeedRequest.text) {
       setDraft(agent.id, dispatchSeedRequest.text);
-      setDispSubject(dispatchSeedRequest.text.split('\n')[0].slice(0, 60));
     }
     clearDispatchSeedRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,7 +207,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
 
   const queueIt = () => {
     if (!canSend) return;
-    enqueueMessage(agent.id, buildBody());
+    enqueueMessage(agent.id, buildBody(), { userDraft: true });
     resetComposer();
   };
 
