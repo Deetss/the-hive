@@ -87,6 +87,16 @@ export function StatusBar() {
   const { samples, rate, breakers } = useFleetTelemetry();
   const rateLimits = useRateLimits();
 
+  // Non-Claude engines (agy/Antigravity, codex) never emit OTel usage samples;
+  // main parses their PTY for tokens/cost/ctx% and pushes it here keyed by agent
+  // id. It's the fallback that lets the session chips below read for every
+  // engine, not just Claude.
+  const [fleetTok, setFleetTok] = useState<Record<string, { tokens: number; ctxPct: number | null; usd: number }>>({});
+  useEffect(() => {
+    if (!window.cth?.onFleetTokens) return;
+    return window.cth.onFleetTokens((data) => setFleetTok(data));
+  }, []);
+
   // One-time read of app-wide badge + profiles for per-agent badge resolution.
   const [accountBadge, setAccountBadge] = useState<'WORK' | 'PERSONAL' | null>(null);
   const [billingMode, setBillingMode] = useState<'subscription' | 'api' | null>(null);
@@ -170,19 +180,35 @@ export function StatusBar() {
     return () => { cancelled = true; };
   }, [focusAgent?.id, focusAgent?.cwd, focusAgent?.worktreePath]);
 
-  const { tokens, usd, tokPerMin } = useMemo(() => {
-    let t = 0, d = 0, r = 0;
-    for (const a of live) {
-      const s = samples[a.id];
-      if (s) { t += totalTokens(s); d += s.usd; }
-      r += rate[a.id] ?? 0;
-    }
+  // Session info for the FOCUSED agent, not a fleet roll-up: the engine/model/
+  // dir chips already track focusAgent, so the tokens/cost/ctx chips must too or
+  // they read as "locked to the profile" when a non-Claude agent is selected.
+  // OTel sample first (Claude); PTY-parsed fleet snapshot as the fallback for
+  // engines that don't emit hooks.
+  const { tokens, usd, tokPerMin, ctxPct } = useMemo(() => {
+    const id = focusAgent?.id;
+    if (!id) return { tokens: 0, usd: 0, tokPerMin: 0, ctxPct: null as number | null };
+    const s = samples[id];
+    const pty = fleetTok[id];
+    const t = s ? totalTokens(s) : (pty?.tokens ?? 0);
+    const d = s ? s.usd : (pty?.usd ?? 0);
+    const r = rate[id] ?? 0;
+    const exactPct = focusAgent?.contextTokens !== undefined && focusAgent?.contextLimit
+      ? (focusAgent.contextTokens / focusAgent.contextLimit) * 100
+      : null;
+    const p = exactPct ?? (pty?.ctxPct ?? null);
     return {
       tokens: Number.isFinite(t) ? t : 0,
       usd: Number.isFinite(d) ? d : 0,
       tokPerMin: Number.isFinite(r) ? r : 0,
+      ctxPct: p !== null && Number.isFinite(p) ? Math.min(100, Math.max(0, Math.round(p))) : null,
     };
-  }, [live, samples, rate]);
+  }, [focusAgent?.id, focusAgent?.contextTokens, focusAgent?.contextLimit, samples, rate, fleetTok]);
+
+  const ctxColor = ctxPct === null ? 'var(--cth-ink-500)'
+    : ctxPct >= 88 ? 'var(--cth-coral)'
+    : ctxPct >= 75 ? 'var(--cth-lemon)'
+    : 'var(--cth-mint)';
 
   const worst = useMemo<BreakerState | null>(() => {
     let acc: BreakerState | null = null;
@@ -310,7 +336,7 @@ export function StatusBar() {
       </Chip>
 
       <Sep />
-      <Chip title="Fleet tokens used (live OpenTelemetry)">
+      <Chip title={`${focusAgent ? `${focusAgent.name}: ` : ''}session tokens${samples[focusAgent?.id ?? ''] ? ' (live OpenTelemetry)' : fleetTok[focusAgent?.id ?? ''] ? ' (PTY-parsed)' : ''}`}>
         <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
           {fmtTokens(tokens)}
         </span>
@@ -323,7 +349,7 @@ export function StatusBar() {
       </Chip>
 
       <Sep />
-      <Chip title={billingMode === 'api' ? 'Fleet cost so far (OTel · API billing)' : 'Estimated fleet cost (OTel · subscription — not actual billing)'}>
+      <Chip title={`${focusAgent ? `${focusAgent.name}: ` : ''}${billingMode === 'api' ? 'session cost (API billing)' : 'estimated session cost (subscription, not actual billing)'}`}>
         <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
           {billingMode === 'api' ? fmtUsd(usd) : `~${fmtUsd(usd)}`}
         </span>
@@ -331,6 +357,21 @@ export function StatusBar() {
           <span style={{ color: 'var(--cth-ink-500)', fontSize: 13 }}>est.</span>
         )}
       </Chip>
+
+      {ctxPct !== null && (
+        <>
+          <Sep />
+          <Chip title={`${focusAgent ? `${focusAgent.name}: ` : ''}context window ${ctxPct}% full`}>
+            <span style={{ color: 'var(--cth-ink-500)' }}>ctx</span>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', color: ctxColor, letterSpacing: 1 }}>
+              {ctxBar(ctxPct)}
+            </span>
+            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
+              {ctxPct}%
+            </span>
+          </Chip>
+        </>
+      )}
 
       {showRateLimitMeters && worstFiveHour && (
         <>
