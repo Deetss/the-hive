@@ -119,6 +119,14 @@ export interface VoiceMessage {
   created_at: string;
 }
 
+/** The human's answer text plus at most one attached image (data URL). Written
+ *  in place of a plain string `a` only when an image is attached, so every
+ *  older answer on disk keeps parsing as a string. */
+export interface HumanQAAnswer {
+  text: string;
+  images?: string[];
+}
+
 /** One question→answer exchange with the human, recorded ON the task card so
  *  the decision trail stays with the work it unblocked. */
 export interface HumanQA {
@@ -126,7 +134,7 @@ export interface HumanQA {
   /** 'decision' = agent needs a freeform text answer (ASK ME shows a text box, not
    *  PASS/FAIL; answering nudges a blocked card back to 'doing' without closing it). */
   kind?: 'question' | 'action' | 'review' | 'decision';
-  a?: string;
+  a?: string | HumanQAAnswer;
   askedAt?: string;
   answeredAt?: string;
   dismissedAt?: string;

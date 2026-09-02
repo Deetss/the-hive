@@ -167,11 +167,17 @@ export interface AgentDirectory {
   agents: AgentDirectoryEntry[];
 }
 
+/** The human's answer text plus at most one attached image (data URL). */
+export interface HumanQAAnswer {
+  text: string;
+  images?: string[];
+}
+
 /** One question→answer exchange with the human, recorded ON the task card. */
 export interface HumanQA {
   q: string;
   kind?: 'question' | 'action' | 'review' | 'decision';
-  a?: string;
+  a?: string | HumanQAAnswer;
   askedAt?: string;
   answeredAt?: string;
   dismissedAt?: string;
@@ -905,9 +911,10 @@ const api = {
     taskId: string,
     question: string,
     verdict: 'PASS' | 'FAIL' | 'ANSWER',
-    note?: string
+    note?: string,
+    images?: string[]
   ): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('tasks:answerHumanQA', taskId, question, verdict, note),
+    ipcRenderer.invoke('tasks:answerHumanQA', taskId, question, verdict, note, images),
   dismissHumanQA: (
     taskId: string,
     question: string

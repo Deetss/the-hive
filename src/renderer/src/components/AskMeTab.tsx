@@ -40,6 +40,9 @@ export function AskMeTab() {
   // Optional comment on a UAT item — rides along on PASS / FAIL, or stands alone
   // as a "comment only" note.
   const [comments, setComments] = useState<Record<string, string>>({});
+  // At most one pasted/attached screenshot per open item, as a data URL — rides
+  // along on the same PASS / FAIL / comment submit as the comment text.
+  const [images, setImages] = useState<Record<string, string>>({});
   const [answerVals, setAnswerVals] = useState<Record<string, string>>({});
   const [busyTasks, setBusyTasks] = useState<Record<string, boolean>>({});
   // "Chat about this" — thread drafts / open / sending, keyed by `${taskId}::${question}`
@@ -87,8 +90,9 @@ export function AskMeTab() {
     if (busyTasks[taskId]) return;
     setBusyTasks((prev) => ({ ...prev, [taskId]: true }));
     try {
+      const image = images[taskId];
       if (window.cth?.answerHumanQA) {
-        await window.cth.answerHumanQA(taskId, question, verdict, note);
+        await window.cth.answerHumanQA(taskId, question, verdict, note, image ? [image] : undefined);
       }
       setComments((prev) => {
         const next = { ...prev };
@@ -96,6 +100,11 @@ export function AskMeTab() {
         return next;
       });
       setAnswerVals((prev) => {
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+      setImages((prev) => {
         const next = { ...prev };
         delete next[taskId];
         return next;
@@ -148,6 +157,42 @@ export function AskMeTab() {
         return next;
       });
     }
+  };
+
+  const readImageAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error ?? new Error('failed to read file'));
+      reader.readAsDataURL(file);
+    });
+
+  const handlePasteImage = (taskId: string) => (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const item = Array.from(e.clipboardData.items).find((it) => it.type.startsWith('image/'));
+    if (!item) return;
+    const file = item.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    void readImageAsDataUrl(file)
+      .then((dataUrl) => setImages((prev) => ({ ...prev, [taskId]: dataUrl })))
+      .catch((err) => console.error('[AskMeTab] failed to read pasted image:', err));
+  };
+
+  const handleAttachImage = (taskId: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    void readImageAsDataUrl(file)
+      .then((dataUrl) => setImages((prev) => ({ ...prev, [taskId]: dataUrl })))
+      .catch((err) => console.error('[AskMeTab] failed to read attached image:', err));
+  };
+
+  const clearImage = (taskId: string) => {
+    setImages((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
   };
 
   const isQueryThread = (m: { act?: string; subject?: string; conversation?: string }) => {
@@ -419,12 +464,14 @@ export function AskMeTab() {
                   ) : (
                   <>
                   {/* Optional comment — included in the PASS / FAIL answer, or
-                      sent on its own as a note with no verdict. */}
+                      sent on its own as a note with no verdict. Paste or attach
+                      one screenshot alongside it as visual evidence. */}
                   <textarea
                     value={commentVal}
                     onChange={(e) => setComments((prev) => ({ ...prev, [item.taskId]: e.target.value }))}
+                    onPaste={handlePasteImage(item.taskId)}
                     rows={2}
-                    placeholder="Optional comment…"
+                    placeholder="Optional comment… (you can paste a screenshot)"
                     style={{
                       width: '100%', boxSizing: 'border-box', padding: '6px 8px',
                       background: 'var(--cth-paper-100)', border: 'none',
@@ -432,6 +479,45 @@ export function AskMeTab() {
                       fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none'
                     }}
                   />
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label
+                      title="Attach a screenshot"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-700)'
+                      }}
+                    >
+                      <Icon name="image" /> attach
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAttachImage(item.taskId)}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                    {images[item.taskId] && (
+                      <div style={{ position: 'relative', display: 'inline-flex' }}>
+                        <img
+                          src={images[item.taskId]}
+                          alt="attachment preview"
+                          style={{ height: 44, boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', display: 'block' }}
+                        />
+                        <button
+                          type="button"
+                          title="Remove attachment"
+                          onClick={() => clearImage(item.taskId)}
+                          style={{
+                            position: 'absolute', top: -6, right: -6, width: 16, height: 16, padding: 0,
+                            border: 'none', borderRadius: '50%', background: 'var(--cth-coral)', color: '#fff',
+                            fontSize: 10, lineHeight: '16px', cursor: 'pointer'
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Action buttons */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

@@ -6,7 +6,7 @@ import { Icon } from './Icon';
 import { UatPanel } from './UatPanel';
 import { Markdown } from './Markdown';
 import { useStore } from '@/store/store';
-import { HumanQA, HiveTask } from '@/types/tasks';
+import { HumanQA, HumanQAAnswer, HiveTask } from '@/types/tasks';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { getAgentDisplayName } from '@/lib/agentNames';
 
@@ -49,6 +49,23 @@ const POLL_MS = 5000;
  *  Used for tasks lacking a valid string id so re-parsing tasks.json on every
  *  5s poll yields the SAME id — no React key churn / card remount. Unlike
  *  shortId() (random, for brand-new tasks), this never changes across polls. */
+/** Normalizes a raw humanQA `a` field: a plain string stays as-is; an object
+ *  keeps only a string `text` and up to one string `images[0]` (a data URL) —
+ *  anything else (including an object with neither) is dropped. */
+function parseHumanQAAnswer(raw: unknown): string | HumanQAAnswer | undefined {
+  if (typeof raw === 'string') return raw;
+  if (raw && typeof raw === 'object') {
+    const text = typeof (raw as { text?: unknown }).text === 'string' ? (raw as { text: string }).text : undefined;
+    if (text === undefined) return undefined;
+    const rawImages = (raw as { images?: unknown }).images;
+    const images = Array.isArray(rawImages)
+      ? rawImages.filter((i): i is string => typeof i === 'string').slice(0, 1)
+      : undefined;
+    return images && images.length > 0 ? { text, images } : text;
+  }
+  return undefined;
+}
+
 function stableId(seed: string): string {
   let h = 5381;
   for (let i = 0; i < seed.length; i++) h = (((h << 5) + h) ^ seed.charCodeAt(i)) | 0;
@@ -87,7 +104,7 @@ export function parseTasks(raw: unknown): HiveTask[] {
             q: e.q as string,
             kind: (e.kind === 'question' || e.kind === 'action' || e.kind === 'review')
               ? e.kind : undefined,
-            a: typeof e.a === 'string' ? e.a : undefined,
+            a: parseHumanQAAnswer(e.a),
             askedAt: typeof e.askedAt === 'string' ? e.askedAt : undefined,
             answeredAt: typeof e.answeredAt === 'string' ? e.answeredAt : undefined,
             dismissedAt: typeof e.dismissedAt === 'string' ? e.dismissedAt : undefined,
@@ -993,10 +1010,19 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
                       <div style={{
                         padding: '5px 7px', background: 'var(--cth-mint-light, #d9eed9)',
                         boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                        display: 'flex', gap: 6, alignItems: 'flex-start'
+                        display: 'flex', flexDirection: 'column', gap: 6
                       }}>
-                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, flexShrink: 0 }}>A</span>
-                        <Markdown text={e.a} style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', minWidth: 0, flex: 1, maxWidth: '72ch' }} />
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                          <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, flexShrink: 0 }}>A</span>
+                          <Markdown text={typeof e.a === 'string' ? e.a : e.a.text} style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', minWidth: 0, flex: 1, maxWidth: '72ch' }} />
+                        </div>
+                        {typeof e.a !== 'string' && e.a.images?.[0] && (
+                          <img
+                            src={e.a.images[0]}
+                            alt="attached screenshot"
+                            style={{ maxHeight: 160, maxWidth: '100%', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', alignSelf: 'flex-start' }}
+                          />
+                        )}
                       </div>
                     ) : (
                       <div style={{ fontSize: 13, color: 'var(--cth-coral)', fontFamily: 'var(--cth-font-ui)' }}>

@@ -53,7 +53,7 @@ import {
   addWorktree, removeWorktree, worktreeHasUnintegratedWork, worktreeIsGcSafe,
   getLogGraph, getCommitFiles, getFileAtRev, compareRefs, listWorktrees, checkoutRef
 } from './git';
-import { HiveManager, type AgentMeta, type HiveMessage, type HiveTask, type PromptOverrides } from './hive';
+import { HiveManager, type AgentMeta, type HiveMessage, type HiveTask, type HumanQA, type PromptOverrides } from './hive';
 import { HookServer } from './hooks';
 import { showFocusNotification, focusMainWindow } from './notify';
 import { CircuitBreaker, type BreakerInput } from './breaker';
@@ -6627,7 +6627,7 @@ ipcMain.handle('tasks:openHumanQA', () => {
   return openItems;
 });
 
-ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: unknown, verdict: unknown, note?: unknown) => {
+ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: unknown, verdict: unknown, note?: unknown, images?: unknown) => {
   if (typeof taskId !== 'string' || !taskId) return { ok: false, error: 'invalid taskId' };
   if (typeof question !== 'string' || !question) return { ok: false, error: 'invalid question' };
   // ANSWER = freeform text reply to a decision-type ask (no PASS/FAIL). It records
@@ -6635,6 +6635,11 @@ ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: un
   const v: 'PASS' | 'FAIL' | 'ANSWER' =
     verdict === 'FAIL' ? 'FAIL' : verdict === 'ANSWER' ? 'ANSWER' : 'PASS';
   const n = typeof note === 'string' && note.trim() ? note.trim() : undefined;
+  // At most one image attachment (a `data:image/...` URL from clipboard paste or
+  // the file picker); anything else on the array is dropped rather than rejected.
+  const imgs = Array.isArray(images)
+    ? images.filter((i): i is string => typeof i === 'string' && i.startsWith('data:image/')).slice(0, 1)
+    : [];
   if (v === 'ANSWER' && !n) return { ok: false, error: 'answer text required' };
   if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
 
@@ -6650,18 +6655,19 @@ ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: un
     qaIndex = qaList.findIndex((qa) => qa.q === question);
   }
   const answerText = v === 'ANSWER' ? (n as string) : n ? `${v}: ${n}` : v;
+  const answerValue: HumanQA['a'] = imgs.length > 0 ? { text: answerText, images: imgs } : answerText;
   const nowIso = new Date().toISOString();
 
   if (qaIndex >= 0) {
     qaList[qaIndex] = {
       ...qaList[qaIndex],
-      a: answerText,
+      a: answerValue,
       answeredAt: nowIso
     };
   } else {
     qaList.push({
       q: question,
-      a: answerText,
+      a: answerValue,
       askedAt: nowIso,
       answeredAt: nowIso
     });

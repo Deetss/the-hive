@@ -1,3 +1,11 @@
+/** The human's answer text plus at most one attached image (data URL). Written
+ *  in place of a plain string `a` only when an image is attached, so every
+ *  older answer on disk keeps parsing as a string. */
+export interface HumanQAAnswer {
+  text: string;
+  images?: string[];
+}
+
 export interface HumanQA {
   q: string;
   /** Default 'question'. 'action' = human must DO something (sets doneAt when complete).
@@ -5,7 +13,7 @@ export interface HumanQA {
    *  freeform text answer (which option? / yes please) — ASK ME shows a text box, not
    *  PASS/FAIL, and answering moves a blocked card back to 'doing' without closing it. */
   kind?: 'question' | 'action' | 'review' | 'decision';
-  a?: string;
+  a?: string | HumanQAAnswer;
   askedAt?: string;
   answeredAt?: string;
   /** Set when the human dismisses the ask from the ASK ME board WITHOUT answering —
