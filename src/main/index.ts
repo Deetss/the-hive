@@ -8796,43 +8796,63 @@ function bootstrapHiveServices(): void {
 const WORKER_WAKE_POLL_MS = 15_000;
 let workerWakeTimer: ReturnType<typeof setInterval> | null = null;
 
-/** Resolve once a PTY's TUI has printed something and then been quiet for
- *  `quietMs` — its readline is up and idle, ready to accept a submitted line.
- *  `minMs` guards against an early-boot pause reading as "settled". Best-effort:
- *  resolves anyway after `maxMs`, or immediately if the pty is gone. The
- *  main-process analogue of the renderer's waitForTerminalReady. */
-function whenPtyReadlineIdle(ptyId: string, quietMs = 2500, maxMs = 15_000, minMs = 3000): Promise<void> {
+// Per-pty write chain — the main-process mirror of the renderer's `writeChains`
+// (useHive.ts). A type+submit from here can otherwise interleave with a
+// concurrent renderer submitToPty on the SAME terminal: the two paste blocks and
+// their carriage returns cross, and Claude Code files the whole tangle as one
+// unsubmitted multi-line draft (the "\r lands as a newline" report).
+const ptyWriteChains = new Map<string, Promise<void>>();
+
+/** Resolve once a PTY's TUI has produced its first frame and had a short settle
+ *  after it — the SAME notion of "ready" the renderer's terminalReadyToReceive
+ *  uses for Claude (first output + ~600ms), NOT a quiet-gap wait (a booting TUI
+ *  that keeps repainting would never look quiet). Hard cap at `maxMs`; resolves
+ *  immediately if the pty is already gone. */
+function whenPtyReadlineReady(ptyId: string, settleMs = 600, maxMs = 20_000): Promise<void> {
   return new Promise((resolve) => {
     const start = Date.now();
+    let firstOutputAt = 0;
     const tick = (): void => {
       const s = ptyManager.list().find((p) => p.id === ptyId);
       if (!s) { resolve(); return; }
-      const elapsed = Date.now() - start;
-      const idle = elapsed >= minMs && s.hasOutput && Date.now() - (s.lastOutputAt || 0) >= quietMs;
-      if (idle || elapsed >= maxMs) { resolve(); return; }
-      setTimeout(tick, 250);
+      if (s.hasOutput && !firstOutputAt) firstOutputAt = Date.now();
+      if ((firstOutputAt && Date.now() - firstOutputAt >= settleMs) || Date.now() - start >= maxMs) {
+        resolve();
+        return;
+      }
+      setTimeout(tick, 150);
     };
     tick();
   });
 }
 
-/** Type `text` into a PTY's TUI and SUBMIT it, once the readline is confirmed
- *  idle. The text and the trailing Enter go as SEPARATE writes: a single chunk
- *  containing "\r" is treated as a paste, so the "\r" lands as a newline inside
- *  the input box and the line never submits (the crux of the "prompt typed but
- *  not run" bug). Multi-line text is bracketed-paste wrapped so its own newlines
- *  don't submit early. Best-effort + never throws. */
-async function typeAndSubmit(ptyId: string, text: string): Promise<void> {
-  try {
-    await whenPtyReadlineIdle(ptyId);
-    if (!ptyManager.list().some((p) => p.id === ptyId)) return; // pty gone while waiting
-    const payload = text.includes('\n') ? `\x1b[200~${text}\x1b[201~` : text;
-    const wrote = ptyManager.write(ptyId, payload);
-    if (!wrote.ok) { console.warn(`[pty-submit] write failed for ${ptyId}: ${wrote.error}`); return; }
-    await new Promise((r) => setTimeout(r, 160));
-    const submitted = ptyManager.write(ptyId, '\r');
-    if (!submitted.ok) console.warn(`[pty-submit] submit failed for ${ptyId}: ${submitted.error}`);
-  } catch (e) { console.error('[pty-submit] threw:', e); }
+/** Type `text` into a PTY's TUI and SUBMIT it — a faithful copy of the renderer's
+ *  submitToPty sequence (the one path that DOES submit reliably): wait for the
+ *  TUI to be ready, bracketed-paste wrap ONLY multi-line text, write it, leave a
+ *  gap long enough for the paste-end marker to be consumed, then write "\r" as a
+ *  SEPARATE keystroke, then settle. Serialized per pty. Best-effort, never
+ *  throws. */
+function typeAndSubmit(ptyId: string, text: string): Promise<void> {
+  const prev = ptyWriteChains.get(ptyId) ?? Promise.resolve();
+  const next = prev.catch(() => { /* a failed prior write must not stall the chain */ }).then(async () => {
+    try {
+      await whenPtyReadlineReady(ptyId);
+      if (!ptyManager.list().some((p) => p.id === ptyId)) return; // pty gone while waiting
+      const multiline = text.includes('\n');
+      const payload = multiline ? `\x1b[200~${text}\x1b[201~` : text;
+      const wrote = ptyManager.write(ptyId, payload);
+      if (!wrote.ok) { console.warn(`[pty-submit] write failed for ${ptyId}: ${wrote.error}`); return; }
+      // A paste needs the \e[201~ end marker fully consumed before the \r, or the
+      // \r joins the paste buffer as a newline instead of submitting. Raw
+      // single-line text just needs a brief keystroke gap.
+      await new Promise((r) => setTimeout(r, multiline ? 400 : 160));
+      const submitted = ptyManager.write(ptyId, '\r');
+      if (!submitted.ok) console.warn(`[pty-submit] submit failed for ${ptyId}: ${submitted.error}`);
+      await new Promise((r) => setTimeout(r, 250));
+    } catch (e) { console.error('[pty-submit] threw:', e); }
+  });
+  ptyWriteChains.set(ptyId, next);
+  return next;
 }
 
 /** Type the renderer's guarded nudge into one worker's PTY and submit it once
