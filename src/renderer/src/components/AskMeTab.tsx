@@ -528,6 +528,14 @@ export function AskMeTab() {
                                 ))}
                               </div>
                             )}
+                            {thread.length > 0 && thread[thread.length - 1].from === 'human' && (
+                              <div style={{
+                                alignSelf: 'flex-start', fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+                                fontStyle: 'italic', color: 'var(--cth-ink-500)'
+                              }}>
+                                waiting for {nameFor(item.assignee)} to reply…
+                              </div>
+                            )}
                             <div style={{ display: 'flex', gap: 4 }}>
                               <input
                                 type="text"
