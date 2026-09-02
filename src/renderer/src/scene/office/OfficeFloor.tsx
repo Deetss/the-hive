@@ -194,6 +194,19 @@ const hiveDeskTile = (i: number): Tile => ({
 // rests on the deck instead of floating on the old office monitor shelf.
 const HIVE_CUP_OFFSET = { dx: 0.62, dy: -0.05 } as const;
 
+// Dev-only ghost-buster: on Vite HMR this module is swapped and React fast-refresh
+// can re-render the component WITHOUT firing the setup effect's cleanup, leaving
+// the previous Pixi Application (and its canvas) alive as a faded ghost scene. We
+// track the live app at module scope and dispose it when Vite replaces the module.
+// No-op in production — import.meta.hot is undefined there and is tree-shaken away.
+let hmrLiveApp: Application | null = null;
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    if (hmrLiveApp) safeDestroy(hmrLiveApp);
+    hmrLiveApp = null;
+  });
+}
+
 function createHiveFloorLayer(tile: number, width: number, height: number): Graphics {
   const layer = new Graphics();
   const base = mixColor(colors.accent.lemon, colors.cream[200], 0.18);
@@ -641,6 +654,7 @@ export function OfficeFloor() {
     const mountId = ++mountIdRef.current;
     const app = new Application();
     appRef.current = app;
+    hmrLiveApp = app;   // dev HMR ghost-buster tracks the live app (see top of module)
 
     const runtimes = new Map<string, Runtime>();
     const seatClaims = new Set<number>();
@@ -2569,6 +2583,7 @@ export function OfficeFloor() {
         safeDestroy(a);
       }
       appRef.current = null;
+      hmrLiveApp = null;
       while (host.firstChild) host.removeChild(host.firstChild);
     };
   }, [officeTheme, glGeneration, floorEnabled]);
