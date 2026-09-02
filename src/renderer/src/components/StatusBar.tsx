@@ -80,6 +80,34 @@ function fmtUsd(n: number): string {
 
 const tail = (p: string) => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? p;
 
+interface RatePaceInfo {
+  paceRatio: number;
+  projectedPct: number;
+  color: string;
+  label: string;
+}
+
+/**
+ * Derive pace from rate-limit numbers:
+ * paceRatio = (used% / 100) / elapsedFraction
+ * projected% = used% / elapsedFraction
+ * Color cues: green <= 1x, amber <= 1.5x, red > 1.5x
+ */
+function calcRatePace(pct: number, resetsAtIso: string, windowMins: number): RatePaceInfo | null {
+  const resetsAtMs = new Date(resetsAtIso).getTime();
+  if (!Number.isFinite(resetsAtMs)) return null;
+  const windowMs = windowMins * 60 * 1000;
+  const windowStartMs = resetsAtMs - windowMs;
+  const now = Date.now();
+  const elapsedMs = Math.max(1000, now - windowStartMs);
+  const elapsedFraction = Math.min(1, Math.max(0.001, elapsedMs / windowMs));
+  const paceRatio = (pct / 100) / elapsedFraction;
+  const projectedPct = pct / elapsedFraction;
+  const color = paceRatio > 1.5 ? 'var(--cth-coral)' : paceRatio > 1.0 ? 'var(--cth-lemon)' : 'var(--cth-mint)';
+  const label = `${paceRatio.toFixed(1)}x`;
+  return { paceRatio, projectedPct, color, label };
+}
+
 export function StatusBar() {
   const agents = useStore((s) => s.agents);
   const selectedId = useStore((s) => s.selectedId);
@@ -373,59 +401,75 @@ export function StatusBar() {
         </>
       )}
 
-      {showRateLimitMeters && worstFiveHour && (
-        <>
-          <Sep />
-          <Chip title={`5h rate limit: ${worstFiveHour.pct}% used · resets ${fmtReset(worstFiveHour.resetsAt)}`}>
-            <span style={{ color: 'var(--cth-ink-500)' }}>5h</span>
-            <span style={{
-              display: 'inline-block', width: 36, height: 5,
-              background: 'var(--cth-cream-200)',
-              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-              overflow: 'hidden', verticalAlign: 'middle', margin: '0 2px'
-            }}>
+      {showRateLimitMeters && worstFiveHour && (() => {
+        const pace = calcRatePace(worstFiveHour.pct, worstFiveHour.resetsAt, 300);
+        return (
+          <>
+            <Sep />
+            <Chip title={`5h rate limit: ${worstFiveHour.pct}% used${pace ? ` · pace ${pace.label} (proj ${Math.round(pace.projectedPct)}%)` : ''} · resets ${fmtReset(worstFiveHour.resetsAt)}`}>
+              <span style={{ color: 'var(--cth-ink-500)' }}>5h</span>
               <span style={{
-                display: 'block', height: '100%',
-                width: `${Math.min(100, Math.max(0, worstFiveHour.pct))}%`,
-                background: ratePaceColor(worstFiveHour.pct, worstFiveHour.resetsAt, 300)
-              }} />
-            </span>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
-              {worstFiveHour.pct.toFixed(2)}%
-            </span>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
-              {fmtReset(worstFiveHour.resetsAt)}
-            </span>
-          </Chip>
-        </>
-      )}
+                display: 'inline-block', width: 36, height: 5,
+                background: 'var(--cth-cream-200)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                overflow: 'hidden', verticalAlign: 'middle', margin: '0 2px'
+              }}>
+                <span style={{
+                  display: 'block', height: '100%',
+                  width: `${Math.min(100, Math.max(0, worstFiveHour.pct))}%`,
+                  background: pace?.color ?? ratePaceColor(worstFiveHour.pct, worstFiveHour.resetsAt, 300)
+                }} />
+              </span>
+              <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
+                {worstFiveHour.pct.toFixed(2)}%
+              </span>
+              {pace && (
+                <span style={{ fontFamily: 'var(--cth-font-ui)', color: pace.color, fontSize: 13, fontWeight: 600 }}>
+                  {pace.label}
+                </span>
+              )}
+              <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
+                {fmtReset(worstFiveHour.resetsAt)}
+              </span>
+            </Chip>
+          </>
+        );
+      })()}
 
-      {showRateLimitMeters && worstSevenDay && (
-        <>
-          <Sep />
-          <Chip title={`7d rate limit: ${worstSevenDay.pct}% used · resets ${fmtReset(worstSevenDay.resetsAt)}`}>
-            <span style={{ color: 'var(--cth-ink-500)' }}>7d</span>
-            <span style={{
-              display: 'inline-block', width: 36, height: 5,
-              background: 'var(--cth-cream-200)',
-              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-              overflow: 'hidden', verticalAlign: 'middle', margin: '0 2px'
-            }}>
+      {showRateLimitMeters && worstSevenDay && (() => {
+        const pace = calcRatePace(worstSevenDay.pct, worstSevenDay.resetsAt, 10080);
+        return (
+          <>
+            <Sep />
+            <Chip title={`7d rate limit: ${worstSevenDay.pct}% used${pace ? ` · pace ${pace.label} (proj ${Math.round(pace.projectedPct)}%)` : ''} · resets ${fmtReset(worstSevenDay.resetsAt)}`}>
+              <span style={{ color: 'var(--cth-ink-500)' }}>7d</span>
               <span style={{
-                display: 'block', height: '100%',
-                width: `${Math.min(100, Math.max(0, worstSevenDay.pct))}%`,
-                background: ratePaceColor(worstSevenDay.pct, worstSevenDay.resetsAt, 10080)
-              }} />
-            </span>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
-              {worstSevenDay.pct.toFixed(2)}%
-            </span>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
-              {fmtReset(worstSevenDay.resetsAt)}
-            </span>
-          </Chip>
-        </>
-      )}
+                display: 'inline-block', width: 36, height: 5,
+                background: 'var(--cth-cream-200)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                overflow: 'hidden', verticalAlign: 'middle', margin: '0 2px'
+              }}>
+                <span style={{
+                  display: 'block', height: '100%',
+                  width: `${Math.min(100, Math.max(0, worstSevenDay.pct))}%`,
+                  background: pace?.color ?? ratePaceColor(worstSevenDay.pct, worstSevenDay.resetsAt, 10080)
+                }} />
+              </span>
+              <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
+                {worstSevenDay.pct.toFixed(2)}%
+              </span>
+              {pace && (
+                <span style={{ fontFamily: 'var(--cth-font-ui)', color: pace.color, fontSize: 13, fontWeight: 600 }}>
+                  {pace.label}
+                </span>
+              )}
+              <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
+                {fmtReset(worstSevenDay.resetsAt)}
+              </span>
+            </Chip>
+          </>
+        );
+      })()}
 
       {queued > 0 && (
         <>
