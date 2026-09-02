@@ -709,6 +709,13 @@ function FloorTab() {
   const [defaultModel, setDefaultModel] = useState<string | undefined>(undefined);
   // Dispatch moved into the unified MessageQueueComposer (ux-unified-input).
   const requestDispatchSeed = useStore((s) => s.requestDispatchSeed);
+  const requestCommandCenterTab = useStore((s) => s.requestCommandCenterTab);
+  // One-click: jump to the terminal tab and drop the composer into dispatch mode
+  // (TO = "BeeYoncé decides"), without touching any text already typed.
+  const openDispatchComposer = () => {
+    requestCommandCenterTab('terminal');
+    requestDispatchSeed('');
+  };
   // ── ISSUES section state ──
   const [issueRepo, setIssueRepo] = useState<string>('');
   const [issues, setIssues] = useState<GHIssue[]>([]);
@@ -1003,12 +1010,21 @@ function FloorTab() {
           switch that one input from "queue for this agent" to a structured
           dispatch routed through BeeYoncé. A task/issue "assign" seeds it. */}
       <Section title="DISPATCH">
-        <p style={{ margin: 0, fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', lineHeight: 1.5 }}>
-          Dispatch now lives in the message composer under the terminal. Open an
-          agent, then set <strong>TO</strong> to <em>BeeYoncé decides</em> (or suggest a
-          worker) to turn that input into a structured dispatch with act, subject,
-          and priority.
-        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <p style={{ margin: 0, fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', lineHeight: 1.5 }}>
+            Dispatch lives in the message composer under the terminal: describe a
+            task with <strong>TO</strong> set to <em>BeeYoncé decides</em> (or suggest a
+            worker) and it becomes a structured dispatch with act, subject, and
+            priority.
+          </p>
+          <div>
+            <PixelButton variant="primary" size="sm" onClick={openDispatchComposer}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="terminal" /> open dispatch composer
+              </span>
+            </PixelButton>
+          </div>
+        </div>
       </Section>
 
       <Section title="AGENTS">

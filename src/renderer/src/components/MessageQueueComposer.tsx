@@ -124,9 +124,16 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   useEffect(() => {
     if (!dispatchSeedRequest) return;
     if (selectedId && agent.id !== selectedId) return;
+    // Always land in dispatch mode (TO = "BeeYoncé decides"), even if the user
+    // had switched the target or turned on "send later".
     setSendLater(false);
-    setDraft(agent.id, dispatchSeedRequest.text);
-    setDispSubject(dispatchSeedRequest.text.split('\n')[0].slice(0, 60));
+    setTarget('god');
+    // An empty seed just focuses the composer in dispatch mode — don't clobber
+    // whatever the user has already typed.
+    if (dispatchSeedRequest.text) {
+      setDraft(agent.id, dispatchSeedRequest.text);
+      setDispSubject(dispatchSeedRequest.text.split('\n')[0].slice(0, 60));
+    }
     clearDispatchSeedRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatchSeedRequest?.seq]);
