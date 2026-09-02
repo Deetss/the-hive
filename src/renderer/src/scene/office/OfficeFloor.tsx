@@ -843,57 +843,62 @@ export function OfficeFloor() {
         const ceoTile = mapRenderer.getSpawnPoint('desk-ceo');
         if (ceoTile) placePod(ceoTile);
 
-        // 4. Props matching scene_frame.png
+        // 4. Props matching scene_frame.png & office map layout
         if (hiveProps) {
-          // Honey vat in top left corner
+          // Honey vat on the middle/left wall run (above main floor, away from CEO desk)
           const vat = new Sprite(hiveProps.vat);
           vat.eventMode = 'none';
-          vat.position.set(1.5 * tile, 3.5 * tile);
-          vat.zIndex = 5 * tile;
+          vat.position.set(0.8 * tile, 6.2 * tile);
+          vat.zIndex = 7.5 * tile;
           hiveDeskLayer.addChild(vat);
 
-          // Filing cabinets
+          // Filing cabinets:
+          // Cab 1: CEO room top-right corner against wall
           const cab1 = new Sprite(hiveProps.cabinet);
           cab1.eventMode = 'none';
-          cab1.position.set(4.5 * tile, 3.8 * tile);
-          cab1.zIndex = 5 * tile;
+          cab1.position.set(5.2 * tile, 3.2 * tile);
+          cab1.zIndex = 4.2 * tile;
           hiveDeskLayer.addChild(cab1);
 
+          // Cab 2: Right break room / cafeteria against top wall
           const cab2 = new Sprite(hiveProps.cabinet);
           cab2.eventMode = 'none';
-          cab2.position.set(24.5 * tile, 8.5 * tile);
-          cab2.zIndex = 9.5 * tile;
+          cab2.position.set(30.8 * tile, 12.2 * tile);
+          cab2.zIndex = 13.2 * tile;
           hiveDeskLayer.addChild(cab2);
 
-          // Potted plants
+          // Potted plants:
+          // Plant 1: CEO door exterior corner
           const plant1 = new Sprite(hiveProps.plant);
           plant1.eventMode = 'none';
-          plant1.position.set(13.5 * tile, 4.5 * tile);
-          plant1.zIndex = 5.5 * tile;
+          plant1.position.set(6.2 * tile, 5.2 * tile);
+          plant1.zIndex = 6.2 * tile;
           hiveDeskLayer.addChild(plant1);
 
+          // Plant 2: Break room / cafeteria bottom-right corner
           const plant2 = new Sprite(hiveProps.plant);
           plant2.eventMode = 'none';
-          plant2.position.set(24 * tile, 13 * tile);
-          plant2.zIndex = 14 * tile;
+          plant2.position.set(30.8 * tile, 18.2 * tile);
+          plant2.zIndex = 19.2 * tile;
           hiveDeskLayer.addChild(plant2);
 
+          // Plant 3: Main floor upper right aisle corner
           const plant3 = new Sprite(hiveProps.plant);
           plant3.eventMode = 'none';
-          plant3.position.set(25.5 * tile, 13.5 * tile);
-          plant3.zIndex = 14.5 * tile;
+          plant3.position.set(23.2 * tile, 6.2 * tile);
+          plant3.zIndex = 7.2 * tile;
           hiveDeskLayer.addChild(plant3);
 
-          // Whiteboards / charts
+          // Whiteboards / charts on back walls:
           const wb1 = new Sprite(hiveProps.whiteboard);
           wb1.eventMode = 'none';
-          wb1.position.set(7.5 * tile, 1.2 * tile);
+          wb1.position.set(1.5 * tile, 1.2 * tile);
           wb1.zIndex = 2 * tile;
           hiveDeskLayer.addChild(wb1);
 
           const wb2 = new Sprite(hiveProps.whiteboard);
           wb2.eventMode = 'none';
-          wb2.position.set(17.5 * tile, 1.2 * tile);
+          wb2.position.set(26.5 * tile, 1.2 * tile);
           wb2.zIndex = 2 * tile;
           hiveDeskLayer.addChild(wb2);
         }
