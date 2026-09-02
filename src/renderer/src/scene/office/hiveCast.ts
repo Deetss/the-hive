@@ -1,9 +1,9 @@
 // The Hive bee cast — roster metadata + authored sprite loading.
 //
-// Mirrors cast.ts / zergCast.ts: a selectable roster whose scene frames and
-// portraits come from authored PNG stills (src/assets/hive/*.png), loaded via
-// the ASSET_URLS + loadHiveFrames pattern. BeeYoncé the queen fills the god
-// seat and is the default. See hivePortraitArt.ts for the draw layer.
+// A selectable roster whose scene frames and portraits come from authored PNG
+// stills (src/assets/hive/*.png), loaded via the ASSET_URLS + loadHiveFrames
+// pattern. BeeYoncé the queen fills the god seat and is the default. See
+// hivePortraitArt.ts for the draw layer.
 
 import { Texture } from 'pixi.js';
 import { loadHiveFrames, paintHivePortrait } from './hivePortraitArt';

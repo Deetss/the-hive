@@ -295,8 +295,6 @@ export const BROOKLYN99_THEME: ThemeConfig = {
   cast: OFFICE_THEME.cast,
 };
 
-/** The Hive — the Zerg reskin (see ZERG-RESKIN.md). Phase 3: the brood cast is
- *  now the procedural Zerg roster (zergCast.ts) with Abathur as the god/default,
 /** The Hive — BeeYoncé's bee colony (the honey/hive rebrand). The cast is the
  *  authored bee roster (hiveCast.ts) with BeeYoncé the queen as god/default; the
  *  palette clears to a warm comb-wax ground. Map, tilesets, and layout still

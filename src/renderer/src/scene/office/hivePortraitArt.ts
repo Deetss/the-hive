@@ -1,10 +1,10 @@
 // Rendering helpers for the Hive bee cast.
 //
-// Unlike the procedural zergPortraitArt, the bee cast ships as authored PNG
-// sprites (see src/assets/hive/*.png, generated from BeeYoncé's approved
-// roster). These helpers turn one authored still into the scene's walk-frame
-// grid and paint the same still as a static portrait. hiveCast.ts owns the
-// roster and the asset URLs; this module is the reusable draw layer.
+// The bee cast ships as authored PNG sprites (see src/assets/hive/*.png,
+// generated from BeeYoncé's approved roster). These helpers turn one authored
+// still into the scene's walk-frame grid and paint the same still as a static
+// portrait. hiveCast.ts owns the roster and the asset URLs; this module is the
+// reusable draw layer.
 
 import { Texture } from 'pixi.js';
 import { PORTRAIT_W, PORTRAIT_H } from './portraitArt';
@@ -15,7 +15,6 @@ import { PORTRAIT_W, PORTRAIT_H } from './portraitArt';
  * authored still. There is one pose, so motion is procedural: the three
  * animated columns are a bob+sway cycle (base → up + lean-right → higher +
  * lean-left). Every frame shares one padded canvas so the anchor stays put.
- * Mirrors zergCast's loadAssetFrames (the abathur asset path).
  */
 export async function loadHiveFrames(url: string): Promise<Texture[][]> {
   const img = new Image();

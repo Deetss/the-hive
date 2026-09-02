@@ -1,8 +1,7 @@
 import { Texture } from 'pixi.js';
 
 // Slice an authored sprite strip (equal-size frames laid out along one axis) into
-// per-frame nearest-neighbour textures. Mirrors zergCast's loadSlitherFrames /
-// hivePortraitArt's frame cutting, factored out so the scene's small authored
+// per-frame nearest-neighbour textures, factored out so the scene's small authored
 // sheets (message envelope, desk screen, tool glyphs) share one loader.
 //
 // The result is cached per URL: these sheets are tiny and shared across every
