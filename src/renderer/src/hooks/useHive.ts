@@ -633,10 +633,14 @@ export function useHive(config: HarnessConfig | null): void {
   //      model, so changing it manually with /model in the terminal updates the
   //      roster card (which otherwise shows only the spawn-time model).
   useEffect(() => {
-    return window.cth.onHiveModelUpdate(({ agentId, model }) => {
+    // Guarded: a freshly added bridge method is undefined until the app is fully
+    // restarted in dev (renderer HMR reloads this file but not the preload), so an
+    // unguarded call would throw in the mount effect and white-screen <App>.
+    const off = window.cth.onHiveModelUpdate?.(({ agentId, model }) => {
       if (!model) return;
       useStore.getState().updateAgent(agentId, { model });
     });
+    return () => off?.();
   }, []);
 
   // 2e) Non-Claude providers cannot drain hive inbox. Direct hive mail to them
