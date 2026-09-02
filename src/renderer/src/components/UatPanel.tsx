@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from '@/store/store';
+import { Markdown } from './Markdown';
 
 interface UatPanelProps {
   onPendingChange?: (pending: number) => void;
@@ -74,9 +75,9 @@ export function UatPanel({ onPendingChange }: UatPanelProps) {
                     {fmtAge(item.askedAt)}
                   </span>
                 </div>
-                <div style={{
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '16px', color: 'var(--cth-ink-800)'
-                }}>{item.question}</div>
+                <Markdown text={item.question} style={{
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '16px', color: 'var(--cth-ink-800)', maxWidth: '72ch'
+                }} />
               </div>
             );
           })}
