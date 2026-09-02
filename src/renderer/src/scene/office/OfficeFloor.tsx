@@ -845,18 +845,18 @@ export function OfficeFloor() {
 
         // 4. Props matching scene_frame.png & office map layout
         if (hiveProps) {
-          // Honey vat on the middle/left wall run (above main floor, away from CEO desk)
+          // Honey vat on the middle/left wall run (mounted high on the wall with generous space below)
           const vat = new Sprite(hiveProps.vat);
           vat.eventMode = 'none';
-          vat.position.set(0.8 * tile, 6.2 * tile);
-          vat.zIndex = 7.5 * tile;
+          vat.position.set(1.0 * tile, 5.0 * tile);
+          vat.zIndex = 7.0 * tile;
           hiveDeskLayer.addChild(vat);
 
           // Animated honey drips from the spout matching scene_frame.png
           const vatDrips = new Graphics();
           vatDrips.eventMode = 'none';
-          vatDrips.position.set(0.8 * tile, 6.2 * tile);
-          vatDrips.zIndex = 7.6 * tile;
+          vatDrips.position.set(1.0 * tile, 5.0 * tile);
+          vatDrips.zIndex = 7.1 * tile;
           hiveDeskLayer.addChild(vatDrips);
 
           let vatDripTime = 0;
@@ -868,7 +868,7 @@ export function OfficeFloor() {
             // Spout position relative to vat sprite (38x52)
             const spoutX = 19;
             const spoutY = 48;
-            const floorY = 62;
+            const floorY = 66;
 
             // Droplet animation cycle (2s period)
             const period = 2.0;
@@ -900,49 +900,49 @@ export function OfficeFloor() {
           // Cab 1: CEO room top-right corner against wall
           const cab1 = new Sprite(hiveProps.cabinet);
           cab1.eventMode = 'none';
-          cab1.position.set(5.2 * tile, 3.2 * tile);
-          cab1.zIndex = 4.2 * tile;
+          cab1.position.set(5.2 * tile, 2.8 * tile);
+          cab1.zIndex = 4.0 * tile;
           hiveDeskLayer.addChild(cab1);
 
           // Cab 2: Right break room / cafeteria against top wall
           const cab2 = new Sprite(hiveProps.cabinet);
           cab2.eventMode = 'none';
-          cab2.position.set(30.8 * tile, 12.2 * tile);
-          cab2.zIndex = 13.2 * tile;
+          cab2.position.set(31.0 * tile, 11.2 * tile);
+          cab2.zIndex = 12.2 * tile;
           hiveDeskLayer.addChild(cab2);
 
           // Potted plants:
-          // Plant 1: CEO door exterior corner
+          // Plant 1: CEO door exterior corner nook
           const plant1 = new Sprite(hiveProps.plant);
           plant1.eventMode = 'none';
-          plant1.position.set(6.2 * tile, 5.2 * tile);
+          plant1.position.set(5.8 * tile, 5.2 * tile);
           plant1.zIndex = 6.2 * tile;
           hiveDeskLayer.addChild(plant1);
 
-          // Plant 2: Break room / cafeteria bottom-right corner
+          // Plant 2: Main floor upper right aisle divider wall
           const plant2 = new Sprite(hiveProps.plant);
           plant2.eventMode = 'none';
-          plant2.position.set(30.8 * tile, 18.2 * tile);
-          plant2.zIndex = 19.2 * tile;
+          plant2.position.set(23.0 * tile, 5.6 * tile);
+          plant2.zIndex = 6.8 * tile;
           hiveDeskLayer.addChild(plant2);
 
-          // Plant 3: Main floor upper right aisle corner
+          // Plant 3: Break room / cafeteria bottom-right corner
           const plant3 = new Sprite(hiveProps.plant);
           plant3.eventMode = 'none';
-          plant3.position.set(23.2 * tile, 6.2 * tile);
-          plant3.zIndex = 7.2 * tile;
+          plant3.position.set(31.0 * tile, 18.5 * tile);
+          plant3.zIndex = 19.5 * tile;
           hiveDeskLayer.addChild(plant3);
 
           // Whiteboards / charts on back walls:
           const wb1 = new Sprite(hiveProps.whiteboard);
           wb1.eventMode = 'none';
-          wb1.position.set(1.5 * tile, 1.2 * tile);
+          wb1.position.set(1.2 * tile, 0.8 * tile);
           wb1.zIndex = 2 * tile;
           hiveDeskLayer.addChild(wb1);
 
           const wb2 = new Sprite(hiveProps.whiteboard);
           wb2.eventMode = 'none';
-          wb2.position.set(26.5 * tile, 1.2 * tile);
+          wb2.position.set(27.0 * tile, 0.8 * tile);
           wb2.zIndex = 2 * tile;
           hiveDeskLayer.addChild(wb2);
         }
@@ -1866,6 +1866,9 @@ export function OfficeFloor() {
       };
 
       const drawHiveHoneyVat = (doneCount: number): void => {
+        // In the hive theme, the authored wall Honey Vat on the left wall is the
+        // primary animated honey reservoir. Do not draw a duplicate floor barrel.
+        if (isHiveTheme) return;
         // Authored sprite: a coopered barrel filling with honey. One fill level per
         // HONEY_TASKS_PER_LEVEL completed tasks, clamped to the 7 frames (0..6).
         const level = Math.min(Math.floor(doneCount / HONEY_TASKS_PER_LEVEL), 6);
