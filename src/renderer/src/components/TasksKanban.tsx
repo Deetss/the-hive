@@ -4,6 +4,7 @@ import { PixelButton } from './PixelButton';
 import { PixelBadge } from './PixelBadge';
 import { Icon } from './Icon';
 import { UatPanel } from './UatPanel';
+import { Markdown } from './Markdown';
 import { useStore } from '@/store/store';
 import { HumanQA, HiveTask } from '@/types/tasks';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -537,7 +538,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
                         {fmtAge(qa.askedAt)}
                       </span>
                     </div>
-                    {/* Ask text — click to expand/collapse when long */}
+                    {/* Ask text — markdown, click to expand/collapse when long */}
                     <div
                       onClick={() => setExpandedKeys((prev) => {
                         const next = new Set(prev);
@@ -546,14 +547,17 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
                       })}
                       title={expandedKeys.has(key) ? 'Click to collapse' : 'Click to expand'}
                       style={{
-                        fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px',
-                        color: 'var(--cth-ink-800)', cursor: 'pointer',
-                        ...(expandedKeys.has(key) ? {} : {
-                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-                        })
+                        cursor: 'pointer',
+                        ...(expandedKeys.has(key) ? {} : { maxHeight: 34, overflow: 'hidden' })
                       }}
                     >
-                      {kind === 'review' && qa.docPath ? qa.docPath : qa.q}
+                      {kind === 'review' && qa.docPath ? (
+                        <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px', color: 'var(--cth-ink-800)' }}>
+                          {qa.docPath}
+                        </div>
+                      ) : (
+                        <Markdown text={qa.q} style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px', color: 'var(--cth-ink-800)' }} />
+                      )}
                     </div>
                     {/* Action row */}
                     {kind === 'question' && (
@@ -1194,19 +1198,19 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
                     <div style={{
                       padding: '5px 7px', background: 'var(--cth-lilac-light, #ece2f5)',
                       boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                      fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap'
+                      display: 'flex', gap: 6, alignItems: 'flex-start'
                     }}>
-                      <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, marginRight: 6 }}>Q</span>
-                      {e.q}
+                      <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, flexShrink: 0 }}>Q</span>
+                      <Markdown text={e.q} style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', minWidth: 0, flex: 1 }} />
                     </div>
                     {e.a ? (
                       <div style={{
                         padding: '5px 7px', background: 'var(--cth-mint-light, #d9eed9)',
                         boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                        fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap'
+                        display: 'flex', gap: 6, alignItems: 'flex-start'
                       }}>
-                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, marginRight: 6 }}>A</span>
-                        {e.a}
+                        <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, flexShrink: 0 }}>A</span>
+                        <Markdown text={e.a} style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', minWidth: 0, flex: 1 }} />
                       </div>
                     ) : (
                       <div style={{ fontSize: 13, color: 'var(--cth-coral)', fontFamily: 'var(--cth-font-ui)' }}>
