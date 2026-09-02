@@ -33,6 +33,7 @@ import { inferAgentProvider, providerPreset, type HarnessConfig } from '@/store/
 const SIDEBAR_WIDTH = 'clamp(232px, 14vw, 340px)';
 /** Remembers the roster collapse across fullscreen sessions and app restarts. */
 const ROSTER_COLLAPSED_KEY = 'cth.fullscreen.rosterCollapsed';
+const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
 
 /** Roster type scale, derived from the shared terminal zoom so Cmd +/- resizes
  *  the whole roster along with the terminal — one knob for the whole view
@@ -326,24 +327,36 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
       zIndex: 250,
       display: 'flex',
       flexDirection: 'column',
-      paddingTop: 36  // leave room for macOS traffic lights / drag region
+      paddingTop: 28  // leave room for titlebar / drag region
     }}>
       {/* Title bar drag region (so the user can still move the window) */}
       <div
         className="cth-titlebar-drag"
         style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 36,
+          position: 'absolute', top: 0, left: 0, right: 0, height: 28,
           background: 'linear-gradient(180deg, var(--cth-cream-100) 0%, var(--cth-cream-200) 100%)',
           borderBottom: '1px solid var(--cth-ink-300)',
           display: 'flex', alignItems: 'center',
-          paddingLeft: 96, paddingRight: 12, gap: 12,
+          paddingLeft: isMac ? 96 : 14, paddingRight: 10, gap: 8,
           userSelect: 'none'
         }}
       >
-        {/* Same top-right controls as the main title bar — fullscreen covers
-            it, so theme / exit-fullscreen / IDE must live here too. */}
-        <div className="cth-titlebar-nodrag" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <UpdateBadge />
+        <span
+          aria-hidden
+          style={{
+            width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+            background: agent.status === 'blocked' ? 'var(--cth-coral)'
+              : agent.status === 'working' ? 'var(--cth-lemon)'
+              : 'var(--cth-mint)'
+          }}
+        />
+        <span style={{
+          fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
+          whiteSpace: 'nowrap', overflow: 'hidden'
+        }}>
+          The Hive — Focus Mode · <strong style={{ color: 'var(--cth-ink-900)' }}>{agent.name}</strong>
+        </span>
+        <div className="cth-titlebar-nodrag" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             onClick={toggleRoster}
             title={rosterCollapsed ? 'Show the agent list' : 'Hide the agent list — full-width terminal'}
@@ -351,83 +364,16 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
             aria-pressed={rosterCollapsed}
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: 28, height: 28, padding: 0,
-              // Pressed-in when collapsed, so the rail's absence reads as a state
-              // this button is holding rather than something that broke.
+              width: 22, height: 20, padding: 0,
               background: rosterCollapsed ? 'var(--cth-lemon)' : 'var(--cth-paper-100)',
               boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
               border: 'none', borderRadius: 2, cursor: 'pointer',
-              color: rosterCollapsed ? 'var(--cth-ink-900)' : 'var(--cth-ink-900)'
+              color: 'var(--cth-ink-900)', lineHeight: 1
             }}
           >
-            <Icon name="sidebar" size={1} style={{ width: 16, height: 16 }} />
+            <Icon name="sidebar" size={1} style={{ width: 14, height: 14 }} />
           </button>
-          <button
-            onClick={() => {
-              const next = toggleAppTheme();
-              void window.cth.updateConfig({ terminalTheme: next });
-              // Focus mode has its OWN theme button, so notifying only from the
-              // title-bar toggle meant a flip made from in here never reached a
-              // running TUI. Both entry points must tell them.
-              notifyThemeChangeAll(next === 'dark' ? 'dark' : 'light');
-            }}
-            title={appThemeNow === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme'}
-            aria-label="Toggle dark mode"
-            style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: 28, height: 28, padding: 0,
-              background: 'var(--cth-paper-100)',
-              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-              border: 'none', borderRadius: 2, cursor: 'pointer',
-              color: 'var(--cth-ink-900)', fontSize: 13, lineHeight: 1
-            }}
-          >
-            {appThemeNow === 'dark' ? '☀' : '☾'}
-          </button>
-          {/* Settings — the main title bar has it, so fullscreen must too:
-              anything reachable in one mode and not the other is a trap. Uses
-              App's existing `cth:open-settings` event rather than a new store
-              action, because this overlay is not a child of App. */}
-          <button
-            className="cth-settings-btn"
-            onClick={() => window.dispatchEvent(new CustomEvent('cth:open-settings'))}
-            title="Settings"
-            aria-label="Settings"
-            style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: 28, height: 28, padding: 0,
-              background: 'var(--cth-paper-100)',
-              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-              border: 'none', borderRadius: 2, cursor: 'pointer',
-              color: 'var(--cth-ink-900)'
-            }}
-          >
-            <svg
-              width="16" height="16" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth={2}
-              strokeLinecap="round" strokeLinejoin="round"
-              aria-hidden="true" focusable="false"
-            >
-              <path d="M15.5 3.5a5 5 0 0 0-6.1 6.1l-5.6 5.6a2.3 2.3 0 1 0 3.2 3.2l5.6-5.6a5 5 0 0 0 6.1-6.1l-3 3-2.2-.6-.6-2.2z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setFullscreen(null)}
-            title="Exit focus mode (Esc)"
-            aria-label="Exit focus mode"
-            style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: 28, height: 28, padding: 0,
-              background: 'var(--cth-paper-100)',
-              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-              border: 'none', borderRadius: 2, cursor: 'pointer',
-              color: 'var(--cth-ink-900)'
-            }}
-          >
-            <Icon name="minimize" size={1} style={{ width: 16, height: 16 }} />
-          </button>
-          {/* v0.3.4: IDE moved to agent level — it lives in each agent's
-              header (see Header below), not in this global bar. */}
+          <AppChromeControls />
         </div>
       </div>
 
@@ -843,7 +789,6 @@ function Header({ agent, onEdit }: { agent: Agent; onEdit: () => void }) {
           status={typing ? 'typing' : agent.status}
           style={{ height: 24, padding: '0 8px', lineHeight: '24px' }}
         />
-        <AppChromeControls />
         {!agent.isOvermind && (
           <PixelButton variant="destructive" size="sm" onClick={onKill}>
             {/* inline-flex + center: the other buttons hold TEXT, whose line box

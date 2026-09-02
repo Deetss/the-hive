@@ -4,7 +4,6 @@ import { PixelBadge } from './PixelBadge';
 import { PixelButton } from './PixelButton';
 import { SpritePortrait } from './SpritePortrait';
 import { AgentRosterItem } from './AgentRosterItem';
-import { AppChromeControls } from './AppChromeControls';
 import { PtyTerminalView } from './PtyTerminalView';
 import { MessageQueueComposer } from './MessageQueueComposer';
 import { TasksKanban } from './TasksKanban';
@@ -581,7 +580,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
           and the grid's own reason for existing (keeping wrapped rows aligned)
           stops applying the moment there is only ever one row. */}
       <div className="cth-tabbar" style={{
-        display: 'flex', gap: 3, alignItems: 'center',
+        display: 'flex', gap: 3,
         flexWrap: mobile ? 'nowrap' : (fullscreen ? 'nowrap' : 'wrap'),
         overflowX: mobile || fullscreen ? 'auto' : 'visible',
         padding: '4px 6px 5px', background: 'var(--cth-cream-100)',
@@ -590,11 +589,6 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         {orderedTabs.map((t) => (
           <TabButton key={t.key} t={t} active={tab === t.key} accent={agent.accent} onClick={() => setTab(t.key)} />
         ))}
-        {fullscreen && (
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, paddingRight: 4, flexShrink: 0 }}>
-            <AppChromeControls />
-          </div>
-        )}
       </div>
 
       {/* Body */}

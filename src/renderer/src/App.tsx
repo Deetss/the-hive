@@ -509,6 +509,9 @@ export function App() {
             {fleet.blocked > 0 && <span style={{ color: 'var(--cth-coral)', fontWeight: 600 }}>· {fleet.blocked} needs you</span>}
           </span>
         )}
+        <div className="cth-titlebar-nodrag" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+          <AppChromeControls />
+        </div>
       </div>
 
       <div style={{
@@ -525,12 +528,6 @@ export function App() {
           position: 'relative'
         }}>
           <OfficeFloor />
-          <div style={{
-            position: 'absolute', top: 10, right: 10, zIndex: 40,
-            display: 'flex', alignItems: 'center'
-          }}>
-            <AppChromeControls />
-          </div>
           <MemoryPanel />
           {agentCount === 0 && godStatus === 'booting' && <AbathurBooting />}
           {agentCount === 0 && godStatus !== 'booting' && (
