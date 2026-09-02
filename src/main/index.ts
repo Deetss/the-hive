@@ -5659,10 +5659,20 @@ ipcMain.handle('ai:improveText', async (_evt, text: unknown, context: unknown): 
   if (draft.length > 4000) return { ok: false, error: 'text too long to improve' };
   const kind = (typeof context === 'string' && context.trim()) ? context.trim().slice(0, 40) : 'agent objective';
   const cwd = resolveHarnessHome() || process.cwd();
+  // The hidden session boots in the harness home, where a SessionStart hook makes
+  // the assistant emit an orientation preamble ("Oriented. Here's the situation:")
+  // as its first turn. runHiddenClaude captures the last assistant text block, and
+  // a slow rewrite can let that capture land on the preamble. Fence the answer
+  // between sentinels so the handler pulls out only the rewrite and rejects a
+  // capture that grabbed the preamble — same verify-don't-trust shape as
+  // reflect.ts's JSON envelope.
+  const BEGIN = '<<<BEGIN_IMPROVED>>>';
+  const END = '<<<END_IMPROVED>>>';
   const prompt =
     `Rewrite the following ${kind} so it is a clear, specific, actionable instruction for an AI agent. ` +
     `Keep the author's original intent and scope — do not add new requirements — but make it sharper and more concrete. ` +
-    `Return ONLY the rewritten text: no preamble, no quotes, no commentary.\n\n\`\`\`\n${draft}\n\`\`\``;
+    `Output ONLY the rewritten text, wrapped exactly like this:\n${BEGIN}\n<rewritten text here>\n${END}\n` +
+    `Nothing before ${BEGIN} or after ${END}: no preamble, no quotes, no commentary, no code fences.\n\n\`\`\`\n${draft}\n\`\`\``;
   try {
     const result = await runHiddenClaude(prompt, {
       model: 'claude-haiku-4-5',
@@ -5672,7 +5682,13 @@ ipcMain.handle('ai:improveText', async (_evt, text: unknown, context: unknown): 
       timeoutMs: 90_000,
     });
     if (!result.ok || !result.text) return { ok: false, error: result.error ?? 'no response from the assistant' };
-    return { ok: true, result: result.text.trim() };
+    const fenced = new RegExp(`${BEGIN}\\s*([\\s\\S]*?)\\s*${END}`).exec(result.text);
+    const improved = (fenced ? fenced[1] : '')
+      .replace(/^```(?:\w+)?\s*/, '')
+      .replace(/```\s*$/, '')
+      .trim();
+    if (!improved) return { ok: false, error: 'the assistant did not return improved text — try again' };
+    return { ok: true, result: improved };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
