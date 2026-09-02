@@ -18,6 +18,7 @@ import { Icon } from './Icon';
 import { AgentNameEditor } from './AgentNameEditor';
 import { useStore, type Agent } from '@/store/store';
 import { usePtyParser } from '@/hooks/usePtyParser';
+import { TouchedTab } from './TouchedTab';
 
 export interface AgentDetailPanelProps {
   agent: Agent;
@@ -275,6 +276,10 @@ export function AgentDetailPanel({ agent, isMobile = false }: AgentDetailPanelPr
 
         {sidebarTab === 'git' && (
           <GitTab cwd={agent.cwd} />
+        )}
+
+        {sidebarTab === 'touched' && (
+          <TouchedTab agent={agent} />
         )}
 
         {sidebarTab === 'messages' && (

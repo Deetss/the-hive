@@ -275,7 +275,7 @@ export interface QueuedMessage {
 // 'files' retired in v0.3.4 (the per-agent IDE button superseded it) — a
 // persisted 'files' selection falls back to 'terminal' on load. 'git' added in
 // v0.3.4: at-a-glance branch/status/log without opening the IDE.
-export type SidebarTab = 'terminal' | 'messages' | 'traces' | 'git';
+export type SidebarTab = 'terminal' | 'messages' | 'traces' | 'git' | 'touched';
 
 /** Lifecycle of the god agent ("Abathur") bootstrap on launch.
  *  'booting' until his PTY is confirmed live, then 'ready' (or 'failed' if the
@@ -307,6 +307,9 @@ interface State {
    *  by IdePanel, which routes it the same way a tree click would (Monaco for
    *  source, preview for markdown, the viewer for images). */
   ideInitialFile: string | null;
+  /** Absolute path queued for a diff tab on the next IDE open. Cleared once
+   *  consumed so subsequent opens start fresh. */
+  ideInitialDiff: string | null;
   /** Whether the full-window IDE panel (file manager + Monaco editor + git diff)
    *  is open. Toggled from the title-bar IDE button; a global feature surface,
    *  independent of the per-agent sidebar Files/Git tabs. */
@@ -502,11 +505,14 @@ interface State {
    *  that used to open it now comes here, so there is exactly one editor to fix
    *  when an editor bug shows up. */
   openFileInIde: (absPath: string) => void;
+  /** Queue a diff tab for the IDE using the working tree vs HEAD comparison. */
+  openDiffInIde: (absPath: string) => void;
   /** Open/close the IDE. `agentId` names the agent whose workspace it should
    *  show; omit it only when the caller truly has no specific agent (the IDE
    *  then falls back to the selection and says so in its title). */
   setIdeOpen: (open: boolean, agentId?: string | null) => void;
   setIdeInitialFile: (path: string | null) => void;
+  setIdeInitialDiff: (path: string | null) => void;
   setSidebarWidth: (px: number) => void;
   setSidebarTab: (tab: SidebarTab) => void;
   /** Drop persisted agents whose PTY is no longer alive in the main process.
@@ -772,7 +778,7 @@ const initialSidebarWidth = (() => {
 const initialSidebarTab: SidebarTab = (() => {
   try {
     const v = window.localStorage.getItem(LS_SIDEBAR_TAB);
-    if (v === 'terminal' || v === 'messages' || v === 'traces' || v === 'git') return v;
+    if (v === 'terminal' || v === 'messages' || v === 'traces' || v === 'git' || v === 'touched') return v;
   } catch { /* noop */ }
   return 'terminal';
 })();
@@ -834,6 +840,7 @@ export const useStore = create<State>((set, get) => ({
   fullscreenAgentId: focusOnLoad(initialPrefersFocusMode, initialSelectedId),
   prefersFocusMode: initialPrefersFocusMode,
   ideInitialFile: null,
+  ideInitialDiff: null,
   ideOpen: false,
   ideAgentId: null,
   reviewOpen: false,
@@ -1295,11 +1302,17 @@ export const useStore = create<State>((set, get) => ({
     const owner = s.agents.find((a) => absPath === a.cwd || absPath.startsWith(a.cwd + '/'));
     set({ ideInitialFile: absPath, ideOpen: true, ideAgentId: owner?.id ?? null });
   },
+  openDiffInIde: (absPath) => {
+    const s = get();
+    const owner = s.agents.find((a) => absPath === a.cwd || absPath.startsWith(a.cwd + '/'));
+    set({ ideInitialDiff: absPath, ideOpen: true, ideAgentId: owner?.id ?? null });
+  },
   // Closing CLEARS the target: the id is scoped to one IDE session, and a stale
   // one left behind would silently win over the selection on the next open from
   // a caller that passes nothing.
   setIdeOpen: (open, agentId) => set({ ideOpen: open, ideAgentId: open ? (agentId ?? null) : null }),
   setIdeInitialFile: (path) => set({ ideInitialFile: path }),
+  setIdeInitialDiff: (path) => set({ ideInitialDiff: path }),
   setSidebarWidth: (px) => {
     const clamped = Math.min(1200, Math.max(320, Math.round(px)));
     try { window.localStorage.setItem(LS_SIDEBAR_WIDTH, String(clamped)); } catch { /* noop */ }

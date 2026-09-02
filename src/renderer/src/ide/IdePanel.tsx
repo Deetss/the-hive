@@ -251,6 +251,17 @@ export function IdePanel({ embedded, onClose }: { embedded?: boolean; onClose?: 
     openEdit(rel);
     if (isMarkdown(rel)) setMdViews((p) => ({ ...p, [rel]: 'preview' }));
   }, [root, openEdit]);
+  useEffect(() => {
+    if (!root) return;
+    const abs = useStore.getState().ideInitialDiff;
+    if (!abs) return;
+    useStore.getState().setIdeInitialDiff(null);
+    const prefix = root.endsWith('/') ? root : `${root}/`;
+    if (!abs.startsWith(prefix)) return;
+    const rel = abs.slice(prefix.length);
+    ensureDiff(rel, true);
+    openTab('diff', rel);
+  }, [root, ensureDiff, openTab]);
   const openDiff = useCallback((rel: string) => { ensureDiff(rel, true); openTab('diff', rel); }, [ensureDiff, openTab]);
 
   const closeTab = useCallback((key: string) => {

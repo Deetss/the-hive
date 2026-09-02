@@ -7,6 +7,7 @@ import { Icon, type IconName } from './Icon';
 const TABS: { key: SidebarTab; label: string; icon: IconName }[] = [
   { key: 'terminal', label: 'terminal', icon: 'terminal' },
   { key: 'git',      label: 'git',      icon: 'code' },
+  { key: 'touched',  label: 'touched',  icon: 'ledger' },
   { key: 'messages', label: 'messages', icon: 'bell' },
   { key: 'traces',   label: 'traces',   icon: 'web' }
 ];
