@@ -327,6 +327,15 @@ function createHiveDeskAssets(renderer: Renderer, tile: number): HiveDeskAsset[]
 
   const build = (decorate: (g: Graphics, w: number, h: number) => void): HiveDeskAsset => {
     const g = new Graphics();
+    // Fixed frame so every variant's generated texture has the SAME size and
+    // origin. Without it, anchorY = 0.86h / texture.height varies with each
+    // decoration's bounds (a tall lamp draws past the deck), so pods end up at
+    // slightly different heights and look staggered. This transparent rect
+    // encloses every decoration; the anchor then resolves to the desk's
+    // (0.5w, 0.86h) point identically for all pods.
+    const padL = width * 0.35, padT = height * 0.4;
+    const frameW = width * 1.7, frameH = height * 1.6;
+    g.rect(-padL, -padT, frameW, frameH).fill({ color: 0x000000, alpha: 0 });
     const deck = mixColor(colors.accent.lemon, colors.cream[200], 0.16);
     const edge = mixColor(deck, colors.ink[700], 0.32);
     const glow = mixColor(deck, colors.cream[50], 0.38);
@@ -358,10 +367,12 @@ function createHiveDeskAssets(renderer: Renderer, tile: number): HiveDeskAsset[]
 
     const texture = renderer.generateTexture({ target: g, resolution: 2 });
     g.destroy(true);
+    // Anchor at the desk's (0.5w, 0.86h) point within the fixed frame — the same
+    // fraction for every variant, so all pods share one baseline.
     return {
       texture,
-      anchorX: 0.5,
-      anchorY: (height * 0.86) / texture.height,
+      anchorX: (padL + width * 0.5) / frameW,
+      anchorY: (padT + height * 0.86) / frameH,
     };
   };
 
@@ -469,27 +480,6 @@ function addWaxConduit(layer: Container, x: number, y: number, tile: number, noi
   branch.circle(Math.cos(primaryAngle) * length * 0.65, Math.sin(primaryAngle) * length * 0.65, tile * 0.14)
     .fill({ color: 0xffe28f, alpha: 0.78 });
   layer.addChild(branch);
-}
-
-function addPollenGrate(layer: Container, x: number, y: number, tile: number): void {
-  const grate = new Graphics();
-  grate.eventMode = 'none';
-  grate.position.set((x + 0.5) * tile, (y + 0.5) * tile);
-  grate.zIndex = y * tile + 0.04;
-  const w = tile * 0.9;
-  const h = tile * 0.55;
-  grate.roundRect(-w / 2, -h / 2, w, h, tile * 0.12)
-    .fill({ color: 0x2b1a0c, alpha: 0.95 });
-  grate.roundRect(-w / 2 + tile * 0.05, -h / 2 + tile * 0.05, w - tile * 0.1, h - tile * 0.1, tile * 0.08)
-    .fill({ color: 0x5a3b1f, alpha: 0.9 });
-  for (let i = -1; i <= 1; i++) {
-    grate.moveTo(-w * 0.45, -h / 2 + i * h * 0.32)
-      .lineTo(w * 0.45, h / 2 + i * h * 0.32)
-      .stroke({ color: 0x3a2614, width: tile * 0.05, alpha: 0.55 });
-  }
-  grate.roundRect(-w / 2 + tile * 0.1, -h / 2 + tile * 0.14, w - tile * 0.2, h - tile * 0.28, tile * 0.08)
-    .fill({ color: 0xe5a93c, alpha: 0.28 });
-  layer.addChild(grate);
 }
 
 function addHoneyCrust(layer: Container, x: number, y: number, tile: number): void {
@@ -801,8 +791,6 @@ export function OfficeFloor() {
             const noise = pseudoNoise(tx * 0.33, ty * 0.21);
             if (isCorner && noise > 0.6) {
               addHoneyCrust(patternLayer, tx, ty, tile);
-            } else if (wallUp && noise < 0.2) {
-              addPollenGrate(patternLayer, tx, ty, tile);
             } else if (noise < 0.08) {
               addWaxConduit(patternLayer, tx, ty, tile, noise);
             }
