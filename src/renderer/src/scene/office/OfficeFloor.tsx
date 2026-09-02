@@ -2323,6 +2323,7 @@ export function OfficeFloor() {
           if (seatIndex != null) seatClaims.delete(seatIndex);
           return;
         }
+        const isQueen = !!agent.isOvermind || agent.name.toLowerCase().includes('queen') || charName === 'queen';
         const character = new Character({
           agentId: agent.id,
           mapRenderer,
@@ -2333,6 +2334,7 @@ export function OfficeFloor() {
           glowColor: hexNum(colors.accent[agent.accent]) ?? hexToNumber(member.shirt),
           continuous: theme.cast.continuous?.(charName) ?? false,
           isHiveKit: isHiveTheme,
+          scale: isHiveTheme && isQueen ? 1.35 : 1.08,
           onClick: (id) => useStore.getState().select(id),
         });
         character.show(charLayer);

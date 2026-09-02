@@ -41,7 +41,7 @@ export class CharacterSprite {
   private isHiveKit: boolean = false;
   private currentHiveStatus: HiveKitStatus = 'idle';
 
-  constructor(frames: Texture[][], continuous = false, isHiveKit = false) {
+  constructor(frames: Texture[][], continuous = false, isHiveKit = false, scale = CHAR_SCALE) {
     this.frames = frames;
     this.continuous = continuous;
     this.isHiveKit = isHiveKit;
@@ -63,7 +63,7 @@ export class CharacterSprite {
 
     this.container.addChild(this.sprite);
     this.container.addChild(this.chipSprite);
-    this.container.scale.set(CHAR_SCALE);
+    this.container.scale.set(scale);
 
     if (isHiveKit) {
       void this.setHiveKitStatus('idle', 'down');

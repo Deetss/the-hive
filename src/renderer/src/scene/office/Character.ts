@@ -70,6 +70,8 @@ interface CharacterOptions {
   continuous?: boolean;
   /** Whether this agent is animated via the Hive Kit atlas. */
   isHiveKit?: boolean;
+  /** Sprite scale multiplier (e.g. 1.35 for Queen). */
+  scale?: number;
   onClick?: (agentId: string) => void;
 }
 
@@ -138,7 +140,7 @@ export class Character {
     this.agentId = options.agentId;
     this.mapRenderer = options.mapRenderer;
     this.isHiveKit = options.isHiveKit ?? false;
-    this.sprite = new CharacterSprite(options.frames, options.continuous, this.isHiveKit);
+    this.sprite = new CharacterSprite(options.frames, options.continuous, this.isHiveKit, options.scale);
     this.deskTile = options.seatTile;
     this.seatDirection = options.seatDirection ?? 'down';
     this.onClick = options.onClick;
