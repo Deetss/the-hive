@@ -194,6 +194,11 @@ const hiveDeskTile = (i: number): Tile => ({
 // rests on the deck instead of floating on the old office monitor shelf.
 const HIVE_CUP_OFFSET = { dx: 0.62, dy: -0.05 } as const;
 
+// The honey vat/comb fills one level (of 7 frames, 0..6) per this many completed
+// tasks, so it takes 6 * this many done tasks to fill — a leisurely span rather
+// than topping out at the first handful of tasks. Tune here to pace the fill.
+const HONEY_TASKS_PER_LEVEL = 4;
+
 // Dev-only ghost-buster: on Vite HMR this module is swapped and React fast-refresh
 // can re-render the component WITHOUT firing the setup effect's cleanup, leaving
 // the previous Pixi Application (and its canvas) alive as a faded ghost scene. We
@@ -1780,9 +1785,11 @@ export function OfficeFloor() {
       };
 
       const drawHiveHoneyVat = (doneCount: number): void => {
-        // Authored sprite: a coopered barrel filling with honey, frame per count 0..6.
+        // Authored sprite: a coopered barrel filling with honey. One fill level per
+        // HONEY_TASKS_PER_LEVEL completed tasks, clamped to the 7 frames (0..6).
+        const level = Math.min(Math.floor(doneCount / HONEY_TASKS_PER_LEVEL), 6);
         if (honeyVatFrames) {
-          vatSprite.texture = honeyVatFrames[Math.min(doneCount, 6)];
+          vatSprite.texture = honeyVatFrames[level];
           vatSprite.visible = true;
           return;
         }
@@ -1792,7 +1799,7 @@ export function OfficeFloor() {
         const honeyColor = NOTE_COLORS.done ?? colors.accent.mint;
         boardG.roundRect(vatX - 2, 3, vatWidth + 4, vatHeight + 4, 6).fill(0x3a2715);
         boardG.roundRect(vatX, 5, vatWidth, vatHeight, 6).fill(0x5a3b1f);
-        const ratio = Math.min(doneCount, 6) / 6;
+        const ratio = level / 6;
         if (ratio > 0) {
           const fillHeight = (vatHeight - 4) * ratio;
           const top = 5 + (vatHeight - 4 - fillHeight);
