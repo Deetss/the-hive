@@ -1061,6 +1061,15 @@ const api = {
     ipcRenderer.on('hive:contextUpdate', listener);
     return () => ipcRenderer.removeListener('hive:contextUpdate', listener);
   },
+  /** Push-based model id from the status line: reflects a live /model change in
+   *  the terminal onto the roster card. Same pattern as onHiveContextUpdate. */
+  onHiveModelUpdate: (
+    cb: (e: { agentId: string; model: string }) => void
+  ): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: { agentId: string; model: string }) => cb(payload);
+    ipcRenderer.on('hive:modelUpdate', listener);
+    return () => ipcRenderer.removeListener('hive:modelUpdate', listener);
+  },
   /** Fleet token data from fleet.json (PTY-parsed tokens/ctx for non-Claude agents). */
   onFleetTokens: (
     cb: (data: Record<string, { tokens: number; ctxPct: number | null; usd: number; quotaLimited?: boolean; quotaResetsAt?: number | null }>) => void

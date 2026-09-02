@@ -629,6 +629,16 @@ export function useHive(config: HarnessConfig | null): void {
     });
   }, []);
 
+  // 2d′) Push-based model sync: the status-line shim reports the ACTUAL running
+  //      model, so changing it manually with /model in the terminal updates the
+  //      roster card (which otherwise shows only the spawn-time model).
+  useEffect(() => {
+    return window.cth.onHiveModelUpdate(({ agentId, model }) => {
+      if (!model) return;
+      useStore.getState().updateAgent(agentId, { model });
+    });
+  }, []);
+
   // 2e) Non-Claude providers cannot drain hive inbox. Direct hive mail to them
   //     arrives here as a terminal work order and is queued through the same
   //     idle-only PTY drain as human-composed messages.

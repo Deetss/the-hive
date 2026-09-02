@@ -43,9 +43,9 @@ interface HookPayload {
   /** Notification hook text, e.g. "Claude is waiting for your input" (idle) vs a
    *  permission request. Used to tell "needs you" from "just done / lingering". */
   message?: string;
-  /** CostSample payloads only (synthesized by the proxy-bridge sidecar for
-   *  qwen). Raw token counts for one response, fed to the cost ledger. */
-  model?: string;
+  /** CostSample payloads carry a flat model id (string), fed to the cost ledger.
+   *  Status payloads carry Claude Code's statusline model object ({ id }). */
+  model?: string | { id?: string; display_name?: string };
   provider?: string;
   input?: number;
   output?: number;
@@ -77,6 +77,9 @@ export class HookServer {
   private lastWarningAt = new Map<string, number>();
   /** agentId → last tool executed (for descriptive idle notifications). */
   private lastToolById = new Map<string, string>();
+  /** agentId → last model id seen on the statusline; dedupes hive:modelUpdate so
+   *  the store is written only when a manual /model change actually flips it. */
+  private lastModelById = new Map<string, string>();
 
   constructor(
     private hive: HiveManager,
@@ -147,6 +150,7 @@ export class HookServer {
   clearToolCallCount(agentId: string): void {
     this.toolCallCounts.delete(agentId);
     this.lastWarningAt.delete(agentId);
+    this.lastModelById.delete(agentId);
   }
 
   private handle(p: HookPayload): unknown {
@@ -206,6 +210,19 @@ export class HookServer {
         this.rateLimitsById.set(agentId, entry);
         this.getWebContents()?.send('hive:rateLimitsUpdate', { agentId, ...entry });
       }
+      // The live model id: the card shows the spawn-time model, but the statusline
+      // reports the ACTUAL running model, so a manual /model change in the terminal
+      // syncs to the roster. CC forwards its statusline model object; the qwen
+      // sidecar sends a flat string. Deduped so we push only on a real change (the
+      // statusline fires after every response).
+      const rawModel = p.model;
+      const modelId = typeof rawModel === 'string'
+        ? rawModel
+        : (rawModel && typeof rawModel === 'object' ? (rawModel.id ?? rawModel.display_name) : undefined);
+      if (agentId && modelId && this.lastModelById.get(agentId) !== modelId) {
+        this.lastModelById.set(agentId, modelId);
+        this.getWebContents()?.send('hive:modelUpdate', { agentId, model: modelId });
+      }
       return {};
     }
 
@@ -237,6 +254,7 @@ export class HookServer {
         const provider = (typeof p.provider === 'string' && p.provider.trim())
           ? p.provider.trim()
           : registry.agents[agentId]?.provider ?? null;
+        const costModel = typeof p.model === 'string' ? p.model : '';
         this.hive.appendCostLedger({
           agentId,
           sessionId: p.session_id,
@@ -245,9 +263,9 @@ export class HookServer {
           output,
           cacheRead,
           cacheCreation,
-          model: p.model ?? '',
+          model: costModel,
           provider,
-          usd: estimateCostUsd(p.model, {
+          usd: estimateCostUsd(costModel, {
             inputTokens: input,
             outputTokens: output,
             cacheReadTokens: cacheRead,
