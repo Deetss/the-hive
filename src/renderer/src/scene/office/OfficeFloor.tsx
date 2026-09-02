@@ -368,10 +368,40 @@ function createHiveDeskAssets(renderer: Renderer, tile: number): HiveDeskAsset[]
       .fill({ color: mixColor(colors.ink[700], colors.accent.lemon, 0.25), alpha: 0.9 });
   };
 
+  const addCombMonitor = (g: Graphics, w: number, h: number) => {
+    const cx = w * 0.52;
+    const cy = h * 0.3;
+    g.rect(cx - 1.5, cy + 5, 3, 8).fill({ color: darken(colors.accent.lemon, 0.42), alpha: 0.9 });
+    g.ellipse(cx, cy + 12, 7, 3).fill({ color: darken(colors.accent.lemon, 0.46), alpha: 0.85 });
+    drawHex(g, cx, cy, w * 0.2, h * 0.16, mixColor(colors.accent.lemon, colors.ink[700], 0.32), {
+      stroke: mixColor(colors.accent.lemon, colors.ink[900], 0.2),
+      strokeAlpha: 0.9,
+      strokeWidth: tile * 0.1,
+    });
+    drawHex(g, cx, cy, w * 0.13, h * 0.1, lighten(colors.accent.lemonLight, 0.28), { alpha: 0.92 });
+    drawHex(g, cx, cy - h * 0.02, w * 0.06, h * 0.045, colors.cream[50], { alpha: 0.55 });
+  };
+
+  const addPollenStack = (g: Graphics, w: number, h: number) => {
+    const sx = w * 0.63;
+    const sy = h * 0.34;
+    const discs = [
+      { dy: 0, r: 6, c: mixColor(colors.accent.lemon, colors.accent.peach, 0.4) },
+      { dy: -5, r: 5, c: mixColor(colors.accent.lemonLight, colors.cream[100], 0.3) },
+      { dy: -9, r: 4, c: mixColor(colors.accent.lemon, colors.accent.peachLight, 0.5) },
+    ];
+    for (const d of discs) {
+      g.ellipse(sx, sy + d.dy, d.r, d.r * 0.5).fill({ color: d.c, alpha: 0.95 });
+      g.ellipse(sx, sy + d.dy - 1, d.r * 0.78, d.r * 0.38).fill({ color: lighten(d.c, 0.32), alpha: 0.6 });
+    }
+  };
+
   return [
     build(addLamp),
     build(addLedger),
     build(addHoneyTools),
+    build(addCombMonitor),
+    build(addPollenStack),
   ];
 }
 
