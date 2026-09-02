@@ -279,8 +279,11 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
         <PixelPanel variant="dialog" title="EDIT AGENT" style={{ padding: 16 }} noPadding>
           <div style={{
             display: 'flex', flexDirection: 'column', gap: 14,
-            padding: 16, maxHeight: '86vh', overflowY: 'auto'
+            padding: 16, maxHeight: '86vh'
           }}>
+            {/* Field area scrolls on its own; the footer below stays pinned and
+                always visible, so it never overlaps the inputs on a short window. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', minHeight: 0, flex: '1 1 auto' }}>
             {/* Two columns so the extra width is used rather than padded.
                 Identity and Engine are short field lists; Briefing is free
                 text and takes the taller side. minHeight keeps the dialog from
@@ -508,6 +511,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
             </Section>
               </div>
             </div>
+            </div>
 
             {error && (
               <div style={{
@@ -521,7 +525,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 4, flexShrink: 0 }}>
               <PixelButton variant="ghost" size="md" onClick={onClose} disabled={saving}>cancel</PixelButton>
               <PixelButton variant="primary" size="md" onClick={save} disabled={saving}>
                 {saving ? 'saving…' : 'save changes'}
