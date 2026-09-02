@@ -3,6 +3,7 @@ import { AGENT_MODELS, type HarnessConfig } from '@/store/config';
 import { useStore } from '@/store/store';
 import {
   CLONE_NODE_BLURB,
+  DEFAULT_CONTEXT_TRIGGER,
   DEFAULT_TRIGGER_MODE,
   DEFAULT_WEBHOOK_SCHEMA,
   TRIGGER_MODES,
@@ -598,22 +599,22 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
     finally { setKgBusy(false); }
   };
 
-  // ─── Scheduled auto-compact — the compact-maintenance mission's enabled flag.
-  // The mission itself stays the single source of truth (the Triggers tab edits
-  // the same field); this is just a General-section shortcut. Default OFF (v0.3.4).
+  // ─── Scheduled auto-compact — controls config.contextTrigger.compact.enabled.
+  // The Triggers tab edits the same field; this is a General-section shortcut.
   const [autoCompactOn, setAutoCompactOn] = useState<boolean>(
-    (config.missions ?? []).some((m) => m.id === 'compact-maintenance' && m.enabled)
+    config.contextTrigger?.compact?.enabled ?? DEFAULT_CONTEXT_TRIGGER.compact.enabled
   );
   const toggleAutoCompact = async () => {
     const next = !autoCompactOn;
     setAutoCompactOn(next);
     try {
       const cfg = await window.cth.getConfig();
-      const missions = (cfg.missions ?? []).map((m) =>
-        m.id === 'compact-maintenance' ? { ...m, enabled: next } : m
-      );
-      await window.cth.updateConfig({ missions });
-    } catch { setAutoCompactOn(!next); }
+      const ct = cfg.contextTrigger ?? DEFAULT_CONTEXT_TRIGGER;
+      const compact = { ...(ct.compact ?? DEFAULT_CONTEXT_TRIGGER.compact), enabled: next };
+      await window.cth.updateConfig({ contextTrigger: { ...ct, compact } });
+    } catch {
+      setAutoCompactOn(!next);
+    }
   };
 
   // ─── Auto-update (default ON; gates main's updater checks entirely) ────────

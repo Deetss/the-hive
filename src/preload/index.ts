@@ -390,6 +390,12 @@ export interface HarnessConfig {
    *  Populated by main at startup from the agent's spawn environment.
    *  Absent = subscription assumed (show estimated cost). */
   billingMode?: 'subscription' | 'api';
+  /** Auto-compaction / auto-clearing of agent terminal context. */
+  contextTrigger?: ContextTriggerConfig;
+  /** Inbound HTTP endpoints, one per caller. */
+  webhookTriggers?: WebhookTrigger[];
+  /** Peer messaging between teammates' clone nodes (persistence + UI only). */
+  orgTrigger?: OrgTriggerConfig;
 }
 
 export interface MemoryStatus {
