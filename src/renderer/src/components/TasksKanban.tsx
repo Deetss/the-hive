@@ -1,4 +1,4 @@
-import { CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ClipboardEvent, CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { PixelBadge } from './PixelBadge';
@@ -665,6 +665,39 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
     }
   };
 
+  // Append an attached/pasted file's absolute path on its own line, same
+  // path-based convention as the dispatch composer (MessageQueueComposer.tsx).
+  const appendNotesPath = (path: string) => {
+    if (!path) return;
+    setNotesDraft((prev) => (prev.trim() ? `${prev}\n${path}` : path));
+  };
+
+  const attachNotesFile = async () => {
+    const res = await window.cth.attachFiles();
+    if (res.ok) res.files.forEach((f) => appendNotesPath(f.path));
+  };
+
+  // Paste a screenshot (no path -> persist the clipboard image to a temp file)
+  // or paste files copied from the OS file manager (carry a real path).
+  const onNotesPaste = async (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const hasImage = items.some((it) => it.kind === 'file' && it.type.startsWith('image/'));
+    if (hasImage) {
+      e.preventDefault();
+      const res = await window.cth.saveClipboardImage();
+      if (res.ok) appendNotesPath(res.file.path);
+      return;
+    }
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length) {
+      const paths = files.map((f) => window.cth.pathForFile(f)).filter(Boolean);
+      if (paths.length) {
+        e.preventDefault();
+        paths.forEach(appendNotesPath);
+      }
+    }
+  };
+
   const saveResult = async () => {
     setIsEditingResult(false);
     if (resultDraft !== (task.result || '')) {
@@ -805,6 +838,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
                   <textarea
                     value={notesDraft}
                     onChange={(e) => setNotesDraft(e.target.value)}
+                    onPaste={onNotesPaste}
                     rows={6}
                     autoFocus
                     style={{
@@ -813,9 +847,14 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
                       border: '1px solid var(--cth-ink-700)', outline: 'none', resize: 'vertical', boxSizing: 'border-box'
                     }}
                   />
-                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                    <PixelButton variant="ghost" size="sm" onClick={() => setIsEditingNotes(false)}>cancel</PixelButton>
-                    <PixelButton variant="primary" size="sm" onClick={saveNotes}>save notes</PixelButton>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'space-between' }}>
+                    <PixelButton variant="ghost" size="sm" onClick={() => void attachNotesFile()}>
+                      <Icon name="plus" /> attach
+                    </PixelButton>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <PixelButton variant="ghost" size="sm" onClick={() => setIsEditingNotes(false)}>cancel</PixelButton>
+                      <PixelButton variant="primary" size="sm" onClick={saveNotes}>save notes</PixelButton>
+                    </div>
                   </div>
                 </div>
               ) : (
