@@ -141,7 +141,7 @@ export interface HumanQA {
   /** "Chat about this": a back-and-forth between the human and the assigned agent,
    *  additive to the answer. Appended by tasks:chatHumanQA (human) and the
    *  humanQA-chat outbox intercept in routeOnce (agent). */
-  thread?: { from: 'human' | 'agent'; text: string; ts: string }[];
+  thread?: { from: 'human' | 'agent'; text: string; ts: string; images?: string[] }[];
 }
 
 export interface HiveTask {
@@ -2015,7 +2015,7 @@ export class HiveManager {
   appendHumanQAThread(
     taskId: string,
     question: string,
-    msg: { from: 'human' | 'agent'; text: string; ts: string }
+    msg: { from: 'human' | 'agent'; text: string; ts: string; images?: string[] }
   ): { ok: boolean; assignee?: string | null; title?: string } {
     const ledger = this.tasks() as { tasks?: HiveTask[] };
     const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];

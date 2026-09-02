@@ -35,6 +35,8 @@ export interface HumanQAThreadMsg {
   from: 'human' | 'agent';
   text: string;
   ts: string;
+  /** At most one attached image (a data URL), human side only. */
+  images?: string[];
 }
 
 export interface OpenHumanQAItem {

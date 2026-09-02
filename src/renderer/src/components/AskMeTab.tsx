@@ -50,6 +50,8 @@ export function AskMeTab() {
   const [chatDrafts, setChatDrafts] = useState<Record<string, string>>({});
   const [chatOpen, setChatOpen] = useState<Record<string, boolean>>({});
   const [chatSending, setChatSending] = useState<Record<string, boolean>>({});
+  // At most one pasted/attached screenshot per chat draft, keyed like chatDrafts.
+  const [chatImages, setChatImages] = useState<Record<string, string>>({});
   const [sendingMsg, setSendingMsg] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -127,10 +129,12 @@ export function AskMeTab() {
     if (!text || chatSending[key]) return;
     setChatSending((p) => ({ ...p, [key]: true }));
     try {
+      const image = chatImages[key];
       if (window.cth?.chatHumanQA) {
-        await window.cth.chatHumanQA(taskId, question, text);
+        await window.cth.chatHumanQA(taskId, question, text, image ? [image] : undefined);
       }
       setChatDrafts((p) => { const n = { ...p }; delete n[key]; return n; });
+      setChatImages((p) => { const n = { ...p }; delete n[key]; return n; });
       await loadQA();
     } catch (e) {
       console.error('[AskMeTab] failed to send chat:', e);
@@ -191,6 +195,34 @@ export function AskMeTab() {
     setImages((prev) => {
       const next = { ...prev };
       delete next[taskId];
+      return next;
+    });
+  };
+
+  const handlePasteChatImage = (chatKey: string) => (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const item = Array.from(e.clipboardData.items).find((it) => it.type.startsWith('image/'));
+    if (!item) return;
+    const file = item.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    void readImageAsDataUrl(file)
+      .then((dataUrl) => setChatImages((prev) => ({ ...prev, [chatKey]: dataUrl })))
+      .catch((err) => console.error('[AskMeTab] failed to read pasted chat image:', err));
+  };
+
+  const handleAttachChatImage = (chatKey: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    void readImageAsDataUrl(file)
+      .then((dataUrl) => setChatImages((prev) => ({ ...prev, [chatKey]: dataUrl })))
+      .catch((err) => console.error('[AskMeTab] failed to read attached chat image:', err));
+  };
+
+  const clearChatImage = (chatKey: string) => {
+    setChatImages((prev) => {
+      const next = { ...prev };
+      delete next[chatKey];
       return next;
     });
   };
@@ -610,6 +642,13 @@ export function AskMeTab() {
                                       {m.from === 'human' ? 'you' : nameFor(item.assignee)} · {formatAgo(m.ts, now)}
                                     </div>
                                     <Markdown text={m.text} style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-900)', maxWidth: '72ch' }} />
+                                    {m.images?.[0] && (
+                                      <img
+                                        src={m.images[0]}
+                                        alt="attached screenshot"
+                                        style={{ marginTop: 4, maxHeight: 140, maxWidth: '100%', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)' }}
+                                      />
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -622,12 +661,34 @@ export function AskMeTab() {
                                 waiting for {nameFor(item.assignee)} to reply…
                               </div>
                             )}
-                            <div style={{ display: 'flex', gap: 4 }}>
+                            {chatImages[chatKey] && (
+                              <div style={{ position: 'relative', display: 'inline-flex', alignSelf: 'flex-start' }}>
+                                <img
+                                  src={chatImages[chatKey]}
+                                  alt="attachment preview"
+                                  style={{ height: 40, boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', display: 'block' }}
+                                />
+                                <button
+                                  type="button"
+                                  title="Remove attachment"
+                                  onClick={() => clearChatImage(chatKey)}
+                                  style={{
+                                    position: 'absolute', top: -6, right: -6, width: 16, height: 16, padding: 0,
+                                    border: 'none', borderRadius: '50%', background: 'var(--cth-coral)', color: '#fff',
+                                    fontSize: 10, lineHeight: '16px', cursor: 'pointer'
+                                  }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                               <input
                                 type="text"
                                 value={draft}
                                 onChange={(e) => setChatDrafts((p) => ({ ...p, [chatKey]: e.target.value }))}
                                 onKeyDown={(e) => { if (e.key === 'Enter') void handleChat(item.taskId, item.question); }}
+                                onPaste={handlePasteChatImage(chatKey)}
                                 placeholder={`ask ${nameFor(item.assignee)}…`}
                                 disabled={sending}
                                 style={{
@@ -636,6 +697,18 @@ export function AskMeTab() {
                                   fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)'
                                 }}
                               />
+                              <label
+                                title="Attach a screenshot"
+                                style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', color: 'var(--cth-ink-700)' }}
+                              >
+                                <Icon name="image" />
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleAttachChatImage(chatKey)}
+                                  style={{ display: 'none' }}
+                                />
+                              </label>
                               <PixelButton
                                 variant="secondary"
                                 size="sm"

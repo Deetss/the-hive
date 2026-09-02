@@ -6723,14 +6723,22 @@ ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: un
 /** "Chat about this": append the human's message to the item's thread and route
  *  the text to the item's ASSIGNED agent, tagged so it can reply into the same
  *  thread. Additive to answerHumanQA — does not change the PASS/FAIL decision. */
-ipcMain.handle('tasks:chatHumanQA', async (_evt, taskId: unknown, question: unknown, text: unknown) => {
+ipcMain.handle('tasks:chatHumanQA', async (_evt, taskId: unknown, question: unknown, text: unknown, images?: unknown) => {
   if (typeof taskId !== 'string' || !taskId) return { ok: false, error: 'invalid taskId' };
   if (typeof question !== 'string' || !question) return { ok: false, error: 'invalid question' };
   const body = typeof text === 'string' ? text.trim() : '';
   if (!body) return { ok: false, error: 'message text required' };
   if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
+  const imgs = Array.isArray(images)
+    ? images.filter((i): i is string => typeof i === 'string' && i.startsWith('data:image/')).slice(0, 1)
+    : [];
 
-  const res = hive.appendHumanQAThread(taskId, question, { from: 'human', text: body, ts: new Date().toISOString() });
+  const res = hive.appendHumanQAThread(taskId, question, {
+    from: 'human',
+    text: body,
+    ts: new Date().toISOString(),
+    ...(imgs.length > 0 ? { images: imgs } : {})
+  });
   if (!res.ok) return { ok: false, error: 'humanQA item not found' };
 
   if (res.assignee) {

@@ -925,9 +925,10 @@ const api = {
   chatHumanQA: (
     taskId: string,
     question: string,
-    text: string
+    text: string,
+    images?: string[]
   ): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('tasks:chatHumanQA', taskId, question, text),
+    ipcRenderer.invoke('tasks:chatHumanQA', taskId, question, text, images),
   onHumanQAChanged: (cb: () => void): (() => void) => {
     const handler = () => cb();
     ipcRenderer.on('hive:humanQAChanged', handler);
