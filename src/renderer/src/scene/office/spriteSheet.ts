@@ -43,6 +43,7 @@ export function loadFrameStrip(url: string, count: number, axis: Axis): Promise<
   if (!p) {
     p = slice(url, count, axis).catch((e) => {
       cache.delete(url);
+      console.warn('[spriteSheet] failed to load', url.slice(0, 64), e);
       throw e;
     });
     cache.set(url, p);
