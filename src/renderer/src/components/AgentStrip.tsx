@@ -106,13 +106,13 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
       display: 'flex',
       flexDirection: isMobile ? 'column' : 'row',
       gap: isMobile ? 10 : 12,
-      padding: isMobile ? '12px 12px 16px' : '14px 16px',
+      padding: isMobile ? '12px 12px 16px' : '10px 16px',
       overflowX: isMobile ? 'hidden' : 'auto',
       overflowY: isMobile ? 'auto' : 'hidden',
       borderTop: '1px solid var(--cth-ink-300)',
       background: 'var(--cth-cream-200)',
-      height: isMobile ? 'auto' : 112,
-      minHeight: isMobile ? 0 : 112,
+      height: isMobile ? 'auto' : 124,
+      minHeight: isMobile ? 0 : 124,
       alignItems: isMobile ? 'stretch' : 'center',
       maxHeight: isMobile ? '40vh' : undefined
     }}>
@@ -182,8 +182,6 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
             onEditNote={a.isOvermind ? undefined : () => setNoteEditId(a.id)}
             lastTool={lastTool[a.id]}
             lastActivityTs={(telemetrySamples[a.id]?.ts) ?? a.recentTextTs ?? null}
-            cwd={a.cwd}
-            worktreePath={a.worktreePath}
             command={a.command}
             provider={a.provider}
             model={a.model}

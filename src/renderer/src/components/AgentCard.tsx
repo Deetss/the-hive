@@ -57,10 +57,6 @@ export interface AgentCardProps {
   lastTool?: string;
   /** Epoch ms of the most recent activity (telemetry or transcript). */
   lastActivityTs?: number | null;
-  /** Base working directory for this agent. */
-  cwd?: string;
-  /** Isolated worktree path, when present. */
-  worktreePath?: string;
   command?: string;
   provider?: AgentProvider;
   model?: string;
@@ -99,20 +95,6 @@ function formatAgo(ts: number | null | undefined, now: number): string | null {
   return `${days} d ago`;
 }
 
-function shortenPath(path: string | undefined, keepSegments = 2): { display: string; title: string } | null {
-  if (!path) return null;
-  const normalized = path.replace(/\\+/g, '/');
-  if (normalized.length <= 36) return { display: normalized, title: path };
-  const segments = normalized.split('/').filter(Boolean);
-  if (segments.length <= keepSegments + 1) {
-    return { display: normalized.slice(-36), title: path };
-  }
-  const root = normalized.startsWith('/') ? '/' : segments[0].includes(':') ? segments[0] : '';
-  const tail = segments.slice(-keepSegments).join('/');
-  const prefix = root ? `${root}/` : '';
-  return { display: `${prefix}…/${tail}`, title: path };
-}
-
 /**
  * v0.3.4 compact redesign: one identity row (name + status), one context line
  * (action while working, repo while idle — both in the tooltip), one note row,
@@ -122,7 +104,7 @@ export function AgentCard({
   name, agentId, character, accent, status, ptyId, project, action, progress = 0,
   contextTokens, contextLimit, selected, isOvermind, onClick, onRename,
   doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold, quotaLimited,
-  lastTool, lastActivityTs, cwd, worktreePath, command, provider, model, profileId, profileLabel,
+  lastTool, lastActivityTs, command, provider, model, profileId, profileLabel,
   onRespawn
 }: AgentCardProps) {
   const [hover, setHover] = useState(false);
@@ -167,8 +149,12 @@ export function AgentCard({
   // that gets cut. Widened for every card so the dock stays uniform, with enough
   // slack that Talk's info mark (which only appears when the OpenAI key is
   // missing) has somewhere to sit rather than pushing the row apart.
-  const width = 220;
-  const height = 78;
+  // The bottom-strip card lives in a 112px-tall row; 78px crammed six stacked
+  // text rows into ~66px of usable height and the name collapsed to "BE…".
+  // Wider + taller (still inside the strip), and the lowest-value rows are
+  // dropped below, so name / status / model / project get the room.
+  const width = 244;
+  const height = 100;
   const lift = (isOvermind ? -2 : 0) - (hover ? 1 : 0) - (selected ? 1 : 0);
   /** God's distinction: a tinted surface plus a thin accent border all the way
    *  around — NOT the 3px rule that used to sit on the top edge alone. That rule
@@ -202,7 +188,6 @@ export function AgentCard({
     ? Math.max(0, now - lastActivityTs)
     : 0;
   const idleStaleLabel = idleMs >= IDLE_STALE_MS ? `idle ${Math.floor(idleMs / 3_600_000)}h` : null;
-  const location = shortenPath(worktreePath ?? cwd);
   const modelLabel = shortModel(model);
   const toolLabel = lastTool ?? ((status !== 'idle' && action) ? action : undefined);
   // #5C — surface `/compact` distinctly. The PreCompact hook sets status to
@@ -294,7 +279,11 @@ export function AgentCard({
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between', minWidth: 0 }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
                 {onRename ? (
-                  <AgentNameEditor name={name} onCommit={onRename} uppercase />
+                  // Floor the name so a wide status badge / tags can't crush it to
+                  // "BE…" — it truncates with an ellipsis instead, never below ~9 chars.
+                  <span style={{ flex: 1, minWidth: 64, display: 'flex' }}>
+                    <AgentNameEditor name={name} onCommit={onRename} uppercase />
+                  </span>
                 ) : (
                   <span style={{
                     fontFamily: 'var(--cth-font-ui)',
@@ -428,29 +417,24 @@ export function AgentCard({
               </div>
             )}
 
-            {(toolLabel || activityLabel || location) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {(toolLabel || activityLabel) && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', opacity: 0.85 }}>
-                    {toolLabel && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }} title={`Last tool: ${toolLabel}`}>
-                        <Icon name="terminal" size={1} style={{ color: 'var(--cth-ink-500)' }} />
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>{toolLabel}</span>
-                      </span>
-                    )}
-                    {activityLabel && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={lastActivityTs ? new Date(lastActivityTs).toLocaleString() : undefined}>
-                        <Icon name="clock" size={1} style={{ color: 'var(--cth-ink-500)' }} />
-                        <span>{activityLabel}</span>
-                      </span>
-                    )}
-                  </div>
+            {/* Compact strip card: last-tool + activity on ONE line. The working
+                directory row was dropped here — it forced its own line and
+                pushed the card past its height; the path is in the sidebar and
+                the agent's own header. `toolLabel` is skipped when it just
+                repeats the action already on the context line above. */}
+            {((toolLabel && toolLabel !== infoLine) || activityLabel) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', opacity: 0.85, minWidth: 0 }}>
+                {toolLabel && toolLabel !== infoLine && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }} title={`Last tool: ${toolLabel}`}>
+                    <Icon name="terminal" size={1} style={{ color: 'var(--cth-ink-500)' }} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 130 }}>{toolLabel}</span>
+                  </span>
                 )}
-                {location && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', opacity: 0.85 }}>
-                    <Icon name="folder" size={1} style={{ color: 'var(--cth-ink-500)' }} />
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }} title={location.title}>{location.display}</span>
-                  </div>
+                {activityLabel && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }} title={lastActivityTs ? new Date(lastActivityTs).toLocaleString() : undefined}>
+                    <Icon name="clock" size={1} style={{ color: 'var(--cth-ink-500)' }} />
+                    <span>{activityLabel}</span>
+                  </span>
                 )}
               </div>
             )}
