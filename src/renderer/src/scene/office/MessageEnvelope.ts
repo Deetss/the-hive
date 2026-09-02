@@ -1,5 +1,7 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { colors } from '@/design/tokens';
+import { loadFrameStrip } from './spriteSheet';
+import envelopeSheetUrl from '@/assets/hive/msg-envelope.png?url';
 
 /** Hive speech-acts (mirrors HiveMessage['act'] in the main process). */
 export type MessageAct = 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done' | 'warn';
@@ -41,9 +43,22 @@ function easeInOut(t: number): number {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }
 
+// Authored envelope sheet: 3 frames of 16×12 (closed / flap-flutter / seal-glint).
+// The body art is near-white so `tint` = speech-act colour still reads; ink
+// linework + a honeycomb wax seal are baked in. Kicked off once at module load
+// so envelopes after the first already have it; the first falls back to the
+// drawn rect until the strip resolves.
+const ENVELOPE_FLUTTER = [0, 1, 2, 1];
+let envelopeFrames: Texture[] | null = null;
+loadFrameStrip(envelopeSheetUrl, 3, 'x')
+  .then((f) => { envelopeFrames = f; })
+  .catch(() => { /* keep the Graphics fallback */ });
+
 export class MessageEnvelope {
   readonly container: Container;
   private body: Graphics;
+  private sprite: Sprite | null = null;
+  private fill: number;
   private burst: Graphics;
 
   private sx: number; private sy: number;
@@ -66,7 +81,7 @@ export class MessageEnvelope {
     const dist = Math.hypot(this.ex - this.sx, this.ey - this.sy);
     this.duration = Math.min(MAX_DURATION, Math.max(MIN_DURATION, dist / SPEED));
 
-    const fill = needsHuman ? HUMAN_COLOR : (ACT_COLOR[act] ?? colors.cream[200]);
+    this.fill = needsHuman ? HUMAN_COLOR : (ACT_COLOR[act] ?? colors.cream[200]);
 
     this.container = new Container();
     this.container.zIndex = 1_000_000; // always above the cast
@@ -74,10 +89,11 @@ export class MessageEnvelope {
     this.container.alpha = 0;
 
     // Envelope: a 14×10 rect with an ink outline and a "flap" chevron. Drawn
-    // centered so rotation/scale pivot at the middle.
+    // centered so rotation/scale pivot at the middle. Used as-is until the
+    // authored sheet resolves, then hidden behind the sprite (below).
     this.body = new Graphics();
     const w = 14, h = 10;
-    this.body.rect(-w / 2, -h / 2, w, h).fill({ color: fill }).stroke({ color: OUTLINE, width: 1 });
+    this.body.rect(-w / 2, -h / 2, w, h).fill({ color: this.fill }).stroke({ color: OUTLINE, width: 1 });
     // flap — two lines from the top corners meeting at the centre
     this.body.moveTo(-w / 2, -h / 2).lineTo(0, h / 2 - 3).lineTo(w / 2, -h / 2)
       .stroke({ color: OUTLINE, width: 1 });
@@ -87,6 +103,9 @@ export class MessageEnvelope {
     this.burst.visible = false;
     this.container.addChild(this.burst);
 
+    // attach after burst exists — attachSprite slots the sprite under it
+    if (envelopeFrames) this.attachSprite(envelopeFrames);
+
     this.setPos(this.sx, this.sy);
   }
 
@@ -95,9 +114,28 @@ export class MessageEnvelope {
     this.container.y = Math.round(y);
   }
 
+  /** Swap the drawn rect for the authored sprite once its sheet is ready. */
+  private attachSprite(frames: Texture[]): void {
+    if (this.sprite || this.finished) return;
+    const s = new Sprite(frames[0]);
+    s.anchor.set(0.5);
+    s.tint = this.fill;
+    s.eventMode = 'none';
+    this.sprite = s;
+    this.body.visible = false;
+    // keep the burst on top
+    this.container.addChildAt(s, this.container.getChildIndex(this.burst));
+  }
+
+  /** The visible envelope art — sprite when loaded, else the drawn fallback. */
+  private get art(): Sprite | Graphics {
+    return this.sprite ?? this.body;
+  }
+
   /** Advance the animation. Returns true once it has fully played out. */
   update(dt: number): boolean {
     if (this.finished) return true;
+    if (!this.sprite && envelopeFrames) this.attachSprite(envelopeFrames);
 
     if (!this.bursting) {
       this.elapsed += dt;
@@ -115,11 +153,15 @@ export class MessageEnvelope {
         ? Math.max(0, (1 - t) / (FADE_OUT / this.duration))
         : 1;
       this.container.alpha = Math.min(fadeIn, fadeOut);
-      this.body.rotation = Math.sin(this.elapsed * 6) * 0.12;
+      this.art.rotation = Math.sin(this.elapsed * 6) * 0.12;
+      if (this.sprite && envelopeFrames) {
+        this.sprite.texture =
+          envelopeFrames[ENVELOPE_FLUTTER[Math.floor(this.elapsed * 8) % ENVELOPE_FLUTTER.length]];
+      }
 
       if (t >= 1) {
         this.bursting = true;
-        this.body.visible = false;
+        this.art.visible = false;
         this.burst.visible = true;
         this.container.alpha = 1;
         this.setPos(this.ex, this.ey);

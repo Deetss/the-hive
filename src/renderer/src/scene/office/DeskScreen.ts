@@ -1,6 +1,8 @@
-import { Container, Graphics, Sprite } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { TiledMapRenderer } from './TiledMapRenderer';
 import type { MonitorConfig } from './themeRegistry';
+import { loadFrameStrip } from './spriteSheet';
+import screenSheetUrl from '@/assets/hive/desk-screen-anim.png?url';
 
 // The office tileset ships every desk PC twice: a dark, switched-off monitor
 // (gids 365/366 + 381/382 — what the map paints) and the SAME monitor with a
@@ -24,9 +26,19 @@ const DEFAULT_ON_GIDS: ReadonlyArray<readonly [number, number, number]> = [
  *  blue desktop is drawn in the tile art. The animation stays inside it. */
 const SCREEN = { x: 3, y: 5, w: 25, h: 12 };
 
+// Authored screen content: a 25×12 × 4-frame vertical strip — a warm "hive log"
+// scrolling up with a block cursor that blinks on frames 0/1. Loaded once; until
+// it resolves DeskScreen keeps drawing the procedural scroll below.
+const SCREEN_FPS = 4;
+let screenFrames: Texture[] | null = null;
+loadFrameStrip(screenSheetUrl, 4, 'y')
+  .then((f) => { screenFrames = f; })
+  .catch(() => { /* keep the Graphics fallback */ });
+
 export class DeskScreen {
   readonly container = new Container();
   private anim = new Graphics();
+  private screen: Sprite | null = null;
   private on = false;
   private t = 0;
 
@@ -43,6 +55,7 @@ export class DeskScreen {
     }
     this.anim.eventMode = 'none';
     this.container.addChild(this.anim);
+    if (screenFrames) this.attachScreen();
     this.container.x = topLeft.x * ts;
     this.container.y = topLeft.y * ts;
     // Sort with the characters: the block's bottom edge sits above the seated
@@ -51,6 +64,19 @@ export class DeskScreen {
     this.container.zIndex = (topLeft.y + 2) * ts - 1;
     this.container.visible = false;
     this.container.eventMode = 'none';
+  }
+
+  /** Mount the authored screen sprite once its strip is ready; the procedural
+   *  Graphics stops drawing from that point on. */
+  private attachScreen(): void {
+    if (this.screen || !screenFrames) return;
+    const s = new Sprite(screenFrames[0]);
+    s.x = SCREEN.x;
+    s.y = SCREEN.y;
+    s.eventMode = 'none';
+    this.screen = s;
+    this.anim.clear();
+    this.container.addChild(s);
   }
 
   /** Light the screen (agent sat down) or cut it (stood up / left). */
@@ -64,6 +90,13 @@ export class DeskScreen {
   update(dt: number): void {
     if (!this.on) return;
     this.t += dt;
+
+    if (!this.screen && screenFrames) this.attachScreen();
+    if (this.screen && screenFrames) {
+      this.screen.texture = screenFrames[Math.floor(this.t * SCREEN_FPS) % screenFrames.length];
+      return;
+    }
+
     const g = this.anim;
     g.clear();
     // Two faint "output" lines scrolling up the desktop, wrapping around —

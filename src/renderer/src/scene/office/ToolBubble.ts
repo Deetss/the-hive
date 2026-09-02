@@ -19,6 +19,24 @@ const TOOL_ICONS: Record<string, string> = {
 
 const DEFAULT_ICON = '*';
 
+// Frame index into assets/hive/tool-glyphs.png (7 × 12×12, authored bee style):
+//   0 eye · 1 nib · 2 terminal · 3 lens · 4 globe · 5 checklist · 6 hex
+const TOOL_GLYPH_FRAMES: Record<string, number> = {
+  Read: 0,
+  Edit: 1, Write: 1,
+  Bash: 2,
+  Grep: 3, Glob: 3,
+  WebFetch: 4, WebSearch: 4,
+  TodoWrite: 5,
+  MCP: 6,
+};
+const DEFAULT_GLYPH_FRAME = 6;
+
+/** Which tool-glyphs.png frame represents a tool (falls back to the hex mark). */
+export function toolGlyphFrame(toolName: string): number {
+  return TOOL_GLYPH_FRAMES[toolName] ?? DEFAULT_GLYPH_FRAME;
+}
+
 const PADDING_X = 6;
 const PADDING_Y = 3;
 const CORNER_RADIUS = 4;

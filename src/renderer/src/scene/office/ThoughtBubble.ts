@@ -1,6 +1,8 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { colors } from '@/design/tokens';
-import { toolIcon } from './ToolBubble';
+import { toolIcon, toolGlyphFrame } from './ToolBubble';
+import { loadFrameStrip } from './spriteSheet';
+import toolGlyphsUrl from '@/assets/hive/tool-glyphs.png?url';
 
 // A comic "thought cloud" pinned above an avatar's head showing what it's doing
 // RIGHT NOW (the agent's live `action`, e.g. "edit App.tsx" / "bash npm test").
@@ -34,6 +36,17 @@ const WRAP_WIDTH = MAX_WIDTH / RENDER_SCALE - PADDING_X * 2;
 // lines instead of a runaway-tall cloud (~4 lines at this width).
 const MAX_CHARS = 160;
 
+// Authored tool glyphs (assets/hive/tool-glyphs.png, 7 × 12×12). When ready they
+// replace the ASCII prefix toolIcon() would otherwise splice into the label; the
+// glyph is a real Sprite child sitting to the left of the first text line. Loaded
+// once — until it resolves the ASCII prefix path stays in use.
+const GLYPH_SIZE = 12;
+const GLYPH_GAP = 3;
+let toolGlyphFrames: Texture[] | null = null;
+loadFrameStrip(toolGlyphsUrl, 7, 'x')
+  .then((f) => { toolGlyphFrames = f; })
+  .catch(() => { /* keep the ASCII toolIcon() prefix */ });
+
 type BubbleState = 'hidden' | 'fading-in' | 'visible' | 'lingering' | 'fading-out';
 
 export class ThoughtBubble {
@@ -42,6 +55,8 @@ export class ThoughtBubble {
   private bg: Graphics;
   private tail: Graphics;
   private label: Text;
+  private glyph: Sprite;
+  private hasGlyph = false;
   private state: BubbleState = 'hidden';
   private fadeElapsed = 0;
   private lingerElapsed = 0;
@@ -94,20 +109,34 @@ export class ThoughtBubble {
     this.label.x = PADDING_X;
     this.label.y = PADDING_Y;
 
-    // tail first so it sits behind the body
-    this.inner.addChild(this.tail, this.bg, this.label);
+    this.glyph = new Sprite();
+    this.glyph.visible = false;
+
+    // tail first so it sits behind the body; glyph on top of the fill
+    this.inner.addChild(this.tail, this.bg, this.label, this.glyph);
   }
 
   /** Show the current activity. Empty text → an animated "…" (model thinking).
    *  `tool` (an agent's `carrying`) prefixes a small glyph when present. */
   show(text: string, tool?: string): void {
     this.isThinking = !text.trim();
+    // A tool glyph rides as a Sprite when its sheet is loaded; before that (or
+    // with no tool) fall back to toolIcon()'s ASCII prefix in the label.
+    this.hasGlyph = !this.isThinking && !!tool && !!toolGlyphFrames;
+    if (this.hasGlyph && tool && toolGlyphFrames) {
+      this.glyph.texture = toolGlyphFrames[toolGlyphFrame(tool)];
+      this.glyph.setSize(GLYPH_SIZE, GLYPH_SIZE);
+      this.glyph.visible = true;
+    } else {
+      this.glyph.visible = false;
+    }
+
     if (this.isThinking) {
       this.dotsElapsed = 0;
       this.dotsPhase = 0;
       this.label.text = '.';
     } else {
-      const display = tool ? `${toolIcon(tool)} ${text}` : text;
+      const display = this.hasGlyph ? text : (tool ? `${toolIcon(tool)} ${text}` : text);
       // Word-wrap (style.wordWrap) handles the horizontal fit, so the card can no
       // longer overflow; we only cap the raw length so a very long action wraps to
       // a few lines rather than a wall of text.
@@ -256,7 +285,16 @@ export class ThoughtBubble {
     // whenever the measurement overshot wordWrapWidth a touch (emoji glyphs,
     // fallback-font metrics) — on the dark map that read as "horizontally cut".
     // wordWrap already bounds the label, so the bg needs no clamp of its own.
-    this.bgW = this.label.width + PADDING_X * 2;
+    // With a tool glyph the row is [glyph][gap][label]; shift the label right and
+    // widen the cloud to hold it. The glyph aligns to the first text line.
+    const lead = this.hasGlyph ? GLYPH_SIZE + GLYPH_GAP : 0;
+    this.label.x = PADDING_X + lead;
+    if (this.hasGlyph) {
+      this.glyph.x = PADDING_X;
+      this.glyph.y = PADDING_Y + Math.max(0, Math.round((FONT_SIZE * 1.2 - GLYPH_SIZE) / 2));
+    }
+
+    this.bgW = this.label.width + lead + PADDING_X * 2;
     this.bgH = this.label.height + PADDING_Y * 2;
 
     this.bg.clear();
