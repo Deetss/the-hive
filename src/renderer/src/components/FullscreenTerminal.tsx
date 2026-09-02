@@ -21,7 +21,9 @@ import { useHasTerminalDraft, disposeTerminal, reflowTerminal, notifyThemeChange
 import { StatusBar } from './StatusBar';
 import { AppChromeControls } from './AppChromeControls';
 import { GitTab } from './GitTab';
-import { FilesTab } from './FilesTab';
+import { TouchedTab } from './TouchedTab';
+import { ThreadsPanel } from './ThreadsPanel';
+import { ToolWaterfall } from './ToolWaterfall';
 import { useAppTheme, toggleAppTheme } from '@/design/theme';
 import { UpdateBadge } from './UpdateBadge';
 import { AgentRosterItem } from './AgentRosterItem';
@@ -163,7 +165,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
   // Owned HERE, not in Header, purely so the Esc handler below can see it:
   // Esc closing the dialog must not also throw you out of focus mode.
   const [editAgentOpen, setEditAgentOpen] = useState(false);
-  const [contentTab, setContentTab] = useState<'terminal' | 'git' | 'files'>('terminal');
+  const [contentTab, setContentTab] = useState<'terminal' | 'git' | 'touched' | 'messages' | 'traces'>('terminal');
   const setAgentNote = useStore(s => s.setAgentNote);
   const updateAgent = useStore(s => s.updateAgent);
   // The floor strip (and with it the restore button) is hidden behind the
@@ -579,7 +581,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                 borderBottom: '1px solid var(--cth-ink-300)',
                 background: 'var(--cth-cream-200)'
               }}>
-                {(['terminal', 'git', 'files'] as const).map((t) => (
+                {(['terminal', 'git', 'touched', 'messages', 'traces'] as const).map((t) => (
                   <button key={t} onClick={() => setContentTab(t)} style={{
                     padding: '3px 10px', border: 'none', cursor: 'pointer',
                     fontFamily: 'var(--cth-font-ui)', fontSize: 13, textTransform: 'uppercase',
@@ -591,7 +593,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
               </div>
 
               <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: contentTab === 'terminal' ? 0 : 12 }}>
-                {contentTab === 'terminal' ? (
+                {contentTab === 'terminal' && (
                   <>
                     <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
                       <PtyTerminalView
@@ -611,10 +613,18 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                     </div>
                     <MessageQueueComposer agent={agent} />
                   </>
-                ) : contentTab === 'git' ? (
+                )}
+                {contentTab === 'git' && (
                   <GitTab cwd={agent.worktreePath ?? agent.cwd} />
-                ) : (
-                  <FilesTab cwd={agent.worktreePath ?? agent.cwd} />
+                )}
+                {contentTab === 'touched' && (
+                  <TouchedTab agent={agent} />
+                )}
+                {contentTab === 'messages' && (
+                  <ThreadsPanel agentId={agent.id} />
+                )}
+                {contentTab === 'traces' && (
+                  <ToolWaterfall agentId={agent.id} />
                 )}
               </div>
             </>
