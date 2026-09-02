@@ -5592,12 +5592,17 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
           role: 'Queen'
         }
       };
+      console.log(`[respawn] overmind ${id}: outgoingPty=${outgoingPtyId ?? '(none)'} newPty=${overmindPtyId} cwd=${spawnCwd}`);
       const res = await spawnAgentCore(spawnOpts, webContents);
-      if (!res.ok) return { ok: false, error: res.error ?? 'failed to spawn Overmind' };
+      if (!res.ok) { console.error(`[respawn] overmind spawn failed: ${res.error}`); return { ok: false, error: res.error ?? 'failed to spawn Overmind' }; }
       // Re-arm the renderer terminal bound to this id: clear its latched "process
-      // exited" line and reset the grid so the fresh session paints onto a clean,
-      // typeable screen (the same signal the post-install auto relaunch sends).
-      try { webContents?.send(`pty:relaunch:${overmindPtyId}`); } catch { /* window gone */ }
+      // exited" line, reset the grid, and reflow to the real size so the fresh
+      // full-screen TUI repaints. Sent twice — immediately, then after the TUI has
+      // had a moment to boot — so an ordering race with the kill's pty:exit or a
+      // not-yet-ready listener can't leave the panel looking dead.
+      const rearm = () => { try { webContents?.send(`pty:relaunch:${overmindPtyId}`); } catch { /* window gone */ } };
+      rearm();
+      setTimeout(rearm, 600);
       setTimeout(() => {
         try {
           ptyManager.write(overmindPtyId, `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.\r`);

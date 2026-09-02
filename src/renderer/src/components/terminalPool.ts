@@ -199,14 +199,17 @@ export function acquireTerminal(ptyId: string, theme?: ThemeMap, fontSize = 14):
     entry.exited = true;
     term.writeln(`\r\n\x1b[2m─ process exited (code ${exitCode}${signal ? `, signal ${signal}` : ''}) ─\x1b[0m`);
   }));
-  // A first-time engine-CLI install just finished and the agent is auto
-  // restart-and-continuing into THIS same pty (main re-ran the spawn). Re-arm the
-  // terminal in place — clear the latched exit (so keystrokes flow again) and wipe
-  // the install banner + "process exited" line — so the relaunched CLI's TUI paints
-  // onto a clean, typeable grid. Mirrors resetTerminal but works on this closure.
+  // Main re-ran the spawn into THIS same pty id — a first-time engine-CLI install
+  // that finished and auto restart-and-continued, or an operator respawn of the
+  // Overmind (respawnAgentById). Re-arm the terminal fully in place: clear the
+  // latched exit + the stale input model, wipe the old grid, then reflow so the
+  // fresh full-screen TUI is told the real cols/rows and repaints (a hardcoded
+  // 100x30 spawn otherwise paints a misaligned frame that reads as "not
+  // reconnected"). Same effect as the renderer-driven restart's resetTerminal.
   entry.unsub.push(window.cth.onPtyRelaunch(ptyId, () => {
-    entry.exited = false;
-    try { term.reset(); } catch { /* not yet open */ }
+    console.debug('[pty:relaunch] re-arming terminal', ptyId);
+    resetTerminal(ptyId);
+    setTimeout(() => reflowTerminal(ptyId), 50);
   }));
 
   // ── Copy / paste ──────────────────────────────────────────────────────────
