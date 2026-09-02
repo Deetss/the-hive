@@ -17,6 +17,7 @@ import { HivePicker } from '@/components/HivePicker';
 import { QuitWarningModal, type ClosingTimeState } from '@/components/QuitWarningModal';
 import { CompletionToast } from '@/realtime/CompletionToast';
 import { UpdateToast } from '@/components/UpdateToast';
+import { HumanCommandToast } from '@/components/HumanCommandToast';
 import { SettingsModal, type Section as SettingsSection } from '@/components/SettingsModal';
 import { PixelPanel } from '@/components/PixelPanel';
 import { PixelButton } from '@/components/PixelButton';
@@ -437,6 +438,10 @@ export function App() {
       {/* v0.3.4: background-update toast ("restart to update"); renders null until
           main's updater pushes a status. */}
       <UpdateToast />
+      {/* A decision or instruction typed straight into an agent's terminal is
+          otherwise buried in that one scrollback — surface it app-wide. Bottom
+          LEFT so it never stacks over the two bottom-right toasts. */}
+      <HumanCommandToast />
       {/* Title bar — a thin logo drag-strip. The version / update control, theme,
           settings and focus-mode toggles moved to the always-on StatusBar
           (<AppChromeControls/>), which killed the dead gap this row used to

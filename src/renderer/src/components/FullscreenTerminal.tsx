@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { PixelBadge, type StatusKind } from './PixelBadge';
 import { PixelButton } from './PixelButton';
 import { PtyTerminalView } from './PtyTerminalView';
+import { emitHumanCommand } from './HumanCommandToast';
 import { terminalInstanceKey } from './terminalRecovery';
 import { MessageQueueComposer } from './MessageQueueComposer';
 import { AgentControlStrip } from './AgentControlStrip';
@@ -639,6 +640,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                         onStreamData={parser}
                         onUserPrompt={(t) => {
                           updateAgent(agent.id, { lastPrompt: t });
+                          emitHumanCommand(agent.id, agent.name, t);
                           if (t.trim().toLowerCase() === '/clear') {
                             updateAgent(agent.id, { contextTokens: 0, contextLimit: undefined, progress: 0 });
                           }
