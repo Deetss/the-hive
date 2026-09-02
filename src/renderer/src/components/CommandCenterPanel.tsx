@@ -104,11 +104,11 @@ function TabButton({ t, active, accent, onClick }: { t: TabDef; active: boolean;
   const msgPending = useStore((s) => s.humanMessages.filter((m) => !m.resolved && !isQueryThread(m)).length);
   const askMePending = useStore((s) => s.askMePending);
   const activityUnread = useStore((s) => s.activityUnread);
-  const assignedPending = useStore((s) => s.assignedPending);
   const pendingArtifacts = useStore((s) => s.pendingArtifacts);
+  // Open humanQA / UAT items are surfaced (with the PASS/FAIL UI) on the 'for you'
+  // tab only — the tasks tab no longer double-badges them.
   const badge = t.key === 'human' ? (msgPending + askMePending)
     : t.key === 'activity' ? activityUnread
-    : t.key === 'tasks' ? (assignedPending || askMePending)
     : t.key === 'review' ? pendingArtifacts.length
     : 0;
   const showBadge = badge > 0 && !active;
