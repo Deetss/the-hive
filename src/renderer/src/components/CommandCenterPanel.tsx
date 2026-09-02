@@ -194,12 +194,36 @@ function QrGlyph({ size = 1 }: { size?: number }) {
  *  cols/rows and corrupt the display. */
 export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }: { agent: Agent; fullscreen?: boolean; mobile?: boolean }) {
   const tabKey = `cth.tab.${agent.id}`;
+  // tab-ordering-by-usage: per-agent recency + frequency for each tab, so the
+  // strip can render most-recently-used first (see `orderedTabs`). Persisted in
+  // localStorage; a private-mode / quota failure just means the order resets.
+  const tabStatsKey = `cth.tabstats.${agent.id}`;
+  const [tabStats, setTabStats] = useState<Record<string, { lastUsed: number; count: number }>>(() => {
+    let stats: Record<string, { lastUsed: number; count: number }> = {};
+    try {
+      const parsed = JSON.parse(localStorage.getItem(tabStatsKey) ?? '{}');
+      if (parsed && typeof parsed === 'object') stats = parsed;
+    } catch { /* private mode / malformed */ }
+    // Seed the tab we're restoring onto so the strip opens MRU-correct before the
+    // first click (the persisted `cth.tab.<id>` IS the last tab the user used).
+    try {
+      const restored = localStorage.getItem(tabKey) ?? 'terminal';
+      if (!stats[restored]) stats = { ...stats, [restored]: { lastUsed: Date.now(), count: 0 } };
+    } catch { /* private mode */ }
+    return stats;
+  });
   const [tab, setTabState] = useState<CCTab>(() => {
     try { return (localStorage.getItem(tabKey) ?? 'terminal') as CCTab; } catch { return 'terminal'; }
   });
   const setTab = (next: CCTab) => {
     try { localStorage.setItem(tabKey, next); } catch { /* private mode */ }
     setTabState(next);
+    setTabStats((prev) => {
+      const cur = prev[next] ?? { lastUsed: 0, count: 0 };
+      const updated = { ...prev, [next]: { lastUsed: Date.now(), count: cur.count + 1 } };
+      try { localStorage.setItem(tabStatsKey, JSON.stringify(updated)); } catch { /* private mode */ }
+      return updated;
+    });
   };
 
   // The trigger-history ledger has nothing to say until an outside party can
@@ -218,6 +242,18 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
     if (t.key === 'trigger-history' && !showHistory) return false;
     if (!agent.isOvermind && !workerTabs.has(t.key)) return false;
     return true;
+  });
+  // tab-ordering-by-usage: most-recently-used first, then most-used, then
+  // alphabetical by label. Tabs with no recorded use (all-zero) fall through to
+  // the alphabetical tiebreak. Re-sorts on every render, so a click re-orders the
+  // strip immediately.
+  const orderedTabs = [...visibleTabs].sort((a, b) => {
+    const sa = tabStats[a.key], sb = tabStats[b.key];
+    const lastA = sa?.lastUsed ?? 0, lastB = sb?.lastUsed ?? 0;
+    if (lastB !== lastA) return lastB - lastA;
+    const cntA = sa?.count ?? 0, cntB = sb?.count ?? 0;
+    if (cntB !== cntA) return cntB - cntA;
+    return a.label.localeCompare(b.label);
   });
 
   // External tab requests (the office task board → 'tasks', the boss-room
@@ -529,7 +565,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         padding: '4px 6px 5px', background: 'var(--cth-cream-100)',
         borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
       }}>
-        {visibleTabs.map((t) => (
+        {orderedTabs.map((t) => (
           <TabButton key={t.key} t={t} active={tab === t.key} accent={agent.accent} onClick={() => setTab(t.key)} />
         ))}
       </div>
