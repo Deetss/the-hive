@@ -6016,10 +6016,10 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
 ipcMain.handle('config:setAgentTokenCap', (_evt, agentId: unknown, tokenCap: unknown) =>
   setAgentTokenCap(agentId, tokenCap)
 );
-// The shipped defaults for the two user-editable prompts, so Settings → Prompts
+// The shipped defaults for the user-editable prompts, so Settings → Prompts
 // can pre-fill each textarea and offer revert-to-default without baking the
 // (long) default strings into the renderer bundle.
-ipcMain.handle('prompts:getDefaults', (): { workerOrientation: string; protocolTemplate: string } =>
+ipcMain.handle('prompts:getDefaults', (): { workerOrientation: string; overmindOrientation: string; protocolTemplate: string } =>
   hive.promptDefaults()
 );
 // Renderer needs both to build the pairing URL: the LAN/Tailscale hostname the

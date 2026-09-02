@@ -236,12 +236,12 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
     catch { setOrchSpawnOn(!next); }
   };
 
-  // ─── Prompts (Settings → Prompts): the two overridable prompt templates ──────
+  // ─── Prompts (Settings → Prompts): the overridable prompt templates ──────────
   // An override is null when the user hasn't customized the field (the textarea
   // shows the shipped default); a string is the user's edit. writeConfig shallow-
-  // overwrites promptOverrides, so we always send BOTH fields on save.
-  const cfgPrompts = (config as HarnessConfig & { promptOverrides?: { workerOrientation?: string; protocolTemplate?: string } }).promptOverrides ?? {};
-  const [promptDefaults, setPromptDefaults] = useState<{ workerOrientation: string; protocolTemplate: string } | null>(null);
+  // overwrites promptOverrides, so we always send ALL fields on save.
+  const cfgPrompts = (config as HarnessConfig & { promptOverrides?: { workerOrientation?: string; overmindOrientation?: string; protocolTemplate?: string } }).promptOverrides ?? {};
+  const [promptDefaults, setPromptDefaults] = useState<{ workerOrientation: string; overmindOrientation: string; protocolTemplate: string } | null>(null);
   // Distinguish "still loading" from "the defaults IPC is unavailable" so the
   // Prompts panel shows an actionable message instead of an eternal spinner.
   const [promptDefaultsErr, setPromptDefaultsErr] = useState(false);
@@ -260,14 +260,16 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
     } catch { setPromptDefaultsErr(true); }
   }, []);
   const [woOverride, setWoOverride] = useState<string | null>(cfgPrompts.workerOrientation ?? null);
+  const [omOverride, setOmOverride] = useState<string | null>(cfgPrompts.overmindOrientation ?? null);
   const [ptOverride, setPtOverride] = useState<string | null>(cfgPrompts.protocolTemplate ?? null);
   const [promptSaveNote, setPromptSaveNote] = useState('');
-  const savePromptOverrides = async (wo: string | null, pt: string | null) => {
+  const savePromptOverrides = async (wo: string | null, om: string | null, pt: string | null) => {
     // A field equal to its default (or blank) means "no override" → undefined.
     const norm = (v: string | null, def: string | undefined): string | undefined =>
       (v != null && v.trim() !== '' && v !== def) ? v : undefined;
     const promptOverrides = {
       workerOrientation: norm(wo, promptDefaults?.workerOrientation),
+      overmindOrientation: norm(om, promptDefaults?.overmindOrientation),
       protocolTemplate: norm(pt, promptDefaults?.protocolTemplate)
     };
     try {
@@ -1773,7 +1775,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               <PixelButton
                                 variant="secondary" size="sm"
                                 disabled={woOverride == null || woOverride === promptDefaults.workerOrientation}
-                                onClick={() => { setWoOverride(null); void savePromptOverrides(null, ptOverride); }}
+                                onClick={() => { setWoOverride(null); void savePromptOverrides(null, omOverride, ptOverride); }}
                               >
                                 revert to default
                               </PixelButton>
@@ -1786,7 +1788,36 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                             <textarea
                               value={woOverride ?? promptDefaults.workerOrientation}
                               onChange={(e) => setWoOverride(e.target.value)}
-                              onBlur={() => void savePromptOverrides(woOverride, ptOverride)}
+                              onBlur={() => void savePromptOverrides(woOverride, omOverride, ptOverride)}
+                              spellCheck={false}
+                              style={{ ...slackInputStyle, minHeight: 160, resize: 'vertical', lineHeight: '18px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                            />
+                          </div>
+
+                          <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
+
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px', color: 'var(--cth-ink-700)', textTransform: 'uppercase' }}>
+                                Overmind orientation
+                              </div>
+                              <PixelButton
+                                variant="secondary" size="sm"
+                                disabled={omOverride == null || omOverride === promptDefaults.overmindOrientation}
+                                onClick={() => { setOmOverride(null); void savePromptOverrides(woOverride, null, ptOverride); }}
+                              >
+                                revert to default
+                              </PixelButton>
+                            </div>
+                            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', display: 'block', marginBottom: 6 }}>
+                              The orchestration block in the Overmind's system prompt (awareness, delegation,
+                              what to own, the dispatch contract). The live fleet / registry / COMMANDS paths and
+                              heartbeat guidance are appended automatically and stay outside this field.
+                            </span>
+                            <textarea
+                              value={omOverride ?? promptDefaults.overmindOrientation}
+                              onChange={(e) => setOmOverride(e.target.value)}
+                              onBlur={() => void savePromptOverrides(woOverride, omOverride, ptOverride)}
                               spellCheck={false}
                               style={{ ...slackInputStyle, minHeight: 160, resize: 'vertical', lineHeight: '18px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
                             />
@@ -1802,7 +1833,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               <PixelButton
                                 variant="secondary" size="sm"
                                 disabled={ptOverride == null || ptOverride === promptDefaults.protocolTemplate}
-                                onClick={() => { setPtOverride(null); void savePromptOverrides(woOverride, null); }}
+                                onClick={() => { setPtOverride(null); void savePromptOverrides(woOverride, omOverride, null); }}
                               >
                                 revert to default
                               </PixelButton>
@@ -1814,7 +1845,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                             <textarea
                               value={ptOverride ?? promptDefaults.protocolTemplate}
                               onChange={(e) => setPtOverride(e.target.value)}
-                              onBlur={() => void savePromptOverrides(woOverride, ptOverride)}
+                              onBlur={() => void savePromptOverrides(woOverride, omOverride, ptOverride)}
                               spellCheck={false}
                               style={{ ...slackInputStyle, minHeight: 220, resize: 'vertical', lineHeight: '18px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
                             />
