@@ -720,12 +720,16 @@ export function OfficeFloor() {
         const initialCharIndex = mapContainer.getChildIndex(charLayer);
         const tile = mapRenderer.tileSize;
 
+        // Hide the reused office map's own floor/walls AND furniture — the office
+        // desks were only dimmed before, so their dark sprites bled through at
+        // scattered positions and fought the honeycomb desk grid. The hive draws
+        // its own floor, walls, pods and props; coffee stations, wall anchors and
+        // errand FX are separate Graphics on the char layer, so nothing is lost.
         for (const child of mapContainer.children) {
           const label = (child as Container & { label?: string }).label;
-          if (label === 'floor' || label === 'walls') {
+          if (label === 'floor' || label === 'walls'
+            || label === 'furniture-below' || label === 'furniture-above') {
             child.visible = false;
-          } else if (label === 'furniture-below' || label === 'furniture-above') {
-            child.alpha = 0.88;
           }
         }
 
