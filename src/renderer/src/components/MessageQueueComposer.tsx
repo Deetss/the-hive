@@ -7,6 +7,7 @@ import { clearTerminalDraft, dismissTerminalPicker, terminalAutomationBlockFor }
 import type { TerminalAutomationBlock } from './terminalAutomation';
 import { freeflowRecorder, useFreeflow } from '@/freeflow/recorder';
 import { useTerminalFontSize } from './terminalFontSize';
+import { inboxNudgeText } from '@shared/hiveNudge';
 
 const EMPTY_QUEUE: QueuedMessage[] = [];
 
@@ -276,6 +277,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       : `${body}${priorityDirective}`;
     let ok = false;
     let err: string | undefined;
+    let sentId: string | undefined;
     try {
       const res = await window.cth.hiveSend(
         { to: 'god', act: dispAct, subject, body: full, priority: dispPriority },
@@ -283,10 +285,19 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       );
       ok = res.ok;
       err = res.error;
+      sentId = res.message?.id;
     } catch (e) {
       err = e instanceof Error ? e.message : String(e);
     }
-    if (ok) { rememberProject(dispProject); resetComposer(); }
+    if (ok) {
+      // The message is already in BeeYoncé's inbox. Wake her NOW rather than
+      // waiting up to ~4s for the inbox poll to notice it — enqueue the same
+      // inbox-nonempty nudge that poll would; the queue drains it on its next
+      // tick, and drops it harmlessly if she reads the inbox herself first.
+      if (sentId) enqueueMessage('god', inboxNudgeText([sentId]), { precondition: 'inbox-nonempty' });
+      rememberProject(dispProject);
+      resetComposer();
+    }
     setDispMsg(ok
       ? `sent to BeeYoncé${suggested ? ` (suggesting ${suggested.name})` : ''}`
       : `failed: ${err ?? '?'}`);
