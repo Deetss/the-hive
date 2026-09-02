@@ -53,7 +53,7 @@ import {
   addWorktree, removeWorktree, worktreeHasUnintegratedWork, worktreeIsGcSafe,
   getLogGraph, getCommitFiles, getFileAtRev, compareRefs, listWorktrees, checkoutRef
 } from './git';
-import { HiveManager, type AgentMeta, type HiveMessage, type HiveTask } from './hive';
+import { HiveManager, type AgentMeta, type HiveMessage, type HiveTask, type PromptOverrides } from './hive';
 import { HookServer } from './hooks';
 import { CircuitBreaker, type BreakerInput } from './breaker';
 import type { UsageProvider } from './usage';
@@ -6019,7 +6019,7 @@ ipcMain.handle('config:setAgentTokenCap', (_evt, agentId: unknown, tokenCap: unk
 // The shipped defaults for the user-editable prompts, so Settings → Prompts
 // can pre-fill each textarea and offer revert-to-default without baking the
 // (long) default strings into the renderer bundle.
-ipcMain.handle('prompts:getDefaults', (): { workerOrientation: string; overmindOrientation: string; protocolTemplate: string } =>
+ipcMain.handle('prompts:getDefaults', (): Required<PromptOverrides> =>
   hive.promptDefaults()
 );
 // Renderer needs both to build the pairing URL: the LAN/Tailscale hostname the

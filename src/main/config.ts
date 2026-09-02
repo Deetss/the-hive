@@ -403,7 +403,11 @@ export interface HarnessConfig {
    *  (the shipped default updates but the override stays); blank/unset a field to
    *  fall back to the current shipped default. Edited in Settings → Prompts, with
    *  a revert-to-default per field. */
-  promptOverrides?: { workerOrientation?: string; overmindOrientation?: string; protocolTemplate?: string };
+  promptOverrides?: {
+    workerOrientation?: string; overmindOrientation?: string; assistantOrientation?: string;
+    coreLoop?: string; slackWorker?: string; slackOvermind?: string;
+    ctxLine?: string; memoryLine?: string; knowledgeLine?: string; protocolTemplate?: string;
+  };
   /** Skip the launch-time harness config picker and open the last-used home directly. */
   skipHarnessPickerOnLaunch?: boolean;
   /** When true, new agents are spawned with --permission-mode bypassPermissions. */

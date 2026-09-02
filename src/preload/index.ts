@@ -14,6 +14,7 @@ export type { HeroPayload } from '../shared/heroPayload';
 import type { ArtifactDescriptor } from '../shared/artifacts';
 export type { ArtifactDescriptor } from '../shared/artifacts';
 import type { LocalSkill, CatalogSkill } from '../main/skills';
+import type { PromptOverrides } from '../main/hive';
 export type { LocalSkill, CatalogSkill } from '../main/skills';
 import type {
   ContextRule, ContextTriggerConfig, OrgTriggerConfig, TriggerHistoryEntry, WebhookTrigger
@@ -762,7 +763,7 @@ const api = {
     ipcRenderer.invoke('config:get'),
   updateConfig: (patch: Partial<HarnessConfig>): Promise<HarnessConfig> =>
     ipcRenderer.invoke('config:update', patch),
-  getPromptDefaults: (): Promise<{ workerOrientation: string; overmindOrientation: string; protocolTemplate: string }> =>
+  getPromptDefaults: (): Promise<Required<PromptOverrides>> =>
     ipcRenderer.invoke('prompts:getDefaults'),
   /** Set or clear one per-agent token ceiling against main's latest config. */
   setAgentTokenCap: (agentId: string, tokenCap?: number): Promise<HarnessConfig> =>

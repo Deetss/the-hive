@@ -234,6 +234,20 @@ export interface PromptOverrides {
   workerOrientation?: string;
   /** The Overmind's orchestration block (awareness / delegate / own-the-important / dispatch contract). */
   overmindOrientation?: string;
+  /** The prep-assistant's role block. */
+  assistantOrientation?: string;
+  /** The core-loop block. Template: {MEMORY} {INBOX_DONE} {OUTBOX} filled per agent. */
+  coreLoop?: string;
+  /** Worker Slack-reply instructions. Template: {HIVE_NODE} filled per agent. */
+  slackWorker?: string;
+  /** Overmind Slack-reply instructions (static). */
+  slackOvermind?: string;
+  /** The roster/context one-liner (static). */
+  ctxLine?: string;
+  /** The semantic-memory one-liner (shown only when semantic memory is on). */
+  memoryLine?: string;
+  /** The Knowledge Graph one-liner. Template: {HIVE_NODE} {KG_CLI} filled per agent. */
+  knowledgeLine?: string;
   /** The PROTOCOL.md template written to the hive root. */
   protocolTemplate?: string;
 }
@@ -409,6 +423,13 @@ export class HiveManager {
     return {
       workerOrientation: DEFAULT_WORKER_ORIENTATION,
       overmindOrientation: DEFAULT_OVERMIND_ORIENTATION,
+      assistantOrientation: DEFAULT_ASSISTANT_ORIENTATION,
+      coreLoop: DEFAULT_CORE_LOOP,
+      slackWorker: DEFAULT_SLACK_WORKER,
+      slackOvermind: DEFAULT_SLACK_OVERMIND,
+      ctxLine: DEFAULT_CTX_LINE,
+      memoryLine: DEFAULT_MEMORY_LINE,
+      knowledgeLine: DEFAULT_KNOWLEDGE_LINE,
       protocolTemplate: PROTOCOL_MD
     };
   }
@@ -1559,7 +1580,19 @@ export class HiveManager {
     // Native-separator path helpers — see the 🪟 note above.
     const inDir = (...parts: string[]): string => join(dir, ...parts);
     const inRoot = (...parts: string[]): string => join(root, ...parts);
-    const ctxLine = 'Roster shows `ctx NN%` usage - treat high percentages as busy and route heavy work to low-ctx agents.';
+    // Per-field prompt overrides (blank/absent -> shipped default). Templated
+    // fields keep {PLACEHOLDER} tokens the user edits; fillTemplate fills them.
+    const assistantOverride = this._promptOverrides.assistantOrientation?.trim();
+    const coreLoopOverride = this._promptOverrides.coreLoop?.trim();
+    const slackWorkerOverride = this._promptOverrides.slackWorker?.trim();
+    const slackOvermindOverride = this._promptOverrides.slackOvermind?.trim();
+    const ctxOverride = this._promptOverrides.ctxLine?.trim();
+    const memoryOverride = this._promptOverrides.memoryLine?.trim();
+    const knowledgeOverride = this._promptOverrides.knowledgeLine?.trim();
+    const coreLoopBody = fillTemplate(coreLoopOverride || DEFAULT_CORE_LOOP, {
+      MEMORY: inDir('memory.md'), INBOX_DONE: inDir('inbox', '.done'), OUTBOX: inDir('outbox')
+    });
+    const ctxLine = (ctxOverride || DEFAULT_CTX_LINE);
 
     // Session handoff context from .remember/remember.md (1:1 session resume context)
     const remember = this.readRememberHandoff(dir, meta.cwd);
@@ -1571,7 +1604,7 @@ export class HiveManager {
       // The palace location is named, not spelled as `$MEMPALACE_PALACE_PATH`:
       // `mempalace` reads that env var itself, and the POSIX `$` form was noise
       // (or an empty expansion) for a Windows agent that tried to use it literally.
-      ? 'Semantic memory: use `mempalace search` / `mempalace wake-up`; notes you add to memory.md sync automatically.'
+      ? (memoryOverride || DEFAULT_MEMORY_LINE)
       : '';
     // Enterprise Knowledge Graph (opt-in). Volatile-free: the bundled-node launcher
     // and the KG CLI are both fixed absolute paths for an install, so baking them
@@ -1580,7 +1613,7 @@ export class HiveManager {
     const hiveNode = this.nodeCommand();
     const kgCli = kgCliPath || (process.platform === 'win32' ? '%KG_CLI%' : '$KG_CLI');
     const knowledgeLine = knowledgeGraph
-      ? `Knowledge Graph: run \`"${hiveNode}" "${kgCli}" search "<query>"\` for organisation context before guessing.`
+      ? fillTemplate(knowledgeOverride || DEFAULT_KNOWLEDGE_LINE, { HIVE_NODE: hiveNode, KG_CLI: kgCli })
       : '';
     // The shared KB is any number of sources: local `.md`/`.txt` folders the agent
     // greps/reads, and/or MCP endpoints it queries via a tool. The agent consults
@@ -1632,12 +1665,12 @@ export class HiveManager {
       ? (overmindOverride || DEFAULT_OVERMIND_ORIENTATION)
         + ` MONITOR the floor by reading ${inRoot('fleet.json')} (live per-agent tokens, cost, status, last tool, breaker level, inbox backlog) and ${inRoot('registry.json')} — note that running 'claude agents' will NOT list your hive's sibling agents. A full Claude Code command reference is at ${inRoot('COMMANDS.md')} (slash commands act ONLY on your own session; CLI commands run in your shell and can target the fleet). You periodically receive scheduler / "Heartbeat" standup requests — on each, review every agent via fleet.json, re-engage anyone stalled, over-budget, or breaker-armed, and keep board.md and tasks.json accurate. In tasks.json, ALWAYS set each task's "assignee" to the worker's agent id the moment you dispatch it, and NEVER clear it on status changes — a done card must still say who did the work (the human reads the board by who-did-what). HUMAN FEEDBACK is first-class in the ledger: when a task can only proceed with the human's input — a QUESTION to answer OR an ACTION only the human can perform (create an account, approve a purchase, provide credentials/screenshots, test on their device) — set its status to "blocked" and append the concrete ask to the card's "humanQA" array (push {"q":"...","askedAt":"<iso>"}; keep every past entry — the history documents the card's decisions). Write every ask — UAT checks especially — with all three of WHERE to look (exact screen/panel/control), WHAT to do (the precise action, in order), and WHAT TO EXPECT (the observable pass criteria + the fail signal); a bare "does X work?" wastes a round-trip. One thing to check per question, and name the build/branch under test. Phrase pure actions as clear to-dos with the same rigour. The harness surfaces open questions on the office floor's ASK ME board; the human's answer lands in the same entry ("a") AND arrives as an inbox message to you — read it, act on it, and unblock the card so work continues. Do NOT park human questions in separate files (no HumanQuestion.md) and never sit waiting on the human in your own session. Steward the token budget.`
       : meta.isAssistant
-      ? 'You are Abathur\'s PREP ASSISTANT. You will be handed short, possibly vague instructions (each begins with "ENRICH TASK:"). For each one: (1) figure out which project it concerns and cd into the most relevant repo — you start in Abathur\'s home directory; (2) gather concrete context READ-ONLY (exact file paths, current state, relevant code, conventions, active branch, gotchas) — NEVER modify, create, or delete files; (3) rewrite the instruction into ONE clear, self-contained prompt that Abathur can execute autonomously, preserving the user\'s original intent without inventing scope. Then deliver it: write ONE message JSON into your outbox with "to":"god", "act":"request", a short subject, and the finished prompt as the body. Do NOT perform the task yourself — your only output is the improved prompt sent to Abathur.'
+      ? (assistantOverride || DEFAULT_ASSISTANT_ORIENTATION)
       : 'For anything ambiguous, cross-cutting, or needing sign-off, address a message to Abathur (to: "god").';
     const guardrailsLine = GUARDRAILS_LINE;
     const slackLine = meta.isOvermind
-      ? 'SLACK REPLIES: When composing a Slack reply (or writing the `result` field of a Slack-origin kanban card), you MUST: (1) directly address what the user asked — never a bare "done"; (2) include the relevant specifics, outcome, and details; (3) format for Slack mrkdwn — open with a short *bold* headline, use bullet points for multiple items, wrap code/paths in `backtick` blocks, keep it concise (no walls of text). When finishing a Slack-origin task, always write a complete, user-facing, well-formatted `result` on the kanban card — the system posts it verbatim to Slack as the done reply.'
-      : `SLACK REPLIES: If Abathur dispatches you a task that came from Slack, it will include an exact \`"${hiveNode}" "<helper>" --channel … --thread … --text "…"\` reply command — when you finish, run it VERBATIM to post your result back to that thread yourself. The reply must be SUBSTANTIVE Slack mrkdwn (a short *bold* headline + the actual outcome/specifics/links), NEVER a bare "done".`;
+      ? (slackOvermindOverride || DEFAULT_SLACK_OVERMIND)
+      : fillTemplate(slackWorkerOverride || DEFAULT_SLACK_WORKER, { HIVE_NODE: hiveNode });
     const progressLine = PROGRESS_LINE;
     const completionLine = meta.isOvermind ? '' : COMPLETION_LINE_WORKER;
     const externalActionLine = meta.isOvermind ? '' : EXTERNAL_ACTION_LINE;
@@ -1656,10 +1689,7 @@ export class HiveManager {
     const basePrompt = [
       `You are "${meta.name}" (${meta.id}), an autonomous agent in a collaborating hive of Claude agents.`,
       `Workspace: ${dir}. Shared hive: ${root}. Full protocol + Slack rules: ${inRoot('PROTOCOL.md')}.`,
-      'Core loop:',
-      `- Start: read ${inDir('memory.md')} and inbox; file handled mail into ${inDir('inbox', '.done')}.`,
-      `- During: capture durable facts in memory.md and send requests via ${inDir('outbox')} JSON.`,
-      `- Finish: append what you learned to memory.md, then run the task close-out below (done-report → re-drain inbox → next task or "idle and available").`,
+      coreLoopBody,
       orientationBody,
       memoryLine,
       knowledgeLine,
@@ -2902,6 +2932,23 @@ const PROGRESS_LINE = 'Progress notes: as you work, append timestamped entries t
 const DECISION_GATE_LINE = 'Need the human to answer something? Surface it on the ASK ME board, never only in your terminal. This covers EVERY question you need the human to decide, including a quick yes/no or a "which of these": if you just type the question into your own session and wait, the human has to scroll the terminal to even find it and will likely miss it (that is the exact failure this rule exists to stop). Instead: (1) append the ask to your task card\'s "humanQA" array in tasks.json (push {"q":"<the question + the concrete options>","askedAt":"<iso>"}, keeping every past entry); (2) if you are truly stuck until it is answered, also set that task\'s "status" to "blocked" (a quick non-blocking question can stay "doing" so you keep working other parts); (3) message Abathur (to:"god") so the floor knows you are waiting. The harness surfaces open humanQA on the ASK ME board with a badge, labelled with your task title for context; the human\'s answer lands back in the same entry ("a") and arrives in your inbox. Read it, act on it, and move the card off "blocked". While you wait, pick up other work rather than sitting idle.';
 const EXTERNAL_ACTION_LINE = 'EXTERNAL ACTION GATE — before you run ANY command that reaches beyond this machine or is hard to reverse (git push of a branch OR a tag, gh api / gh pr / gh release, curl / wget / fetch or any network request, a deploy / publish command such as npm publish or a release script, rm -rf on anything outside a scratch dir), STOP. If your CURRENT dispatch names that exact command as the task, it is already approved — run it, but for a release / deploy / tag push still confirm the board is clear and the timing still holds (a dispatch written earlier is not a live green light). Otherwise you MUST get Overmind approval first: push a humanQA decision card to your task card (push {"q":"<exactly what you will run + which external system it affects + why>","kind":"decision","askedAt":"<iso>"}), set the task "status" to "blocked", message Abathur (to:"god"), and WAIT for the answer before proceeding. Local-only work (builds, typecheck, tests, git add/commit/tag WITHOUT push, reading files) does not need this gate.';
 const COMPLETION_LINE_WORKER = 'FINISHING A TASK — never go silent the moment the work is done. Run this close-out every time, in order: (1) VERIFY YOUR OWN WORK FIRST — run the checks that apply before you claim done: typecheck (npm run typecheck:web, npm run typecheck:node), tests (node --test on the suites you touched), and/or manually exercise the feature to confirm it behaves as intended. If any check fails, FIX IT before going further — never report done with broken checks; (2) set the task\'s tasks.json "status" to "done" (keep its "assignee" and "progressLog"); (3) send a substantive "done" report to Abathur ("to":"god") — commit hash / files changed / what changed / what you verified (e.g. "typecheck clean, N tests pass, manually confirmed X"), NEVER a bare "done"; (4) RE-DRAIN your inbox — new dispatches and "urgent" messages often arrive while you were working (process urgent first, then FIFO); (5) if nothing is waiting, check tasks.json for an unassigned "todo" whose deps are met that fits you, claim it (set "assignee" + "status":"doing") and start — you do not need to wait for a hand-off; (6) only if there is genuinely nothing to pick up, send Abathur a one-line "inform": "inbox empty, idle and available", then stop — do NOT sit polling your own session.';
+/** Additional user-overridable prompt blocks (exposed in Settings > Prompts).
+ *  Templated fields carry {PLACEHOLDER} tokens filled per agent at runtime. */
+function fillTemplate(tpl: string, vars: Record<string, string>): string {
+  return tpl.replace(/\{([A-Z_]+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+}
+export const DEFAULT_ASSISTANT_ORIENTATION = 'You are Abathur\'s PREP ASSISTANT. You will be handed short, possibly vague instructions (each begins with "ENRICH TASK:"). For each one: (1) figure out which project it concerns and cd into the most relevant repo — you start in Abathur\'s home directory; (2) gather concrete context READ-ONLY (exact file paths, current state, relevant code, conventions, active branch, gotchas) — NEVER modify, create, or delete files; (3) rewrite the instruction into ONE clear, self-contained prompt that Abathur can execute autonomously, preserving the user\'s original intent without inventing scope. Then deliver it: write ONE message JSON into your outbox with "to":"god", "act":"request", a short subject, and the finished prompt as the body. Do NOT perform the task yourself — your only output is the improved prompt sent to Abathur.';
+export const DEFAULT_CORE_LOOP = [
+  'Core loop:',
+  '- Start: read {MEMORY} and inbox; file handled mail into {INBOX_DONE}.',
+  '- During: capture durable facts in memory.md and send requests via {OUTBOX} JSON.',
+  '- Finish: append what you learned to memory.md, then run the task close-out below (done-report \u2192 re-drain inbox \u2192 next task or "idle and available").'
+].join('\n');
+export const DEFAULT_SLACK_WORKER = `SLACK REPLIES: If Abathur dispatches you a task that came from Slack, it will include an exact \`"{HIVE_NODE}" "<helper>" --channel … --thread … --text "…"\` reply command — when you finish, run it VERBATIM to post your result back to that thread yourself. The reply must be SUBSTANTIVE Slack mrkdwn (a short *bold* headline + the actual outcome/specifics/links), NEVER a bare "done".`;
+export const DEFAULT_SLACK_OVERMIND = 'SLACK REPLIES: When composing a Slack reply (or writing the `result` field of a Slack-origin kanban card), you MUST: (1) directly address what the user asked — never a bare "done"; (2) include the relevant specifics, outcome, and details; (3) format for Slack mrkdwn — open with a short *bold* headline, use bullet points for multiple items, wrap code/paths in `backtick` blocks, keep it concise (no walls of text). When finishing a Slack-origin task, always write a complete, user-facing, well-formatted `result` on the kanban card — the system posts it verbatim to Slack as the done reply.';
+export const DEFAULT_CTX_LINE = 'Roster shows `ctx NN%` usage - treat high percentages as busy and route heavy work to low-ctx agents.';
+export const DEFAULT_MEMORY_LINE = 'Semantic memory: use `mempalace search` / `mempalace wake-up`; notes you add to memory.md sync automatically.';
+export const DEFAULT_KNOWLEDGE_LINE = `Knowledge Graph: run \`"{HIVE_NODE}" "{KG_CLI}" search "<query>"\` for organisation context before guessing.`;
 export const DEFAULT_WORKER_ORIENTATION = [
   GUARDRAILS_LINE, PROGRESS_LINE, DECISION_GATE_LINE, EXTERNAL_ACTION_LINE, COMPLETION_LINE_WORKER
 ].join('\n');
