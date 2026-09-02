@@ -4960,13 +4960,19 @@ function maybeScheduleResumeNudge(opts: AgentSpawnOptions): void {
   const meta = opts.hive;
   if (!meta || meta.isOvermind) return;
   if (typeof meta.id === 'string' && meta.id.startsWith('worker-')) return;
-  const ptyId = opts.id;
+  const agentId = meta.id;
+  if (typeof agentId !== 'string') return;
   const rememberPath = join(opts.cwd, '.remember', 'remember.md');
   setTimeout(() => {
     if (!existsSync(rememberPath)) return;
-    // typeAndSubmit waits for the readline to be idle before it types + submits,
-    // so a slow boot no longer leaves the nudge sitting unsubmitted.
-    void typeAndSubmit(ptyId, 'Your last session handoff is in .remember/remember.md. Read it now and resume your previous work.');
+    // Route through the renderer's queue-drain (useHive effect #4 -> submitToPty)
+    // so it actually SUBMITS — a main-side write's "\r" reads as a newline.
+    try {
+      liveWebContents()?.send('hive:enqueueToAgent', {
+        targetId: agentId,
+        text: 'Your last session handoff is in .remember/remember.md. Read it now and resume your previous work.'
+      });
+    } catch { /* window gone */ }
   }, 5_000);
 }
 
@@ -5595,12 +5601,19 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
       const rearm = () => { try { webContents?.send(`pty:relaunch:${overmindPtyId}`); } catch { /* window gone */ } };
       rearm();
       setTimeout(rearm, 600);
-      // Type + submit the re-orientation only once the fresh Claude readline is
-      // idle. The old code wrote the prompt AND a trailing "\r" in one chunk at a
-      // fixed 1.5s — the TUI took that as a paste, so the "\r" was a newline in
-      // the box and the prompt just sat there unsubmitted until the next inbox
-      // nudge's Enter ran it.
-      void typeAndSubmit(overmindPtyId, `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.`);
+      // Hand the re-orientation to the RENDERER's queue rather than writing it +
+      // Enter from here. Main-side writes never reliably SUBMIT (the "\r" reads as
+      // a newline); the renderer's queue-drain (useHive effect #4 -> submitToPty)
+      // types AND submits correctly every time — the same path a normal inbox
+      // message rides. Delayed so the fresh agent card exists in the store first.
+      setTimeout(() => {
+        try {
+          liveWebContents()?.send('hive:enqueueToAgent', {
+            targetId: id,
+            text: `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.`
+          });
+        } catch { /* window gone */ }
+      }, 800);
       return { ok: true };
     }
 
@@ -8249,15 +8262,20 @@ async function processSpawnRequest(filePath: string): Promise<void> {
     console.error('[worker] dispatch send failed:', e);
   }
 
-  // Deliver the objective as soon as the worker is ready. nudgeWorker →
-  // typeAndSubmit waits for the readline to be idle before it types + submits,
-  // so the first nudge can't be swallowed mid-boot; here we only decide WHEN to
-  // attempt it (a short beat after spawn) and skip it entirely if the worker
-  // drains its own inbox first.
+  // Route the first wake through the RENDERER's proven queue-drain submit
+  // (useHive effect #4 -> submitToPty), NOT a main-side write: a main write's
+  // trailing "\r" reads as a newline and never submits, but an inbox-nonempty
+  // nudge enqueued for the worker in the renderer types AND submits reliably —
+  // the same path a normal inbox message rides. Short beat so the worker's card
+  // exists in the renderer store. The renderer's own 4s inbox poll and the main
+  // worker-wake watchdog stay as backstops.
   setTimeout(() => {
     if (!liveWorkers.has(workerId)) return;
     const pending = hive.inbox(workerId).map((m) => m.id).filter(Boolean);
-    if (pending.length) nudgeWorker(workerId, pending);
+    if (!pending.length) return;
+    try {
+      liveWebContents()?.send('hive:enqueueToAgent', { targetId: workerId, text: inboxNudgeText(pending) });
+    } catch { /* window gone */ }
   }, 2000);
 
   console.log(`[worker] spawned ${workerId} (cwd=${cwd}, base=${baseBranch}${slack ? ', slack' : ''})`);
