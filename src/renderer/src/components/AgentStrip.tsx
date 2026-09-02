@@ -111,8 +111,8 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
       overflowY: isMobile ? 'auto' : 'hidden',
       borderTop: '1px solid var(--cth-ink-300)',
       background: 'var(--cth-cream-200)',
-      height: isMobile ? 'auto' : 124,
-      minHeight: isMobile ? 0 : 124,
+      height: isMobile ? 'auto' : 106,
+      minHeight: isMobile ? 0 : 106,
       alignItems: isMobile ? 'stretch' : 'center',
       maxHeight: isMobile ? '40vh' : undefined
     }}>

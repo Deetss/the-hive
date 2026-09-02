@@ -149,12 +149,11 @@ export function AgentCard({
   // that gets cut. Widened for every card so the dock stays uniform, with enough
   // slack that Talk's info mark (which only appears when the OpenAI key is
   // missing) has somewhere to sit rather than pushing the row apart.
-  // The bottom-strip card lives in a 112px-tall row; 78px crammed six stacked
-  // text rows into ~66px of usable height and the name collapsed to "BE…".
-  // Wider + taller (still inside the strip), and the lowest-value rows are
-  // dropped below, so name / status / model / project get the room.
-  const width = 244;
-  const height = 100;
+  // Two dense rows (identity, then status = action + model + last-seen) plus the
+  // gauge — the old card stacked five thin rows and still had slack. Wider so
+  // those two rows have room to breathe horizontally.
+  const width = 248;
+  const height = isOvermind ? 82 : 72;
   const lift = (isOvermind ? -2 : 0) - (hover ? 1 : 0) - (selected ? 1 : 0);
   /** God's distinction: a tinted surface plus a thin accent border all the way
    *  around — NOT the 3px rule that used to sit on the top edge alone. That rule
@@ -380,73 +379,41 @@ export function AgentCard({
               )}
             </div>
 
-            {/* Context line: action while working, repo while idle. */}
-            <div
-              title={`${project}${action && status !== 'idle' ? ` — ${action}` : ''}${isNonClaude ? ` · Engine: ${preset.label}` : ''}`}
-              style={{
-                fontSize: 13, lineHeight: '15px',
-                color: 'var(--cth-ink-500)',
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-              }}
-            >{infoLine}</div>
+            {/* One status line: what it's doing (fills the width) + the model chip
+                + when it was last active — three things that used to be three
+                stacked rows. `toolLabel` is gone: it only ever repeated `action`,
+                which is already the text here. */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
+              fontSize: 12, lineHeight: '15px', color: 'var(--cth-ink-500)'
+            }}>
+              <span
+                title={`${project}${action && status !== 'idle' ? ` — ${action}` : ''}${isNonClaude ? ` · Engine: ${preset.label}` : ''}`}
+                style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >{infoLine}</span>
+              {modelLabel && (
+                <span title={`Model: ${model}`} style={{
+                  flexShrink: 0, maxWidth: 92,
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '11px',
+                  padding: '1px 4px 0',
+                  background: 'var(--cth-cream-200)', color: 'var(--cth-ink-700)',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                }}>{modelLabel}</span>
+              )}
+              {activityLabel && (
+                <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }} title={lastActivityTs ? new Date(lastActivityTs).toLocaleString() : undefined}>
+                  <Icon name="clock" size={1} style={{ color: 'var(--cth-ink-500)' }} />
+                  {activityLabel}
+                </span>
+              )}
+            </div>
 
-            {/* Profile + model chips: make the account and engine each agent runs
-                under obvious at a glance (no need to open the terminal). */}
-            {(profileLabel || modelLabel) && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
-                {profileLabel && (
-                  <span title={`Profile: ${profileLabel}`} style={{
-                    flexShrink: 1, minWidth: 0,
-                    fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '11px',
-                    padding: '1px 4px 0', textTransform: 'uppercase', fontWeight: 600,
-                    background: 'var(--cth-sky-light)', color: 'var(--cth-ink-900)',
-                    boxShadow: 'inset 0 0 0 1px var(--cth-sky)',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                  }}>{profileLabel}</span>
-                )}
-                {modelLabel && (
-                  <span title={`Model: ${model}`} style={{
-                    flexShrink: 1, minWidth: 0,
-                    fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '11px',
-                    padding: '1px 4px 0',
-                    background: 'var(--cth-cream-200)', color: 'var(--cth-ink-700)',
-                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                  }}>{modelLabel}</span>
-                )}
-              </div>
-            )}
-
-            {/* Compact strip card: last-tool + activity on ONE line. The working
-                directory row was dropped here — it forced its own line and
-                pushed the card past its height; the path is in the sidebar and
-                the agent's own header. `toolLabel` is skipped when it just
-                repeats the action already on the context line above. */}
-            {((toolLabel && toolLabel !== infoLine) || activityLabel) && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', opacity: 0.85, minWidth: 0 }}>
-                {toolLabel && toolLabel !== infoLine && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }} title={`Last tool: ${toolLabel}`}>
-                    <Icon name="terminal" size={1} style={{ color: 'var(--cth-ink-500)' }} />
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 130 }}>{toolLabel}</span>
-                  </span>
-                )}
-                {activityLabel && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }} title={lastActivityTs ? new Date(lastActivityTs).toLocaleString() : undefined}>
-                    <Icon name="clock" size={1} style={{ color: 'var(--cth-ink-500)' }} />
-                    <span>{activityLabel}</span>
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* God: voice on its own compact row. Workers: the private note row.
-                Both sit ABOVE the gauge, so it is never covered. */}
+            {/* God: the voice toggle + cost, its own interactive row. Workers: the
+                private note — but only when there IS a note or the card is
+                hovered, so a note-less worker card is just two rows + the gauge
+                instead of carrying an empty strip. */}
             {isOvermind ? (
-              // Talk grows an info mark when the OpenAI key is missing, so this
-              // row can hold three things instead of two. `overflow: hidden` is
-              // the guard: the toggle's label shrinks first (it has minWidth:0),
-              // and if it still does not fit, the row clips INSIDE the card
-              // instead of spilling over its border.
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
@@ -457,9 +424,9 @@ export function AgentCard({
                 <RealtimeAbathurToggle />
                 <CostHud compact />
               </div>
-            ) : (
+            ) : (noteFirstLine || (onEditNote && hover)) ? (
               <div
-                style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, minHeight: 14 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}
               >
                 {noteFirstLine ? (
                   <span
@@ -485,13 +452,12 @@ export function AgentCard({
                       flexShrink: 0, width: 15, height: 14,
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 13, lineHeight: 1, cursor: 'pointer',
-                      // Quiet until the card is hovered — discoverable, not noisy.
-                      color: hover ? 'var(--cth-ink-500)' : 'var(--cth-ink-300)'
+                      color: 'var(--cth-ink-500)'
                     }}
                   >✎</span>
                 )}
               </div>
-            )}
+            ) : null}
 
             {/* Context gauge — slim fill bar pinned to the card's bottom edge. */}
             <div style={{ marginTop: 'auto' }} title={gaugeTitle}>
