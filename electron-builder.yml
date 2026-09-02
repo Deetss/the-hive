@@ -140,6 +140,10 @@ nsis:
   allowToChangeInstallationDirectory: true
   artifactName: The-Hive-${version}-win-x64-setup.exe
   shortcutName: The Hive
+  # Match app.setAppUserModelId('The Hive') in src/main/index.ts so Windows
+  # resolves this shortcut for toast notifications (name + icon) instead of
+  # falling back to "electron.app.Electron".
+  appUserModelId: The Hive
 
 portable:
   artifactName: The-Hive-${version}-win-x64-portable.exe

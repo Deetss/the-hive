@@ -120,6 +120,14 @@ import {
   withCodexRemoteArgs
 } from '../shared/codexRemote';
 
+// First executable statement in the main process, ahead of any window or
+// Notification. Windows attributes every toast to the process AppUserModelId;
+// left unset, dev builds (electron.exe) fall back to "electron.app.Electron".
+// Pin it to the exact name the user should see. electron-builder.yml sets the
+// same string as the NSIS shortcut's AUMID so packaged builds also get the icon.
+app.setAppUserModelId('The Hive');
+app.name = 'The Hive';
+
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 
 const BROWSER_SERVER_HOST = '0.0.0.0';
@@ -9424,14 +9432,6 @@ if (process.platform === 'linux' && !app.commandLine.hasSwitch('ozone-platform-h
 if (process.env.THEHIVE_DISABLE_GPU === '1') {
   app.disableHardwareAcceleration();
 }
-
-// Without this, Windows toast notifications are attributed to "electron.app".
-// Packaged builds must use the NSIS shortcut's AppUserModelId (electron-builder
-// defaults it to the `appId` in electron-builder.yml) so Windows resolves the
-// shortcut and shows its "The Hive" display name; in dev there is no shortcut,
-// so a plain "The Hive" is what the toast shows.
-app.setAppUserModelId(app.isPackaged ? 'dev.thehive.app' : 'The Hive');
-app.name = 'The Hive';
 
 app.whenReady().then(() => {
   // Realtime Abathur mic-gate hygiene (rt-8 / Pam rt-10 nit): the voice session
