@@ -1081,6 +1081,15 @@ export function OfficeFloor() {
       machineG.position.set(26 * ts0, 17 * ts0);
       machineG.zIndex = 19 * ts0;
       charLayer.addChild(machineG);
+      if (isHiveTheme) {
+        // These office-styled coffee stations (steel sink, mug rack, counter
+        // steam) sat on the office cafeteria counter, which the hive now hides —
+        // so they'd float on bare honeycomb. Hide the visuals in the hive; the
+        // coffee-break logic and agent pathing are unchanged.
+        trayG.visible = false;
+        sinkG.visible = false;
+        machineG.visible = false;
+      }
       let machineBusy = 0;
       const drawMachine = (t: number): void => {
         machineG.clear();
