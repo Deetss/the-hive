@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { PixelButton } from './PixelButton';
+import { Markdown } from './Markdown';
 
 /**
  * WORKERS — live god-triggered ephemeral Slack workers (the Phase-1 spawn loop):
@@ -35,6 +36,13 @@ function stripAnsi(s: string): string {
 
 function isCompletedStatus(status: WorkerHistoryEntry['status']): boolean {
   return status === 'done' || status === 'stopped';
+}
+
+const OBJECTIVE_PREVIEW_CHARS = 150;
+
+function truncateObjective(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > OBJECTIVE_PREVIEW_CHARS ? `${flat.slice(0, OBJECTIVE_PREVIEW_CHARS)}…` : flat;
 }
 
 function relAge(ms: number): string {
@@ -187,6 +195,7 @@ export function WorkersTab() {
 
   const [pendingBusy, setPendingBusy] = useState<Record<string, boolean>>({});
   const [pendingError, setPendingError] = useState<string | null>(null);
+  const [expandedObjective, setExpandedObjective] = useState<Record<string, boolean>>({});
 
   const refresh = useCallback(() => {
     window.cth.listWorkers().then(setData).catch(() => { /* main not ready */ });
@@ -233,6 +242,10 @@ export function WorkersTab() {
   const declineSpawn = useCallback((filename: string) => {
     runPendingAction(filename, (f) => window.cth.workersDeclineSpawn(f), 'Decline');
   }, [runPendingAction]);
+
+  const toggleObjective = useCallback((filename: string) => {
+    setExpandedObjective((e) => ({ ...e, [filename]: !e[filename] }));
+  }, []);
 
   const launchTerminal = useCallback(() => {
     const { cwd, shell, label, distro, wslCommand } = terminalForm;
@@ -398,10 +411,31 @@ export function WorkersTab() {
                   </div>
                 </div>
                 {p.objective && (
-                  <div style={{
-                    fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                  }}>{p.objective}</div>
+                  <div>
+                    {expandedObjective[p.filename] ? (
+                      <Markdown
+                        text={p.objective}
+                        style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)', maxWidth: '72ch' }}
+                      />
+                    ) : (
+                      <div style={{
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                      }}>{truncateObjective(p.objective)}</div>
+                    )}
+                    {(p.objective.length > OBJECTIVE_PREVIEW_CHARS || p.objective.includes('\n')) && (
+                      <button
+                        type="button"
+                        onClick={() => toggleObjective(p.filename)}
+                        style={{
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-sky, #4aa3ff)',
+                          background: 'none', border: 'none', padding: '2px 0', cursor: 'pointer'
+                        }}
+                      >
+                        {expandedObjective[p.filename] ? 'Hide' : 'Show full prompt'}
+                      </button>
+                    )}
+                  </div>
                 )}
                 <div style={metaRow}>
                   {p.cwd && <span title="working directory">{p.cwd}</span>}
