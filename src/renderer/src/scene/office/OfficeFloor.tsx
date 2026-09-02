@@ -805,8 +805,13 @@ export function OfficeFloor() {
         mapContainer.addChildAt(hiveDeskLayer, charInsertIndex >= 0 ? charInsertIndex : mapContainer.children.length);
 
         const deskAssets = hiveDeskAssets;
+        // These senior desks sit at scattered spots in the reused office map
+        // (chief-architect/ui-ux-expert top-right, agent-organizer mid-top), so
+        // their pods break the hive's two tidy desk rows. Skip the decorative pod
+        // for them; the seat itself still works, and the Queen's CEO pod stays.
+        const offGridDesks = new Set(['desk-chief-architect', 'desk-ui-ux-expert', 'desk-agent-organizer']);
         spawnEntries
-          .filter(([name]) => name.startsWith('desk-') || name.startsWith('pc-'))
+          .filter(([name]) => (name.startsWith('desk-') || name.startsWith('pc-')) && !offGridDesks.has(name))
           .sort((a, b) => a[1].y - b[1].y || a[1].x - b[1].x)
           .forEach(([, point]) => {
             const deskNoise = Math.abs(pseudoNoise(point.x * 0.37, point.y * 0.41));
