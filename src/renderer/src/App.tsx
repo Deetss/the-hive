@@ -28,7 +28,6 @@ import { FullscreenTerminal } from '@/components/FullscreenTerminal';
 import { TaskDetailOverlay } from '@/components/TaskDetailOverlay';
 import { IdePanel } from '@/ide/IdePanel';
 import { useHoldOptionToTalk } from '@/freeflow/holdOption';
-import brandLogo from '@brand/logo.png?url';
 import { cancelQaTimer } from '@/components/QuickAskPanel';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -48,6 +47,9 @@ export function App() {
     const blocked = live.filter((a) => a.status === 'blocked' || a.status === 'prompt').length;
     return { count: live.length, working, waiting, blocked };
   }, [agents]);
+  // Only macOS needs the left inset for its traffic lights; elsewhere the strip
+  // starts at the edge so it doesn't read as empty.
+  const isMac = (typeof window !== 'undefined' && window.cth?.platform === 'darwin');
   const addAgentOpen = useStore(s => s.addAgentOpen);
   const setAddAgentOpen = useStore(s => s.setAddAgentOpen);
   const clearPendingHires = useStore(s => s.clearPendingHires);
@@ -451,47 +453,47 @@ export function App() {
           otherwise buried in that one scrollback — surface it app-wide. Bottom
           LEFT so it never stacks over the two bottom-right toasts. */}
       <HumanCommandToast />
-      {/* Title bar — the window drag-strip. It has to exist (frameless window drag
-          + the macOS traffic-light inset the paddingLeft clears), so it carries a
-          live fleet roll-up rather than just the logo: agents on the floor and
-          how many are working / waiting / need you. The version/theme/settings
-          chrome lives on the bottom StatusBar (<AppChromeControls/>). */}
+      {/* Title bar — the frameless-window drag strip. It has to exist for window
+          dragging (and the macOS traffic-light inset), so it is given a real job:
+          the live fleet status. No logo — it carries agent counts, sized to read
+          at a glance. App chrome (version/theme/settings) is on the StatusBar. */}
       <div
         className="cth-titlebar-drag"
         style={{
-          height: 24, minHeight: 24,
+          height: 28, minHeight: 28,
           background: 'linear-gradient(180deg, var(--cth-cream-100) 0%, var(--cth-cream-200) 100%)',
           borderBottom: '1px solid var(--cth-ink-300)',
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
-          paddingLeft: 96,
-          paddingRight: 12,
+          gap: 8,
+          paddingLeft: isMac ? 96 : 14,
+          paddingRight: 14,
           userSelect: 'none',
-          fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)',
-          overflow: 'hidden'
+          fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
+          whiteSpace: 'nowrap', overflow: 'hidden'
         }}
       >
-        <img
-          src={brandLogo}
-          alt="The Hive"
-          style={{ height: 15, width: 'auto', display: 'block', flexShrink: 0 }}
+        <span
+          aria-hidden
+          style={{
+            width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+            background: fleet.count === 0 ? 'var(--cth-ink-300)'
+              : fleet.blocked ? 'var(--cth-coral)'
+              : fleet.working ? 'var(--cth-lemon)'
+              : 'var(--cth-mint)'
+          }}
         />
-        {fleet.count > 0 && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden' }}>
-            <span
-              aria-hidden
-              style={{
-                width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-                background: fleet.blocked ? 'var(--cth-coral)' : fleet.working ? 'var(--cth-lemon)' : 'var(--cth-mint)'
-              }}
-            />
-            <span style={{ color: 'var(--cth-ink-700)' }}>
-              <strong style={{ color: 'var(--cth-ink-900)' }}>{fleet.count}</strong> on the floor
+        {fleet.count === 0 ? (
+          <span style={{ color: 'var(--cth-ink-500)' }}>The Hive — no agents on the floor</span>
+        ) : (
+          <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, minWidth: 0, overflow: 'hidden' }}>
+            <span>
+              <strong style={{ color: 'var(--cth-ink-900)' }}>{fleet.count}</strong>
+              {' '}{fleet.count === 1 ? 'agent' : 'agents'} on the floor
             </span>
-            {fleet.working > 0 && <span>· {fleet.working} working</span>}
-            {fleet.waiting > 0 && <span>· {fleet.waiting} waiting</span>}
-            {fleet.blocked > 0 && <span style={{ color: 'var(--cth-coral)' }}>· {fleet.blocked} needs you</span>}
+            {fleet.working > 0 && <span style={{ color: 'var(--cth-ink-500)' }}>· {fleet.working} working</span>}
+            {fleet.waiting > 0 && <span style={{ color: 'var(--cth-ink-500)' }}>· {fleet.waiting} waiting</span>}
+            {fleet.blocked > 0 && <span style={{ color: 'var(--cth-coral)', fontWeight: 600 }}>· {fleet.blocked} needs you</span>}
           </span>
         )}
       </div>

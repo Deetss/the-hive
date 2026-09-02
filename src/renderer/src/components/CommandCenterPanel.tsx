@@ -414,9 +414,10 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
           flexShrink: 0,
           flexWrap: mobile ? 'wrap' : 'nowrap',
           justifyContent: mobile ? 'flex-start' : 'flex-end',
-          // Always hug the identity cluster — same layout docked or fullscreen,
-          // roster panel open or not. (A `marginLeft:auto` in fullscreen used to
-          // shove these to the window's far edge, away from the agent name.)
+          // A deliberate fixed gap sets the controls apart from the agent
+          // identity as their own group — same in every mode. (Not
+          // `marginLeft:auto`, which shoved them to the window's far edge.)
+          marginLeft: mobile ? undefined : 24,
           width: mobile ? '100%' : 'auto',
           order: mobile ? 2 : 0
         }}>
