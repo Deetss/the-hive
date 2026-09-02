@@ -47,6 +47,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
   const [description, setDescription] = useState(agent.description);
   const [goal, setGoal] = useState(agent.goal ?? '');
   const [profileId, setProfileId] = useState<string | undefined>(agent.profileId ?? undefined);
+  const [cwd, setCwd] = useState(agent.cwd);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +65,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
     setDescription(agent.description);
     setGoal(agent.goal ?? '');
     setProfileId(agent.profileId ?? undefined);
+    setCwd(agent.cwd);
   }, [agent.id]);
 
   const pickProvider = (id: AgentProvider) => {
@@ -86,6 +88,13 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
 
   const selectModel = (id?: string) => {
     setModel(id);
+  };
+
+  const pickFolder = async () => {
+    setError(null);
+    const res = await window.cth.chooseFolder();
+    if (res.ok) setCwd(res.path);
+    else if (res.error !== 'cancelled') setError(res.error);
   };
 
   const applyProfile = (id: string) => {
@@ -126,7 +135,8 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
     commandStr: string,
     runtimeProfile: RuntimeProfile | undefined,
     trimmedName: string,
-    trimmedDescription: string
+    trimmedDescription: string,
+    effectiveCwd: string
   ) => {
     if (!agent.ptyId) return;
     const tokens = tokenizeCommand(commandStr);
@@ -151,7 +161,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
     const hiveMeta = {
       id: agent.id,
       name: trimmedName,
-      cwd: agent.cwd,
+      cwd: effectiveCwd,
       provider,
       isOvermind: agent.isOvermind,
       isAssistant: agent.isAssistant,
@@ -161,7 +171,7 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
 
     const res = await window.cth.spawnPty({
       id: agent.ptyId,
-      cwd: agent.cwd,
+      cwd: effectiveCwd,
       command: exe,
       args,
       provider,
@@ -207,18 +217,28 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
       const commandChanged = (agent.command?.trim() ?? '') !== nextCommand;
       const engineChanged = providerChanged || modelChanged || profileChanged || commandChanged;
 
-      if (engineChanged && agent.ptyId) {
-        await restartAgent(nextCommand, activeProfile, trimmedName, trimmedDescription);
-      }
+      const trimmedCwd = cwd.trim();
+      const cwdChanged = trimmedCwd !== (agent.cwd?.trim() ?? '');
+      const effectiveCwd = trimmedCwd || agent.cwd;
+      const relaunch = engineChanged || cwdChanged;
 
-      if (engineChanged && window.cth.hivePatchAgentEngine) {
-        const persist = await window.cth.hivePatchAgentEngine(agent.id, {
+      // Persist engine + workspace to the hive registry FIRST: a bad workspace
+      // path comes back as an error here, so we surface it and skip the relaunch
+      // rather than killing a running agent we then can't respawn.
+      if (relaunch && window.cth.hivePatchAgentEngine) {
+        const patch: { provider: AgentProvider; profileId: string | null; cwd?: string } = {
           provider,
           profileId: profileId ?? null
-        });
+        };
+        if (cwdChanged) patch.cwd = trimmedCwd;
+        const persist = await window.cth.hivePatchAgentEngine(agent.id, patch);
         if (!persist?.ok) {
-          throw new Error(persist?.error ?? 'Failed to persist engine changes to the hive registry.');
+          throw new Error(persist?.error ?? 'Failed to persist changes to the hive registry.');
         }
+      }
+
+      if (relaunch && agent.ptyId) {
+        await restartAgent(nextCommand, activeProfile, trimmedName, trimmedDescription, effectiveCwd);
       }
 
       updateAgent(agent.id, {
@@ -230,7 +250,8 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
         command: nextCommand,
         profileId: profileId ?? undefined,
         description: trimmedDescription,
-        goal: trimmedGoal || undefined
+        goal: trimmedGoal || undefined,
+        cwd: effectiveCwd
       });
 
       onClose();
@@ -436,6 +457,23 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
 
               <span style={{ fontSize: 12, color: 'var(--cth-ink-500)', lineHeight: '16px' }}>
                 Engine changes relaunch the agent immediately; no manual restart required.
+              </span>
+            </Section>
+
+            <Section label="Project / Workspace" hint="working directory">
+              <Row label="Folder">
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    value={cwd}
+                    onChange={(e) => setCwd(e.target.value)}
+                    placeholder="/path/to/your/project"
+                    style={{ ...inputStyle, flex: 1, fontSize: 13 }}
+                  />
+                  <PixelButton variant="secondary" size="md" onClick={pickFolder}>browse</PixelButton>
+                </div>
+              </Row>
+              <span style={{ fontSize: 12, color: 'var(--cth-ink-500)', lineHeight: '16px' }}>
+                Changing the workspace relaunches the agent in the new folder.
               </span>
             </Section>
 

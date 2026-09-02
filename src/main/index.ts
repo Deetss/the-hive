@@ -6643,8 +6643,17 @@ ipcMain.handle('hive:patchAgentEngine', (_evt, id: unknown, patch: unknown) => {
   if (typeof id !== 'string') return { ok: false, error: 'invalid id' };
   if (!patch || typeof patch !== 'object') return { ok: false, error: 'invalid patch' };
   if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
-  const { provider, profileId } = patch as { provider?: AgentProvider | null; profileId?: string | null };
-  return hive.patchAgentEngine(id, { provider: provider ?? undefined, profileId: profileId ?? undefined });
+  const p = patch as { provider?: AgentProvider | null; profileId?: string | null; cwd?: string | null };
+  const forward: { provider?: AgentProvider; profileId?: string; cwd?: string } = {
+    provider: p.provider ?? undefined,
+    profileId: p.profileId ?? undefined
+  };
+  // Only validate/persist cwd when the caller actually sent it (an engine-only
+  // change must not trip workspace validation).
+  if (Object.prototype.hasOwnProperty.call(p, 'cwd')) {
+    forward.cwd = typeof p.cwd === 'string' ? p.cwd : '';
+  }
+  return hive.patchAgentEngine(id, forward);
 });
 
 // ─── IPC: Settings hero payload (remote data, cached) ───────────────────────

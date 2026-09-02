@@ -864,8 +864,8 @@ const api = {
     ipcRenderer.invoke('hive:patchAgentRole', id, role),
   hivePatchAgentEngine: (
     id: string,
-    patch: { provider?: AgentProvider | null; profileId?: string | null }
-  ): Promise<{ ok: boolean; provider?: AgentProvider; profileId?: string; error?: string }> =>
+    patch: { provider?: AgentProvider | null; profileId?: string | null; cwd?: string }
+  ): Promise<{ ok: boolean; provider?: AgentProvider; profileId?: string; cwd?: string; error?: string }> =>
     ipcRenderer.invoke('hive:patchAgentEngine', id, patch),
   /** Rename an agent's display name. Its id, hive directory, and PTY are unchanged. */
   hiveRenameAgent: (id: string, name: string): Promise<{ ok: boolean; name?: string; error?: string }> =>

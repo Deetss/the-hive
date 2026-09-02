@@ -1112,8 +1112,8 @@ export class HiveManager {
 
   patchAgentEngine(
     id: string,
-    patch: { provider?: AgentProvider | null; profileId?: string | null }
-  ): { ok: boolean; provider?: AgentProvider; profileId?: string; error?: string } {
+    patch: { provider?: AgentProvider | null; profileId?: string | null; cwd?: string }
+  ): { ok: boolean; provider?: AgentProvider; profileId?: string; cwd?: string; error?: string } {
     const root = this.root();
     if (!root) return { ok: false, error: 'hive disabled' };
     const reg = this.registry();
@@ -1131,10 +1131,27 @@ export class HiveManager {
       if (trimmed) next.profileId = trimmed;
       else delete next.profileId;
     }
+    // Workspace change: validate the folder BEFORE writing so a bad path is
+    // rejected (the caller can surface it and skip the relaunch) rather than
+    // persisting a cwd the next spawn would fail on.
+    if (Object.prototype.hasOwnProperty.call(patch, 'cwd')) {
+      const raw = (patch.cwd ?? '').trim();
+      const check = this.cwdValidity(raw);
+      if (!check.valid) {
+        const msg = check.issue === 'not-absolute'
+          ? 'Workspace path must be an absolute path.'
+          : check.issue === 'missing'
+            ? 'Enter a workspace folder.'
+            : 'That workspace folder does not exist.';
+        return { ok: false, error: msg };
+      }
+      next.cwd = expandTilde(raw);
+      next.cwdValid = true;
+    }
 
     reg.agents[id] = next;
     this.atomicWriteJson(join(root, 'registry.json'), reg);
-    return { ok: true, provider: next.provider, profileId: next.profileId };
+    return { ok: true, provider: next.provider, profileId: next.profileId, cwd: next.cwd };
   }
 
   /**
