@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelBadge } from './PixelBadge';
 import { PixelButton } from './PixelButton';
-import { emitHumanCommand } from './HumanCommandToast';
 import { SpritePortrait } from './SpritePortrait';
 import { PtyTerminalView } from './PtyTerminalView';
 import { terminalInstanceKey } from './terminalRecovery';
@@ -254,7 +253,6 @@ export function AgentDetailPanel({ agent, isMobile = false }: AgentDetailPanelPr
                   onStreamData={onPtyStream}
                   onUserPrompt={(t) => {
                     updateAgent(agent.id, { lastPrompt: t });
-                    emitHumanCommand(agent.id, agent.name, t);
                     if (t.trim().toLowerCase() === '/clear') {
                       updateAgent(agent.id, { contextTokens: 0, contextLimit: undefined, progress: 0 });
                     }
