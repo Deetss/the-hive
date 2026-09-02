@@ -47,10 +47,10 @@ export class CharacterSprite {
     this.isHiveKit = isHiveKit;
     this.container = new Container();
 
-    const initialFrames = continuous ? frames[0] : this.getFrames('down', 'idle');
+    const initialFrames = (continuous || isHiveKit) ? frames[0] : this.getFrames('down', 'idle');
     this.sprite = new AnimatedSprite(initialFrames);
     this.sprite.anchor.set(0.5, 1);
-    this.sprite.animationSpeed = continuous ? 0.28 : this.frameSpeed;
+    this.sprite.animationSpeed = isHiveKit ? 0.20 : continuous ? 0.28 : this.frameSpeed;
     this.sprite.play();
 
     this.frameW = this.sprite.texture.frame.width || this.sprite.width || 24;
@@ -121,24 +121,21 @@ export class CharacterSprite {
 
   async setHiveKitStatus(status: HiveKitStatus, direction: Direction): Promise<void> {
     this.isHiveKit = true;
-    const changed = status !== this.currentHiveStatus || direction !== this.currentDirection;
     this.currentHiveStatus = status;
     this.currentDirection = direction;
 
-    if (changed || this.sprite.textures.length <= 1) {
-      const dirKey = direction === 'left' ? 'right' : direction;
-      const textures = await getHiveBeeStatusFrames(status, dirKey);
-      this.sprite.textures = textures;
-      this.sprite.scale.x = direction === 'left' ? -1 : 1;
+    const dirKey = direction === 'left' ? 'right' : direction;
+    const textures = await getHiveBeeStatusFrames(status, dirKey);
+    this.sprite.textures = textures;
+    this.sprite.scale.x = direction === 'left' ? -1 : 1;
 
-      // Kit animation timing: 12fps base (0.20), moving (0.35), blocked fast shake (0.75)
-      this.sprite.animationSpeed = status === 'moving' ? 0.35 : status === 'blocked' ? 0.75 : 0.20;
-      this.sprite.play();
+    // Kit animation timing: 12fps base (0.20), moving (0.35), blocked fast shake (0.75)
+    this.sprite.animationSpeed = status === 'moving' ? 0.35 : status === 'blocked' ? 0.75 : 0.20;
+    this.sprite.play();
 
-      const chipTex = await getHiveStatusChipTexture(status);
-      this.chipSprite.texture = chipTex;
-      this.chipSprite.visible = true;
-    }
+    const chipTex = await getHiveStatusChipTexture(status);
+    this.chipSprite.texture = chipTex;
+    this.chipSprite.visible = true;
   }
 
   setChipVisible(visible: boolean): void {
