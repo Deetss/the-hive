@@ -3,7 +3,7 @@ import { useStore, selectedAgent } from '@/store/store';
 import { startMockLoop, stopMockLoop } from '@/store/mockEvents';
 import type { HarnessConfig } from '@/store/config';
 import { DEFAULT_ORG_TRIGGER } from '@shared/triggers';
-import { OfficeFloor } from '@/scene/office/OfficeFloor';
+import { HiveScene } from '@/components/HiveScene';
 import { useHive } from '@/hooks/useHive';
 import { MemoryPanel } from '@/components/MemoryPanel';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
@@ -527,7 +527,7 @@ export function App() {
           minWidth: 0,
           position: 'relative'
         }}>
-          <OfficeFloor />
+          <HiveScene />
           <MemoryPanel />
           {agentCount === 0 && godStatus === 'booting' && <AbathurBooting />}
           {agentCount === 0 && godStatus !== 'booting' && (

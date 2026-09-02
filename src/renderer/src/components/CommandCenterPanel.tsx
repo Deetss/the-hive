@@ -17,6 +17,7 @@ import { SkillsTab } from './SkillsTab';
 import { ReviewPanel } from './ReviewPanel';
 import { GitTab } from './GitTab';
 import { FilesTab } from './FilesTab';
+import { TouchedTab } from './TouchedTab';
 import { IdePanel } from '@/ide/IdePanel';
 import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool';
 import { terminalInstanceKey } from './terminalRecovery';
@@ -54,7 +55,7 @@ import { submitToPty, INITIAL_GOD_PROMPT } from '@/hooks/useHive';
 // the old Schedules tab: schedules are now one of four trigger types, and the
 // whole surface lives in ./triggers (see src/shared/triggers.ts for the contract).
 type CCTab = 'terminal' | 'floor' | 'tasks' | 'ask' | 'human' | 'triggers' | 'trigger-history'
-  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations' | 'review' | 'git' | 'files' | 'ide';
+  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations' | 'review' | 'git' | 'touched' | 'files' | 'ide';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
  *  is configured — so the bar reads as a budget estimate (filled + remaining)
@@ -88,6 +89,7 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
   { key: 'delegations', label: 'delegations', icon: 'gear' },
   { key: 'review', label: 'review', icon: 'ledger' },
   { key: 'git', label: 'git', icon: 'code' },
+  { key: 'touched', label: 'touched', icon: 'ledger' },
   { key: 'files', label: 'files', icon: 'folder' },
   { key: 'ide', label: 'ide', icon: 'code' }
 ];
@@ -699,6 +701,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         {tab === 'delegations' && <DelegationsTab />}
         {tab === 'review' && <ReviewPanel onClose={() => setTab('floor')} />}
         {tab === 'git' && <GitTab cwd={agent.worktreePath ?? agent.cwd} />}
+        {tab === 'touched' && <TouchedTab agent={agent} />}
         {tab === 'files' && <FilesTab cwd={agent.worktreePath ?? agent.cwd} />}
         {tab === 'ide' && <IdePanel embedded onClose={() => setTab('terminal')} />}
       </div>
