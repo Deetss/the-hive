@@ -56,12 +56,6 @@ function healthColor(level: Health): string {
   return 'var(--cth-mint)';
 }
 
-/** 4-cell filled/empty glyph bar. */
-function ctxBar(pct: number): string {
-  const filled = Math.min(4, Math.round(pct / 25));
-  return '█'.repeat(filled) + '░'.repeat(4 - filled);
-}
-
 function fmtTokens(n: number): string {
   if (!Number.isFinite(n) || n < 0) n = 0;
   if (n >= 1e9) return `${+(n / 1e9).toFixed(2)}B`;
@@ -401,8 +395,17 @@ export function StatusBar() {
           <Sep />
           <Chip title={`${focusAgent ? `${focusAgent.name}: ` : ''}context window ${ctxPct}% full`}>
             <span style={{ color: 'var(--cth-ink-500)' }}>ctx</span>
-            <span style={{ fontFamily: 'var(--cth-font-ui)', color: ctxColor, letterSpacing: 1 }}>
-              {ctxBar(ctxPct)}
+            <span style={{
+              display: 'inline-block', width: 36, height: 5,
+              background: 'var(--cth-cream-200)',
+              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+              overflow: 'hidden', verticalAlign: 'middle', margin: '0 2px'
+            }}>
+              <span style={{
+                display: 'block', height: '100%',
+                width: `${Math.min(100, Math.max(0, ctxPct))}%`,
+                background: ctxColor
+              }} />
             </span>
             <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-900)' }}>
               {ctxPct}%
