@@ -92,6 +92,13 @@ export function AiEnginesSettings({
   const [draftProvider, setDraftProvider] = useState<AgentProvider>('claude');
   const [draftModel, setDraftModel] = useState('');
   const [draftConfigDir, setDraftConfigDir] = useState('');
+  const [draftBaseUrl, setDraftBaseUrl] = useState('');
+  const [baseUrlError, setBaseUrlError] = useState('');
+  // Cloud-endpoint API keys are per-profile, write-only (safeStorage via
+  // profile:setApiKey) — same discipline as the BACKENDS keys above.
+  const [cloudHasKey, setCloudHasKey] = useState<Record<string, boolean>>({});
+  const [cloudDraftKey, setCloudDraftKey] = useState<Record<string, string>>({});
+  const [cloudNote, setCloudNote] = useState<Record<string, string>>({});
 
   // Reseed set/not-set flags on mount (write-only — only the boolean is fetched).
   useEffect(() => {
@@ -105,6 +112,19 @@ export function AiEnginesSettings({
     })();
     return () => { alive = false; };
   }, []);
+
+  // Reseed per-profile cloud-endpoint key flags whenever the profile list changes.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const out: Record<string, boolean> = {};
+      for (const p of profiles) {
+        try { out[p.id] = (await window.cth.profileHasApiKey(p.id)).hasKey; } catch { out[p.id] = false; }
+      }
+      if (alive) setCloudHasKey(out);
+    })();
+    return () => { alive = false; };
+  }, [profiles]);
 
   const saveKey = async (backend: string) => {
     const key = (draftKey[backend] ?? '').trim();
@@ -151,19 +171,46 @@ export function AiEnginesSettings({
   const addProfile = async () => {
     const name = draftName.trim();
     if (!name) return;
+    const baseUrl = draftBaseUrl.trim();
+    if (baseUrl) {
+      const safe = await window.cth.profileIsSafeUrl(baseUrl);
+      if (!safe) { setBaseUrlError('Unsafe or invalid URL — must be a public http/https endpoint.'); return; }
+    }
+    setBaseUrlError('');
     const profile: RuntimeProfile = {
       id: crypto.randomUUID(),
       name,
       provider: draftProvider,
       model: draftModel.trim() || undefined,
       claudeConfigDir: isClaudeProvider(draftProvider) ? (draftConfigDir.trim() || undefined) : undefined,
+      baseUrl: baseUrl || undefined,
       createdAt: Date.now()
     };
     await persistProfiles([...profiles, profile]);
-    setDraftName(''); setDraftModel(''); setDraftConfigDir('');
+    setDraftName(''); setDraftModel(''); setDraftConfigDir(''); setDraftBaseUrl('');
   };
   const removeProfileById = async (id: string) => {
     await persistProfiles(profiles.filter((p) => p.id !== id));
+  };
+
+  const saveCloudKey = async (profileId: string) => {
+    const key = (cloudDraftKey[profileId] ?? '').trim();
+    if (!key) return;
+    try {
+      const r = await window.cth.profileSetApiKey(profileId, key);
+      if (r.ok) {
+        setCloudHasKey((s) => ({ ...s, [profileId]: true }));
+        setCloudDraftKey((s) => ({ ...s, [profileId]: '' }));
+        setCloudNote((s) => ({ ...s, [profileId]: 'saved' }));
+      } else setCloudNote((s) => ({ ...s, [profileId]: r.error ?? 'failed' }));
+    } catch (e) { setCloudNote((s) => ({ ...s, [profileId]: e instanceof Error ? e.message : String(e) })); }
+  };
+  const clearCloudKey = async (profileId: string) => {
+    try {
+      await window.cth.profileRemoveApiKey(profileId);
+      setCloudHasKey((s) => ({ ...s, [profileId]: false }));
+      setCloudNote((s) => ({ ...s, [profileId]: 'cleared' }));
+    } catch { /* noop */ }
   };
 
   return (
@@ -277,21 +324,45 @@ export function AiEnginesSettings({
         {profiles.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {profiles.map((p) => {
-              const profileStr = `${p.provider}${p.model ? ` · ${p.model}` : ''}${p.claudeConfigDir ? ` · ${p.claudeConfigDir}` : ''}`;
+              const profileStr = `${p.provider}${p.model ? ` · ${p.model}` : ''}${p.claudeConfigDir ? ` · ${p.claudeConfigDir}` : ''}${p.baseUrl ? ` · ${p.baseUrl}` : ''}`;
               return (
                 <div key={p.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
+                  display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 8px',
                   boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', background: 'var(--cth-paper-100)'
                 }}>
-                  <ProviderLogo provider={p.provider} size={14} />
-                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 13, color: 'var(--cth-ink-900)', fontFamily: 'var(--cth-font-ui)' }}>{p.name}</span>
-                    <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {profileStr}
-                    </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ProviderLogo provider={p.provider} size={14} />
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 13, color: 'var(--cth-ink-900)', fontFamily: 'var(--cth-font-ui)' }}>{p.name}</span>
+                      <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {profileStr}
+                      </span>
+                    </div>
+                    <CopyButton value={`${p.name} · ${profileStr}`} title="Copy profile config" />
+                    <PixelButton variant="secondary" size="sm" onClick={() => removeProfileById(p.id)}>Delete</PixelButton>
                   </div>
-                  <CopyButton value={`${p.name} · ${profileStr}`} title="Copy profile config" />
-                  <PixelButton variant="secondary" size="sm" onClick={() => removeProfileById(p.id)}>Delete</PixelButton>
+                  {p.baseUrl && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 22 }}>
+                      <label style={labelStyle}>
+                        Cloud endpoint API key {cloudHasKey[p.id] ? '· set ✓' : ''}
+                      </label>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <input
+                          type="password"
+                          autoComplete="off"
+                          placeholder={cloudHasKey[p.id] ? '•••••••• (stored — type to replace)' : 'paste the endpoint API key'}
+                          value={cloudDraftKey[p.id] ?? ''}
+                          onChange={(e) => setCloudDraftKey((s) => ({ ...s, [p.id]: e.target.value }))}
+                          style={inputStyle}
+                        />
+                        <PixelButton variant="secondary" size="sm" onClick={() => saveCloudKey(p.id)}>Save</PixelButton>
+                        {cloudHasKey[p.id] && (
+                          <PixelButton variant="secondary" size="sm" onClick={() => clearCloudKey(p.id)}>Clear</PixelButton>
+                        )}
+                      </div>
+                      {cloudNote[p.id] && <div style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>{cloudNote[p.id]}</div>}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -346,6 +417,20 @@ export function AiEnginesSettings({
               </div>
             )}
             <PixelButton variant="secondary" size="sm" onClick={addProfile}>Add profile</PixelButton>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <input
+              placeholder="Base URL (optional — e.g. https://your-endpoint.openai.azure.com/openai/v1/...)"
+              value={draftBaseUrl}
+              onChange={(e) => { setDraftBaseUrl(e.target.value); setBaseUrlError(''); }}
+              style={inputStyle}
+            />
+            <div style={{ fontSize: 12, color: 'var(--cth-ink-700)', lineHeight: '16px' }}>
+              Routes this profile's agent through a custom OpenAI-compatible endpoint (Azure
+              OpenAI, GitHub Models, etc.) instead of the provider default. Add the profile,
+              then set its API key below — the key is stored write-only and never shown again.
+            </div>
+            {baseUrlError && <div style={{ fontSize: 13, color: 'var(--cth-danger, #6E1423)' }}>{baseUrlError}</div>}
           </div>
         </div>
       </div>
