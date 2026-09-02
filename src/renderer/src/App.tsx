@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore, selectedAgent } from '@/store/store';
 import { startMockLoop, stopMockLoop } from '@/store/mockEvents';
 import type { HarnessConfig } from '@/store/config';
@@ -39,6 +39,15 @@ export function App() {
   const agent = useStore(selectedAgent);
   const agents = useStore(s => s.agents);
   const agentCount = agents.length;
+  // Fleet roll-up for the title strip — a floor-wide glance (the bottom StatusBar
+  // is scoped to the focused agent, so this is the complement, not a duplicate).
+  const fleet = useMemo(() => {
+    const live = agents.filter((a) => a.ptyId && !a.archived);
+    const working = live.filter((a) => a.status === 'working' || a.status === 'thinking' || a.status === 'looping').length;
+    const waiting = live.filter((a) => a.status === 'waiting').length;
+    const blocked = live.filter((a) => a.status === 'blocked' || a.status === 'prompt').length;
+    return { count: live.length, working, waiting, blocked };
+  }, [agents]);
   const addAgentOpen = useStore(s => s.addAgentOpen);
   const setAddAgentOpen = useStore(s => s.setAddAgentOpen);
   const clearPendingHires = useStore(s => s.clearPendingHires);
@@ -442,10 +451,11 @@ export function App() {
           otherwise buried in that one scrollback — surface it app-wide. Bottom
           LEFT so it never stacks over the two bottom-right toasts. */}
       <HumanCommandToast />
-      {/* Title bar — a thin logo drag-strip. The version / update control, theme,
-          settings and focus-mode toggles moved to the always-on StatusBar
-          (<AppChromeControls/>), which killed the dead gap this row used to
-          carry. paddingLeft keeps the macOS traffic-light inset clear. */}
+      {/* Title bar — the window drag-strip. It has to exist (frameless window drag
+          + the macOS traffic-light inset the paddingLeft clears), so it carries a
+          live fleet roll-up rather than just the logo: agents on the floor and
+          how many are working / waiting / need you. The version/theme/settings
+          chrome lives on the bottom StatusBar (<AppChromeControls/>). */}
       <div
         className="cth-titlebar-drag"
         style={{
@@ -454,16 +464,36 @@ export function App() {
           borderBottom: '1px solid var(--cth-ink-300)',
           display: 'flex',
           alignItems: 'center',
+          gap: 10,
           paddingLeft: 96,
           paddingRight: 12,
-          userSelect: 'none'
+          userSelect: 'none',
+          fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-500)',
+          overflow: 'hidden'
         }}
       >
         <img
           src={brandLogo}
           alt="The Hive"
-          style={{ height: 15, width: 'auto', display: 'block' }}
+          style={{ height: 15, width: 'auto', display: 'block', flexShrink: 0 }}
         />
+        {fleet.count > 0 && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden' }}>
+            <span
+              aria-hidden
+              style={{
+                width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                background: fleet.blocked ? 'var(--cth-coral)' : fleet.working ? 'var(--cth-lemon)' : 'var(--cth-mint)'
+              }}
+            />
+            <span style={{ color: 'var(--cth-ink-700)' }}>
+              <strong style={{ color: 'var(--cth-ink-900)' }}>{fleet.count}</strong> on the floor
+            </span>
+            {fleet.working > 0 && <span>· {fleet.working} working</span>}
+            {fleet.waiting > 0 && <span>· {fleet.waiting} waiting</span>}
+            {fleet.blocked > 0 && <span style={{ color: 'var(--cth-coral)' }}>· {fleet.blocked} needs you</span>}
+          </span>
+        )}
       </div>
 
       <div style={{

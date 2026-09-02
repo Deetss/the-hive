@@ -404,7 +404,7 @@ export function AgentCard({
             {/* Profile + model chips: make the account and engine each agent runs
                 under obvious at a glance (no need to open the terminal). */}
             {(profileLabel || modelLabel) && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
                 {profileLabel && (
                   <span title={`Profile: ${profileLabel}`} style={{
                     flexShrink: 1, minWidth: 0,
@@ -429,7 +429,7 @@ export function AgentCard({
             )}
 
             {(toolLabel || activityLabel || location) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {(toolLabel || activityLabel) && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)', opacity: 0.85 }}>
                     {toolLabel && (
