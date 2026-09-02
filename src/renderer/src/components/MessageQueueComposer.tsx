@@ -52,6 +52,8 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   // per-agent queue (the terminal-input model); picking BeeYoncé or another
   // agent turns this into the structured dispatch the Floor tab used to own.
   const agents = useStore((s) => s.agents);
+  const archivedAgents = useStore((s) => s.archivedAgents);
+  const restorableAgents = useStore((s) => s.restorableAgents);
   const selectedId = useStore((s) => s.selectedId);
   const dispatchSeedRequest = useStore((s) => s.dispatchSeedRequest);
   const clearDispatchSeedRequest = useStore((s) => s.clearDispatchSeedRequest);
@@ -105,6 +107,15 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   const [dispAct, setDispAct] = useState<'request' | 'query' | 'inform'>('request');
   const [dispProject, setDispProject] = useState('');
   const [dispPriority, setDispPriority] = useState<'urgent' | 'normal' | 'backlog'>('normal');
+  // Projects the user has dispatched against before — persisted so the dropdown
+  // remembers them across sessions, on top of the ones read from the agent roster.
+  const PROJECTS_LS_KEY = 'cth.dispatch.projects';
+  const [usedProjects, setUsedProjects] = useState<string[]>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PROJECTS_LS_KEY) ?? '[]');
+      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+    } catch { return []; }
+  });
   const [dispMsg, setDispMsg] = useState<string | null>(null);
   const [harnessHome, setHarnessHome] = useState<string | null>(null);
   useEffect(() => {
@@ -205,6 +216,29 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     setAttachments([]);
   };
 
+  // Every project name we can suggest: the roster (active + archived + restorable
+  // agents' cwd names) plus the persisted "used before" list, deduped + sorted.
+  const knownProjects = [...new Set(
+    [...agents, ...archivedAgents, ...restorableAgents]
+      .map((a) => a.project)
+      .concat(usedProjects)
+      .map((p) => (p ?? '').trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b));
+
+  // Persist a project name once it has actually been used, so it is offered next
+  // session. Bounded so the list can't grow without limit.
+  const rememberProject = (name: string) => {
+    const p = name.trim();
+    if (!p) return;
+    setUsedProjects((prev) => {
+      if (prev.includes(p)) return prev;
+      const next = [p, ...prev].slice(0, 40);
+      try { localStorage.setItem(PROJECTS_LS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+      return next;
+    });
+  };
+
   // There is no message-payload field for project, so both paths carry it as a
   // leading body tag the recipient can read to route / prioritise by project.
   const withProject = (b: string) => {
@@ -215,6 +249,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   const queueIt = () => {
     if (!canSend) return;
     enqueueMessage(agent.id, withProject(buildBody()), { userDraft: true });
+    rememberProject(dispProject);
     resetComposer();
   };
 
@@ -251,7 +286,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     } catch (e) {
       err = e instanceof Error ? e.message : String(e);
     }
-    if (ok) resetComposer();
+    if (ok) { rememberProject(dispProject); resetComposer(); }
     setDispMsg(ok
       ? `sent to BeeYoncé${suggested ? ` (suggesting ${suggested.name})` : ''}`
       : `failed: ${err ?? '?'}`);
@@ -413,10 +448,11 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
           value={dispProject}
           onChange={(e) => setDispProject(e.target.value)}
           placeholder="Project (optional)"
+          title="Pick a known project or type a new one"
           style={{ ...selectStyle, width: 130 }}
         />
         <datalist id="cth-dispatch-projects">
-          {[...new Set(agents.map((a) => a.project).filter(Boolean))].map((p) => (
+          {knownProjects.map((p) => (
             <option key={p} value={p} />
           ))}
         </datalist>
