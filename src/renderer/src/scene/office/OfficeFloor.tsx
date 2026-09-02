@@ -1629,10 +1629,10 @@ export function OfficeFloor() {
       boardProps.position.copyFrom(boardG.position);
       boardProps.zIndex = boardG.zIndex + 0.5;
       const pipeSprite = new Sprite();
-      pipeSprite.position.set(14, -12);
+      pipeSprite.position.set(18, -12);   // tucked into the comb's left edge
       pipeSprite.visible = false;
       const vatSprite = new Sprite();
-      vatSprite.position.set(60, 12);
+      vatSprite.position.set(56, 12);     // on the floor at the comb's lower-right, clear of the door
       vatSprite.visible = false;
       if (isHiveTheme) {
         boardProps.addChild(pipeSprite, vatSprite);
