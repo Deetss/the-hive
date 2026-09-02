@@ -1095,6 +1095,23 @@ const api = {
     ipcRenderer.on('hive:fleetTokens', listener);
     return () => ipcRenderer.removeListener('hive:fleetTokens', listener);
   },
+  /** An agent's terminal is blocked on an interactive prompt (trust-folder, y/n,
+   *  auth). prompt=null clears it. Drives the roster "needs input" chip. */
+  onAgentNeedsInput: (
+    cb: (e: { agentId: string; prompt: string | null }) => void
+  ): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: { agentId: string; prompt: string | null }) => cb(payload);
+    ipcRenderer.on('agent:needsInput', listener);
+    return () => ipcRenderer.removeListener('agent:needsInput', listener);
+  },
+  /** A prompt toast was clicked: reveal (select) that agent's terminal. */
+  onRevealAgent: (
+    cb: (e: { agentId: string }) => void
+  ): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: { agentId: string }) => cb(payload);
+    ipcRenderer.on('agent:reveal', listener);
+    return () => ipcRenderer.removeListener('agent:reveal', listener);
+  },
   onHiveMessage: (cb: (e: HiveRouteEvent) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, payload: HiveRouteEvent) => cb(payload);
     ipcRenderer.on('hive:message', listener);

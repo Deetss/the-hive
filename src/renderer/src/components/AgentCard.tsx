@@ -53,6 +53,9 @@ export interface AgentCardProps {
   onHold?: boolean;
   /** Agent hit provider quota/rate limit — show a QUOTA chip so the floor can re-route. */
   quotaLimited?: boolean;
+  /** Agent's terminal is blocked on an interactive prompt (trust-folder, y/n, auth).
+   *  The value is the short prompt text; shown as a "NEEDS INPUT" chip. */
+  needsInput?: string;
   /** Most recent telemetry tool summary (last command). */
   lastTool?: string;
   /** Epoch ms of the most recent activity (telemetry or transcript). */
@@ -103,7 +106,7 @@ function formatAgo(ts: number | null | undefined, now: number): string | null {
 export function AgentCard({
   name, agentId, character, accent, status, ptyId, project, action, progress = 0,
   contextTokens, contextLimit, selected, isOvermind, onClick, onRename,
-  doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold, quotaLimited,
+  doingCount = 0, onTaskNoteClick, draggable, note, onEditNote, onHold, quotaLimited, needsInput,
   lastTool, lastActivityTs, command, provider, model, profileId, profileLabel,
   onRespawn
 }: AgentCardProps) {
@@ -315,6 +318,15 @@ export function AgentCard({
                   eating the NAME instead. Truncation should land on the longest,
                   most redundant thing, not on the identity. */}
               <PixelBadge status={badgeStatus} style={{ flexShrink: 0 }} />
+              {needsInput && (
+                <span title={`Blocked on an interactive prompt — click the card to answer: ${needsInput}`} style={{
+                  flexShrink: 0,
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
+                  padding: '1px 4px 0', textTransform: 'uppercase', fontWeight: 600,
+                  background: 'var(--cth-salmon, #f47d55)', color: 'var(--cth-ink-900)',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-700)'
+                }}>⌨ needs input</span>
+              )}
               {quotaLimited && (
                 <span title="Hit provider quota / rate limit — re-route or respawn on another profile" style={{
                   flexShrink: 0,

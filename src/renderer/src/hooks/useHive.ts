@@ -643,6 +643,16 @@ export function useHive(config: HarnessConfig | null): void {
     return () => off?.();
   }, []);
 
+  // 2d″) Clicking a "needs input" prompt toast reveals (selects) that agent so the
+  //      human lands on the blocked terminal. Guarded: a freshly added bridge
+  //      method is undefined until a full restart in dev.
+  useEffect(() => {
+    const off = window.cth.onRevealAgent?.(({ agentId }) => {
+      if (agentId) useStore.getState().select(agentId);
+    });
+    return () => off?.();
+  }, []);
+
   // 2e) Non-Claude providers cannot drain hive inbox. Direct hive mail to them
   //     arrives here as a terminal work order and is queued through the same
   //     idle-only PTY drain as human-composed messages.

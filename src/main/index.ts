@@ -55,7 +55,7 @@ import {
 } from './git';
 import { HiveManager, type AgentMeta, type HiveMessage, type HiveTask, type PromptOverrides } from './hive';
 import { HookServer } from './hooks';
-import { showFocusNotification } from './notify';
+import { showFocusNotification, focusMainWindow } from './notify';
 import { CircuitBreaker, type BreakerInput } from './breaker';
 import type { UsageProvider } from './usage';
 import { MemoryManager } from './memory';
@@ -2217,6 +2217,88 @@ function stripAnsiText(str: string): string {
 const workerPtyTail = new Map<string, string[]>();
 const workerPtyPartial = new Map<string, string>();
 
+/** Signatures for interactive TUI prompts an agent can block on — matched against
+ *  the recent (ANSI-stripped) terminal tail. ONE place: extend the list here. */
+const INTERACTIVE_PROMPT_SIGNATURES: RegExp[] = [
+  /do you trust the (files|contents|authors)/i,
+  /trust (this|the) (workspace|folder|directory)/i,
+  /\(y\/n\)/i,
+  /\byes,\s*(proceed|and)\b/i,
+  /^\s*1\.\s*yes\b/im,
+  /press\s+enter\s+to\s+(continue|confirm)/i,
+  /continue\?\s*\[y\/n\]/i,
+  /\bsign in to\b/i,
+  /paste (the|your) (code|url|token|key)/i,
+  /https?:\/\/\S*(oauth|\/auth|login|callback|authorize)/i
+];
+/** ms of output quiet before a matched signature is treated as a real "waiting"
+ *  state (so a signature scrolling past mid-run doesn't false-fire). */
+const PROMPT_QUIESCE_MS = 1500;
+/** agentId → the prompt an agent is currently blocked on (rising-edge, so the
+ *  toast fires once and the roster chip persists until the agent advances). */
+const agentNeedsInput = new Map<string, { prompt: string; at: number }>();
+/** agentId → the pending one-shot quiescence timer, armed on first signature. */
+const promptWatchTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Short human label for the prompt: the last non-empty tail line, trimmed. */
+function promptLabelFromTail(tailLines: string[]): string {
+  for (let i = tailLines.length - 1; i >= 0; i--) {
+    const line = tailLines[i].replace(/\s+/g, ' ').trim();
+    if (line) return line.slice(0, 90);
+  }
+  return 'waiting for your input';
+}
+
+/** Raise the "needs input" state for an agent: persist the roster chip and fire a
+ *  one-time toast whose click reveals that agent's terminal. Never auto-answers. */
+function raiseAgentPrompt(agentId: string, tailLines: string[]): void {
+  if (agentNeedsInput.has(agentId)) return;
+  const label = promptLabelFromTail(tailLines);
+  agentNeedsInput.set(agentId, { prompt: label, at: Date.now() });
+  try { liveWebContents()?.send('agent:needsInput', { agentId, prompt: label }); } catch { /* ignore */ }
+  if (readConfig().notifications && Notification.isSupported()) {
+    try {
+      const name = hive.registry().agents[agentId]?.name ?? agentId;
+      const n = new Notification({ title: `${name} needs your input`, body: label });
+      n.on('click', () => {
+        focusMainWindow(mainWindow);
+        try { liveWebContents()?.send('agent:reveal', { agentId }); } catch { /* ignore */ }
+      });
+      n.show();
+    } catch { /* toast best-effort */ }
+  }
+}
+
+/** Clear the "needs input" state once the agent advances past the prompt. */
+function clearAgentPrompt(agentId: string): void {
+  const timer = promptWatchTimers.get(agentId);
+  if (timer) { clearTimeout(timer); promptWatchTimers.delete(agentId); }
+  if (!agentNeedsInput.has(agentId)) return;
+  agentNeedsInput.delete(agentId);
+  try { liveWebContents()?.send('agent:needsInput', { agentId, prompt: null }); } catch { /* ignore */ }
+}
+
+/** Detect (debounced) whether an agent is blocked on an interactive prompt. Armed
+ *  once on the first matching chunk; after PROMPT_QUIESCE_MS of quiet it re-checks
+ *  the current tail and raises only if a prompt is still the latest output. Any
+ *  non-prompt output cancels a pending watch and clears a raised flag. */
+function detectInteractivePrompt(agentId: string, tailLines: string[]): void {
+  const tail = tailLines.slice(-12).join('\n');
+  const matched = INTERACTIVE_PROMPT_SIGNATURES.some((re) => re.test(tail));
+  if (matched) {
+    if (agentNeedsInput.has(agentId) || promptWatchTimers.has(agentId)) return;
+    promptWatchTimers.set(agentId, setTimeout(() => {
+      promptWatchTimers.delete(agentId);
+      const cur = (workerPtyTail.get(agentId) ?? []).slice(-12);
+      if (INTERACTIVE_PROMPT_SIGNATURES.some((re) => re.test(cur.join('\n')))) {
+        raiseAgentPrompt(agentId, cur);
+      }
+    }, PROMPT_QUIESCE_MS));
+  } else {
+    clearAgentPrompt(agentId);
+  }
+}
+
 function getWorkerPtyTail(id: string): string[] {
   const lines = [...(workerPtyTail.get(id) ?? [])];
   const partial = workerPtyPartial.get(id)?.replace(/\r/g, '').trimEnd();
@@ -2339,6 +2421,8 @@ function notifyAgentPtyActivity(ptyId: string, chunk?: string): void {
     if (ptyId && ptyId !== agentId) {
       workerPtyTail.set(ptyId, currentLines);
     }
+
+    detectInteractivePrompt(agentId, currentLines);
   }
 
   // Push live status update to the renderer

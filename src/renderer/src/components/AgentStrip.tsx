@@ -46,6 +46,19 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
       setQuotaById(next);
     });
   }, []);
+  // Which agents are blocked on an interactive terminal prompt (pushed from main,
+  // which sees every pty — not just the focused one). prompt=null clears the chip.
+  const [needsInputById, setNeedsInputById] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!window.cth.onAgentNeedsInput) return;
+    return window.cth.onAgentNeedsInput(({ agentId, prompt }) => {
+      setNeedsInputById((prev) => {
+        if (prompt) return { ...prev, [agentId]: prompt };
+        if (!(agentId in prev)) return prev;
+        const next = { ...prev }; delete next[agentId]; return next;
+      });
+    });
+  }, []);
   // Shared with the fullscreen roster so both show one restore in progress.
   const { restoring, autoRestoring, restoreTeam } = useRestoreTeam(config);
   // ONE restore control (bottom-right): a button whose dropdown OPENS UPWARD and
@@ -171,6 +184,7 @@ export function AgentStrip({ config, isMobile = false }: AgentStripProps) {
             isOvermind={a.isOvermind}
             onHold={a.onHold}
             quotaLimited={quotaById[a.id]}
+            needsInput={needsInputById[a.id]}
             onClick={() => select(a.id)}
             onRename={(name) => renameAgent(a.id, name)}
             doingCount={doingByAgent[a.id]?.length ?? 0}
