@@ -2980,9 +2980,9 @@ function syncKeepAwake(): void {
   keepAwakeMode = desired;
   if (desired) {
     keepAwakeId = powerSaveBlocker.start(desired);
-    console.log(`[power] keep-awake ON (${desired}) — agents running`);
+    console.log(`[power] keep-awake ON (${desired}) - agents running`);
   } else {
-    console.log('[power] keep-awake off — no agents');
+    console.log('[power] keep-awake off - no agents');
   }
 }
 
@@ -3339,7 +3339,7 @@ function ensureDefaultMissions(): void {
         return rest;
       })
     });
-    console.log('[triggers] dropped the legacy per-mission autoCompact flag —',
+    console.log('[triggers] dropped the legacy per-mission autoCompact flag -',
       'contextTrigger.compact is now the only schedule that compacts');
   }
 }
@@ -5277,7 +5277,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
         // Claude project dir — we fall back to a FRESH session rather than a broken
         // `--resume`. Make that non-silent: warn on the floor and flag it back to
         // the renderer so the dialog can tell the user 'started fresh'.
-        console.warn(`[resume] session "${explicitSid}" not found in any Claude project dir — starting a fresh session`);
+        console.warn(`[resume] session "${explicitSid}" not found in any Claude project dir - starting a fresh session`);
         resumeNotFound = true;
       }
     }
@@ -5442,7 +5442,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
           };
         }
       } else {
-        console.warn(`[spawn] profile ${runtimeProfile.id} baseUrl failed SSRF check at spawn — endpoint not injected`);
+        console.warn(`[spawn] profile ${runtimeProfile.id} baseUrl failed SSRF check at spawn - endpoint not injected`);
       }
     }
   }
@@ -6029,7 +6029,7 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
     if (hive.enabled()) { try { hive.ensureHive(); } catch (e) { console.error('[hive] ensureHive after prompt override:', e); } }
   }
   if (!hiveWasEnabled && hive.enabled()) {
-    console.log('[hive] harnessHome configured — bootstrapping hive services');
+    console.log('[hive] harnessHome configured - bootstrapping hive services');
     try { bootstrapHiveServices(); } catch (e) { console.error('[hive] bootstrap after onboarding:', e); }
   }
   return next;
@@ -8113,7 +8113,7 @@ async function processSpawnRequest(filePath: string): Promise<void> {
       profileConfigs: mergedAutoOffload ? { [accountKey]: mergedAutoOffload } : undefined,
       notify: (subject, body) => informGod(subject, body, slack)
     });
-    console.log(`[worker] offloaded ${reqId} (owning account RED) — not spawning Claude`);
+    console.log(`[worker] offloaded ${reqId} (owning account RED) - not spawning Claude`);
     archiveRequest(filePath, '.done');
     return;
   }
@@ -8296,7 +8296,7 @@ async function gcPreservedWorktrees(): Promise<void> {
       if (!existsSync(e.wtPath)) {
         removeWorkerScratch(e.workerId);
         preservedWorktrees.delete(key);
-        console.log(`[worker gc] ${e.workerId}: worktree already gone — reclaimed scratch`);
+        console.log(`[worker gc] ${e.workerId}: worktree already gone - reclaimed scratch`);
         continue;
       }
       // (b) Still on disk → reclaim ONLY when provably integrated + clean.
@@ -8349,7 +8349,7 @@ async function ephemeralWorkerTick(): Promise<void> {
         // Success: the worker already replied in-thread; just release it.
         rec.releasing = true;
         recordRecentWorker(workerId, 'done');
-        console.log(`[worker] ${workerId} signaled done — releasing`);
+        console.log(`[worker] ${workerId} signaled done - releasing`);
         ptyManager.kill(workerId);
         teardownPty(workerId);
         continue;
@@ -8380,7 +8380,7 @@ async function ephemeralWorkerTick(): Promise<void> {
         if (used > tokenCap) {
           rec.releasing = true;
           recordRecentWorker(workerId, 'reaped');
-          console.warn(`[worker] reaping ${workerId} — token cap (${used.toLocaleString()} > ${tokenCap.toLocaleString()})`);
+          console.warn(`[worker] reaping ${workerId} - token cap (${used.toLocaleString()} > ${tokenCap.toLocaleString()})`);
           informGod(
             `[worker reaped — token cap] ${workerId}`,
             `Worker ${workerId} used ${used.toLocaleString()} tokens (> its cap of ${tokenCap.toLocaleString()}) and was reaped. Any committed work on its branch is preserved for you.`,
@@ -9379,7 +9379,7 @@ function healthCheckPtys(reason: string, awayMs: number | null): void {
  *  health-check the terminals. Idempotent: overlapping resume+unlock events
  *  collapse safely (clear-then-arm everywhere; at most one catch-up fire). */
 function onSystemResume(reason: string): void {
-  console.log(`[power] ${reason} — re-arming scheduler, beats, router, keep-awake`);
+  console.log(`[power] ${reason} - re-arming scheduler, beats, router, keep-awake`);
   try { syncMissions(); } catch (e) { console.error('[power] syncMissions on resume', e); }
   // Same freeze, same catch-up: the context timers honour elapsed-time-since-last-
   // run, so a compact/clear that came due while the machine slept fires ONCE here
@@ -9399,7 +9399,7 @@ function onSystemResume(reason: string): void {
     hive.stopRouter();
     hive.startRouter();
     const drained = hive.routeOnce();
-    if (drained > 0) console.log(`[power] ${reason} — flushed ${drained} queued hive message(s)`);
+    if (drained > 0) console.log(`[power] ${reason} - flushed ${drained} queued hive message(s)`);
   } catch (e) { console.error('[power] router re-arm on resume', e); }
   try { syncKeepAwake(); } catch (e) { console.error('[power] syncKeepAwake on resume', e); }
   const awayMs = lastSuspendAt != null ? Date.now() - lastSuspendAt : null;
@@ -9495,7 +9495,7 @@ app.whenReady().then(() => {
   // every window, so there is nothing to tear down on quit.
   powerMonitor.on('resume', () => onSystemResume('resume'));
   powerMonitor.on('unlock-screen', () => onSystemResume('unlock-screen'));
-  powerMonitor.on('suspend', () => { lastSuspendAt = Date.now(); console.log('[power] suspend — system sleeping'); });
+  powerMonitor.on('suspend', () => { lastSuspendAt = Date.now(); console.log('[power] suspend - system sleeping'); });
   powerMonitor.on('lock-screen', () => { lastSuspendAt = Date.now(); console.log('[power] lock-screen'); });
   // Multi-window floors (opt-in): install the menu carrying "New Floor". When
   // off, the app keeps Electron's default menu — zero behavior change.

@@ -374,7 +374,7 @@ export class MemoryManager {
       // `mining` stuck true, silently stopping all future passes. Generous cap
       // because the first run may lazily download the embedding model.
       const timer = setTimeout(() => {
-        console.error(`[memory] mine ${id} timed out after ${MINE_TIMEOUT_MS / 60000}min — killing`);
+        console.error(`[memory] mine ${id} timed out after ${MINE_TIMEOUT_MS / 60000}min - killing`);
         try { proc.kill('SIGTERM'); } catch { /* gone */ }
         ensureKilled(proc.pid); // SIGKILL sweep if SIGTERM is ignored
       }, MINE_TIMEOUT_MS);

@@ -378,7 +378,7 @@ function recordTargetSpend(targetId: string, tokens: number): void {
 }
 
 function maybeNotifyHold(resolved: ResolvedAutoOffloadConfig, notify?: OffloadNotify): void {
-  console.warn('[governor-offload] no healthy offload targets — work held');
+  console.warn('[governor-offload] no healthy offload targets - work held');
   if (!notify) return;
   const now = Date.now();
   if (now - lastHoldNotifyAt < resolved.holdNotifyIntervalMs) return;

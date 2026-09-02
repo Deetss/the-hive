@@ -1015,7 +1015,7 @@ export class HiveManager {
                 env[desc.baseUrlEnv] = loopback;
               }
             }
-            else console.error(`[hive] proxy bridge for ${meta.id} did not bind — spawning without hive events`);
+            else console.error(`[hive] proxy bridge for ${meta.id} did not bind - spawning without hive events`);
           }
         } catch (e) { console.error(`[hive] install ${desc.kind} bridge failed:`, e); }
       }
