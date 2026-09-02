@@ -458,6 +458,8 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
           list="cth-dispatch-projects"
           value={dispProject}
           onChange={(e) => setDispProject(e.target.value)}
+          // Enter here only picks a suggestion — it must never reach a send path.
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }}
           placeholder="Project (optional)"
           title="Pick a known project or type a new one"
           style={{ ...selectStyle, width: 130 }}
