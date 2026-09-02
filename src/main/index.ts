@@ -5716,10 +5716,12 @@ ipcMain.handle('ai:improveText', async (_evt, text: unknown, context: unknown): 
 });
 
 // ─── IPC: folder picker ─────────────────────────────────────────────────────
-ipcMain.handle('dialog:chooseFolder', async (evt) => {
-  const win = BrowserWindow.fromWebContents(evt.sender);
-  if (!win) return { ok: false as const, error: 'no window' };
-  const res = await dialog.showOpenDialog(win, {
+ipcMain.handle('dialog:chooseFolder', async () => {
+  // Not parented to the BrowserWindow: a window-modal native dialog freezes the
+  // parent window's UI thread the whole time it is open (and a directory dialog
+  // can be slow to enumerate cloud folders / mapped drives). App-modal keeps the
+  // window interactive. Matches the `hire:openFile` picker above.
+  const res = await dialog.showOpenDialog({
     properties: ['openDirectory', 'createDirectory'],
     title: 'Pick a folder'
   });
