@@ -88,6 +88,31 @@ const DESCRIPTION_TEMPLATES: { label: string; description: string; goal: string 
     label: 'Security auditor',
     description: 'hunts for security weaknesses',
     goal: 'Scan for injection risks, unvalidated input, auth and authz gaps, hardcoded secrets, and unsafe output handling. Report each finding with its location, the risk, and a minimal fix. Never change behavior without flagging it.'
+  },
+  {
+    label: 'Refactorer',
+    description: 'cleans up code structure',
+    goal: 'Improve the structure and readability of the code you are pointed at: remove duplication, break up long functions, and clarify names. Keep behavior identical and lean on tests or a careful read to prove it.'
+  },
+  {
+    label: 'Debugger',
+    description: 'tracks down specific bugs',
+    goal: 'Work one bug at a time: gather the logs, stack traces, and exact reproduction steps, form a hypothesis, then confirm the root cause before proposing the smallest fix that addresses it.'
+  },
+  {
+    label: 'DevOps',
+    description: 'handles CI/CD and infra config',
+    goal: 'Own the build and deploy path: CI/CD pipelines, Dockerfiles, deployment scripts, and infrastructure config. Keep them working, reproducible, and documented, and flag anything that touches secrets or production.'
+  },
+  {
+    label: 'Code explainer',
+    description: 'explains how the code works',
+    goal: 'Answer "what does this do" and "how does this work" for the code sections you are asked about. Trace the real control and data flow, call out the non-obvious parts, and keep the explanation concrete.'
+  },
+  {
+    label: 'Perf profiler',
+    description: 'finds and fixes bottlenecks',
+    goal: 'Measure before changing anything: profile the hot path, identify the real bottleneck with evidence, then propose concrete optimizations and confirm they actually help.'
   }
 ];
 
