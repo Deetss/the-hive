@@ -1640,17 +1640,19 @@ export class HiveManager {
       : `SLACK REPLIES: If Abathur dispatches you a task that came from Slack, it will include an exact \`"${hiveNode}" "<helper>" --channel … --thread … --text "…"\` reply command — when you finish, run it VERBATIM to post your result back to that thread yourself. The reply must be SUBSTANTIVE Slack mrkdwn (a short *bold* headline + the actual outcome/specifics/links), NEVER a bare "done".`;
     const progressLine = PROGRESS_LINE;
     const completionLine = meta.isOvermind ? '' : COMPLETION_LINE_WORKER;
+    const externalActionLine = meta.isOvermind ? '' : EXTERNAL_ACTION_LINE;
     const decisionGateLine = DECISION_GATE_LINE;
-    // The orientation body (guardrails, progress, ASK-ME gate, task close-out) is
-    // the one block a user can override via config.promptOverrides.workerOrientation;
-    // the identity header and the feature/role lines around it stay computed. The
-    // override applies to plain workers only — the Overmind/assistant prompts are
-    // structurally special and keep their computed body.
+    // The orientation body (guardrails, progress, ASK-ME gate, external-action gate,
+    // task close-out) is the one block a user can override via
+    // config.promptOverrides.workerOrientation; the identity header and the
+    // feature/role lines around it stay computed. The override applies to plain
+    // workers only — the Overmind/assistant prompts are structurally special and
+    // keep their computed body.
     const isPlainWorker = !meta.isOvermind && !meta.isAssistant;
     const orientationOverride = this._promptOverrides.workerOrientation?.trim();
     const orientationBody = (isPlainWorker && orientationOverride)
       ? orientationOverride
-      : [guardrailsLine, progressLine, decisionGateLine, completionLine].filter(Boolean).join('\n');
+      : [guardrailsLine, progressLine, decisionGateLine, externalActionLine, completionLine].filter(Boolean).join('\n');
     const basePrompt = [
       `You are "${meta.name}" (${meta.id}), an autonomous agent in a collaborating hive of Claude agents.`,
       `Workspace: ${dir}. Shared hive: ${root}. Full protocol + Slack rules: ${inRoot('PROTOCOL.md')}.`,
@@ -2898,9 +2900,10 @@ const COMMANDS_MD = renderCommandsMd();
 const GUARDRAILS_LINE = 'Guardrails: obey breaker steer/constrain notes, keep board.md/tasks.json current, stay token-frugal.';
 const PROGRESS_LINE = 'Progress notes: as you work, append timestamped entries to your task card\'s "progressLog" array in tasks.json at key milestones (root-cause found, fix applied, tests passing, etc). Pattern: read tasks.json → JSON.parse → find your task → push {step:"...", ts:new Date().toISOString()} → write back. The human sees these live on the kanban board.';
 const DECISION_GATE_LINE = 'Need the human to answer something? Surface it on the ASK ME board, never only in your terminal. This covers EVERY question you need the human to decide, including a quick yes/no or a "which of these": if you just type the question into your own session and wait, the human has to scroll the terminal to even find it and will likely miss it (that is the exact failure this rule exists to stop). Instead: (1) append the ask to your task card\'s "humanQA" array in tasks.json (push {"q":"<the question + the concrete options>","askedAt":"<iso>"}, keeping every past entry); (2) if you are truly stuck until it is answered, also set that task\'s "status" to "blocked" (a quick non-blocking question can stay "doing" so you keep working other parts); (3) message Abathur (to:"god") so the floor knows you are waiting. The harness surfaces open humanQA on the ASK ME board with a badge, labelled with your task title for context; the human\'s answer lands back in the same entry ("a") and arrives in your inbox. Read it, act on it, and move the card off "blocked". While you wait, pick up other work rather than sitting idle.';
+const EXTERNAL_ACTION_LINE = 'EXTERNAL ACTION GATE — before you run ANY command that reaches beyond this machine or is hard to reverse (git push of a branch OR a tag, gh api / gh pr / gh release, curl / wget / fetch or any network request, a deploy / publish command such as npm publish or a release script, rm -rf on anything outside a scratch dir), STOP. If your CURRENT dispatch names that exact command as the task, it is already approved — run it, but for a release / deploy / tag push still confirm the board is clear and the timing still holds (a dispatch written earlier is not a live green light). Otherwise you MUST get Overmind approval first: push a humanQA decision card to your task card (push {"q":"<exactly what you will run + which external system it affects + why>","kind":"decision","askedAt":"<iso>"}), set the task "status" to "blocked", message Abathur (to:"god"), and WAIT for the answer before proceeding. Local-only work (builds, typecheck, tests, git add/commit/tag WITHOUT push, reading files) does not need this gate.';
 const COMPLETION_LINE_WORKER = 'FINISHING A TASK — never go silent the moment the work is done. Run this close-out every time, in order: (1) VERIFY YOUR OWN WORK FIRST — run the checks that apply before you claim done: typecheck (npm run typecheck:web, npm run typecheck:node), tests (node --test on the suites you touched), and/or manually exercise the feature to confirm it behaves as intended. If any check fails, FIX IT before going further — never report done with broken checks; (2) set the task\'s tasks.json "status" to "done" (keep its "assignee" and "progressLog"); (3) send a substantive "done" report to Abathur ("to":"god") — commit hash / files changed / what changed / what you verified (e.g. "typecheck clean, N tests pass, manually confirmed X"), NEVER a bare "done"; (4) RE-DRAIN your inbox — new dispatches and "urgent" messages often arrive while you were working (process urgent first, then FIFO); (5) if nothing is waiting, check tasks.json for an unassigned "todo" whose deps are met that fits you, claim it (set "assignee" + "status":"doing") and start — you do not need to wait for a hand-off; (6) only if there is genuinely nothing to pick up, send Abathur a one-line "inform": "inbox empty, idle and available", then stop — do NOT sit polling your own session.';
 export const DEFAULT_WORKER_ORIENTATION = [
-  GUARDRAILS_LINE, PROGRESS_LINE, DECISION_GATE_LINE, COMPLETION_LINE_WORKER
+  GUARDRAILS_LINE, PROGRESS_LINE, DECISION_GATE_LINE, EXTERNAL_ACTION_LINE, COMPLETION_LINE_WORKER
 ].join('\n');
 
 /** The Overmind's orchestration body — the block a user can override via
@@ -2977,6 +2980,19 @@ re-dispatch by hand. Every time you finish a task, run this close-out **in order
 4. **Re-drain your \`inbox/\`.** New dispatches and \`urgent\` messages routinely arrive while you were heads-down. Process \`urgent\` first, then FIFO, and move each to \`.done/\`.
 5. If nothing is waiting, scan \`tasks.json\` for an unassigned \`todo\` whose dependencies are met and that fits your skills. Claim it (set \`assignee\` to your id + \`status\` to \`doing\`) and start — you do not need to wait for a hand-off.
 6. Only if there is genuinely nothing to pick up, send Abathur a one-line \`inform\`: \`"inbox empty, idle and available"\`. Then stop. Do NOT sit polling your own session — the harness will wake you when mail arrives.
+
+## External actions — get Overmind approval before touching outside systems
+Anything that reaches beyond this machine or is hard to reverse needs a green light
+first. Covered: \`git push\` (a branch OR a tag), \`gh\` API / PR / release calls,
+\`curl\` / \`wget\` / \`fetch\` / any network request, deploy or publish commands
+(\`npm publish\`, release scripts), and \`rm -rf\` on anything outside a scratch dir.
+
+Before you run one of these:
+1. If your CURRENT dispatch names that exact command as the task, it is already approved — run it. For a release / deploy / tag push, still confirm the board is clear and the timing holds: a dispatch written earlier is not a live green light once instructions have moved on.
+2. Otherwise, push a \`humanQA\` decision card to your task card — \`{"q":"<exactly what you will run + which external system it affects + why>","kind":"decision","askedAt":"<iso>"}\` — set the task \`status\` to \`blocked\`, message Abathur (\`"to":"god"\`), and WAIT for the answer before proceeding.
+
+Local-only work needs no gate: builds, typecheck, tests, reading files, and
+\`git add\` / \`git commit\` / \`git tag\` **without** a push.
 
 ## Need the human to answer something? Surface it on ASK ME, never only in your terminal
 This is the ONE rule for reaching the human. It covers every question you need them to
