@@ -1,4 +1,9 @@
-import { AnimatedSprite, Container, Graphics, Texture } from 'pixi.js';
+import { AnimatedSprite, Container, Graphics, Sprite, Texture } from 'pixi.js';
+import {
+  type HiveKitStatus,
+  getHiveBeeStatusFrames,
+  getHiveStatusChipTexture
+} from './hiveKit';
 
 export type Direction = 'down' | 'up' | 'right' | 'left';
 export type AnimState = 'walk' | 'type' | 'read' | 'idle';
@@ -18,15 +23,13 @@ const ANIM_FRAMES: Record<AnimState, number[]> = {
   idle: [0],
 };
 
-// Render characters a bit larger than their native 18×32 so heads/faces read
-// clearly on the floor. Applied to the container so the leg-crop mask (a child)
-// scales with the sprite and stays aligned.
 const CHAR_SCALE = 1.08;
 
-/** Ported from shahar061/the-office (office/characters/CharacterSprite.ts). */
+/** Character Sprite supporting standard procedural sprites and animated Hive Kit atlas bees. */
 export class CharacterSprite {
   readonly container: Container;
   private sprite: AnimatedSprite;
+  private chipSprite: Sprite;
   private frames: Texture[][];
   private currentDirection: Direction = 'down';
   private currentAnim: AnimState = 'idle';
@@ -34,13 +37,14 @@ export class CharacterSprite {
   private frameW: number;
   private frameH: number;
   private cropMask: Graphics | null = null;
-  /** Continuous units (e.g. a slithering Abathur) loop their whole frame
-   *  sequence regardless of walk/idle state, for a smooth non-cyclic animation. */
   private continuous: boolean;
+  private isHiveKit: boolean = false;
+  private currentHiveStatus: HiveKitStatus = 'idle';
 
-  constructor(frames: Texture[][], continuous = false) {
+  constructor(frames: Texture[][], continuous = false, isHiveKit = false) {
     this.frames = frames;
     this.continuous = continuous;
+    this.isHiveKit = isHiveKit;
     this.container = new Container();
 
     const initialFrames = continuous ? frames[0] : this.getFrames('down', 'idle');
@@ -48,21 +52,24 @@ export class CharacterSprite {
     this.sprite.anchor.set(0.5, 1);
     this.sprite.animationSpeed = continuous ? 0.28 : this.frameSpeed;
     this.sprite.play();
-    // Anchor is (0.5, 1): in container space the sprite spans x∈[-w/2, w/2],
-    // y∈[-h, 0] (feet at the origin). Used by the seated leg-crop mask.
-    this.frameW = this.sprite.texture.frame.width || this.sprite.width || 16;
-    this.frameH = this.sprite.texture.frame.height || this.sprite.height || 32;
+
+    this.frameW = this.sprite.texture.frame.width || this.sprite.width || 24;
+    this.frameH = this.sprite.texture.frame.height || this.sprite.height || 24;
+
+    this.chipSprite = new Sprite();
+    this.chipSprite.anchor.set(0.5, 1);
+    this.chipSprite.position.set(0, -22); // 15px above the 16×16 bee cell
+    this.chipSprite.visible = false;
 
     this.container.addChild(this.sprite);
+    this.container.addChild(this.chipSprite);
     this.container.scale.set(CHAR_SCALE);
+
+    if (isHiveKit) {
+      void this.setHiveKitStatus('idle', 'down');
+    }
   }
 
-  /**
-   * Crop `cropPx` off the bottom of the sprite (the legs) so a seated agent
-   * reads as tucked under the desk instead of standing on top of it. Pass 0 to
-   * clear the crop (standing / walking). The mask only covers the sprite, so
-   * status glyphs / bubbles parented elsewhere are unaffected.
-   */
   setSeatedCrop(cropPx: number): void {
     if (cropPx <= 0) {
       if (this.cropMask) {
@@ -78,8 +85,6 @@ export class CharacterSprite {
     const w = this.frameW;
     const h = this.frameH;
     this.cropMask.clear();
-    // Keep the top (h - cropPx) of the sprite; reveal whatever (the desk) is
-    // behind where the legs were.
     this.cropMask
       .rect(-w / 2 - 2, -h - 2, w + 4, h - cropPx + 2)
       .fill(0xffffff);
@@ -89,16 +94,20 @@ export class CharacterSprite {
 
   private getFrames(direction: Direction, anim: AnimState): Texture[] {
     const row = DIRECTION_ROW[direction];
-    return ANIM_FRAMES[anim].map((col) => this.frames[row][col]);
+    return ANIM_FRAMES[anim].map((col) => this.frames[row][col % this.frames[row].length]);
   }
 
   setAnimation(anim: AnimState, direction: Direction): void {
-    if (anim === this.currentAnim && direction === this.currentDirection) return;
+    if (this.isHiveKit) {
+      const kitStatus = anim === 'walk' ? 'moving' : this.currentHiveStatus;
+      void this.setHiveKitStatus(kitStatus, direction);
+      return;
+    }
 
+    if (anim === this.currentAnim && direction === this.currentDirection) return;
     this.currentAnim = anim;
     this.currentDirection = direction;
 
-    // Continuous units keep looping their full sequence; only face the direction.
     if (this.continuous) {
       this.sprite.scale.x = direction === 'left' ? -1 : 1;
       return;
@@ -108,6 +117,32 @@ export class CharacterSprite {
     this.sprite.scale.x = direction === 'left' ? -1 : 1;
     this.sprite.animationSpeed = anim === 'walk' ? 0.15 : anim === 'idle' ? 0.08 : 0.06;
     this.sprite.play();
+  }
+
+  async setHiveKitStatus(status: HiveKitStatus, direction: Direction): Promise<void> {
+    this.isHiveKit = true;
+    const changed = status !== this.currentHiveStatus || direction !== this.currentDirection;
+    this.currentHiveStatus = status;
+    this.currentDirection = direction;
+
+    if (changed || this.sprite.textures.length <= 1) {
+      const dirKey = direction === 'left' ? 'right' : direction;
+      const textures = await getHiveBeeStatusFrames(status, dirKey);
+      this.sprite.textures = textures;
+      this.sprite.scale.x = direction === 'left' ? -1 : 1;
+
+      // Kit animation timing: 12fps base (0.20), moving (0.35), blocked fast shake (0.75)
+      this.sprite.animationSpeed = status === 'moving' ? 0.35 : status === 'blocked' ? 0.75 : 0.20;
+      this.sprite.play();
+
+      const chipTex = await getHiveStatusChipTexture(status);
+      this.chipSprite.texture = chipTex;
+      this.chipSprite.visible = true;
+    }
+  }
+
+  setChipVisible(visible: boolean): void {
+    this.chipSprite.visible = visible;
   }
 
   setPosition(x: number, y: number): void {

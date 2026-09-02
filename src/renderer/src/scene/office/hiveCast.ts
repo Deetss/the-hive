@@ -7,6 +7,7 @@
 
 import { Texture } from 'pixi.js';
 import { loadHiveFrames, paintHivePortrait } from './hivePortraitArt';
+import { getHiveBeeIdleGrid } from './hiveKit';
 
 import queenUrl from '@/assets/hive/queen.png?url';
 import docbeegoodUrl from '@/assets/hive/docbeegood.png?url';
@@ -93,8 +94,7 @@ const frameCache = new Map<HiveCharacterName, Texture[][]>();
 export async function getHiveCastFrames(name: HiveCharacterName): Promise<Texture[][]> {
   const cached = frameCache.get(name);
   if (cached) return cached;
-  const url = ASSET_URLS[name] ?? ASSET_URLS.queen;
-  const frames = await loadHiveFrames(url);
+  const frames = await getHiveBeeIdleGrid();
   frameCache.set(name, frames);
   return frames;
 }

@@ -17,6 +17,16 @@ import { colors } from '@/design/tokens';
 import { loadTheme, resolveThemeMap, themeTilesetUrls } from './themeLoader';
 import { installContextLossRecovery } from './glRecovery';
 import type { Tile, Facing, ErrandKind, ErrandSpot } from './themeRegistry';
+import {
+  type HiveKitStatus,
+  getHiveBeeStatusFrames,
+  getHiveStatusChipTexture,
+  getHiveTileset,
+  getHiveProps,
+  mapAgentStatusToHiveKit,
+  type HiveTileset,
+  type HiveProps
+} from './hiveKit';
 
 // The map, tileset atlases, desk-claim order, errand spots, coffee-economy
 // tiles, prop anchors, monitor gids and palette all come from the active
@@ -212,56 +222,22 @@ if (import.meta.hot) {
   });
 }
 
-function createHiveFloorLayer(tile: number, width: number, height: number): Graphics {
-  const layer = new Graphics();
-  const base = mixColor(colors.accent.lemon, colors.cream[200], 0.18);
-  // Match background fill to base hex color so any sub-pixel rasterization blends seamlessly
-  layer.rect(0, 0, width, height).fill({ color: base, alpha: 1 });
-
-  // Regular pointy-top hexagon geometry: height = 2*R, width = sqrt(3)*R
-  const R = Math.max(12, Math.round(tile * 0.95));
-  const ry = R;
-  const rx = R * (Math.sqrt(3) / 2);
-  const horizontalStep = 2 * rx;
-  const verticalStep = 1.5 * ry;
-
-  // 0.75px overlap ensures neighboring hexagons butt up with zero seams
-  const drawRx = rx + 0.75;
-  const drawRy = ry + 0.75;
-
-  let row = 0;
-  for (let y = -verticalStep; y <= height + verticalStep * 2; y += verticalStep, row++) {
-    const offset = row % 2 === 0 ? 0 : rx;
-    for (let x = -horizontalStep; x <= width + horizontalStep * 2; x += horizontalStep) {
-      const cx = x + offset;
-      const noise = pseudoNoise(cx * 0.012, y * 0.014);
-      const fill = mixColor(base, colors.accent.lemonLight, 0.3 + noise * 0.22);
-      const shell = mixColor(base, colors.ink[700], 0.14 + noise * 0.08);
-      drawHex(layer, cx, y, drawRx, drawRy, fill, {
-        stroke: shell,
-        strokeAlpha: 0.88,
-        strokeWidth: Math.max(1, Math.round(tile * 0.1)),
-      });
-      drawHex(layer, cx, y - ry * 0.32, rx * 0.55, ry * 0.44, lighten(fill, 0.42), { alpha: 0.8 });
-      drawHex(layer, cx, y + ry * 0.34, rx * 0.42, ry * 0.32, darken(fill, 0.25), { alpha: 0.3 });
-      layer.moveTo(cx - rx * 0.72, y)
-        .lineTo(cx + rx * 0.72, y)
-        .stroke({ color: lighten(fill, 0.32), width: Math.max(1, tile * 0.05), alpha: 0.2 });
+function createHiveFloorLayer(tileset: HiveTileset, cols: number, rows: number, tile: number): Container {
+  const layer = new Container();
+  for (let ty = 0; ty < rows; ty++) {
+    for (let tx = 0; tx < cols; tx++) {
+      let tex = tileset.floor;
+      if (ty === 0) {
+        tex = tileset.capped;
+      } else if (ty === 1) {
+        tex = tileset.wall;
+      }
+      const s = new Sprite(tex);
+      s.position.set(tx * tile, ty * tile);
+      layer.addChild(s);
     }
   }
-
-  const sheen = new Graphics();
-  sheen.moveTo(0, height * 0.35)
-    .lineTo(width, height * 0.18)
-    .lineTo(width, 0)
-    .lineTo(0, 0)
-    .closePath()
-    .fill({ color: 0xffffff, alpha: 0.035 });
-  layer.addChild(sheen);
-
   layer.eventMode = 'none';
-  sheen.eventMode = 'none';
-  layer.cacheAsBitmap = true;
   return layer;
 }
 
@@ -321,7 +297,16 @@ function createHiveWallTextures(renderer: Renderer, tile: number): HiveWallTextu
   return { body, cap, column, corner };
 }
 
-function createHiveDeskAssets(renderer: Renderer, tile: number): HiveDeskAsset[] {
+function createHiveDeskAssets(renderer: Renderer, tile: number, props?: HiveProps | null): HiveDeskAsset[] {
+  if (props) {
+    return [
+      {
+        texture: props.desk,
+        anchorX: 0.5,
+        anchorY: 0.85,
+      }
+    ];
+  }
   const width = tile * 2.4;
   const height = tile * 2.1;
 
@@ -707,9 +692,11 @@ export function OfficeFloor() {
       );
       if (mountIdRef.current !== mountId) { safeDestroy(app); return; }
 
-      let hiveFloorLayer: Graphics | null = null;
+      let hiveFloorLayer: Container | null = null;
       let hiveWallTextures: HiveWallTextures | null = null;
       let hiveDeskAssets: HiveDeskAsset[] | null = null;
+      let hiveTileset: HiveTileset | null = null;
+      let hiveProps: HiveProps | null = null;
 
       const world = new Container();
       app.stage.addChild(world);
@@ -723,8 +710,10 @@ export function OfficeFloor() {
 
       const isHiveTheme = theme.id === 'hive';
       if (isHiveTheme) {
+        hiveTileset = await getHiveTileset();
+        hiveProps = await getHiveProps();
         hiveWallTextures = createHiveWallTextures(app.renderer, mapRenderer.tileSize);
-        hiveDeskAssets = createHiveDeskAssets(app.renderer, mapRenderer.tileSize);
+        hiveDeskAssets = createHiveDeskAssets(app.renderer, mapRenderer.tileSize, hiveProps);
       }
 
       const applyHiveSceneDecor = (): void => {
@@ -747,18 +736,17 @@ export function OfficeFloor() {
           }
         }
 
-        // 1. Honeycomb Floor (tiled procedural texture)
-        const floorWidth = mapRenderer.width * tile;
-        const floorHeight = mapRenderer.height * tile;
+        const insertIndex = initialCharIndex >= 0 ? initialCharIndex : mapContainer.children.length;
         if (hiveFloorLayer) {
-          hiveFloorLayer.destroy(true);
+          hiveFloorLayer.destroy({ children: true });
           hiveFloorLayer = null;
         }
-        hiveFloorLayer = createHiveFloorLayer(tile, floorWidth, floorHeight);
-        const insertIndex = initialCharIndex >= 0 ? initialCharIndex : mapContainer.children.length;
-        hiveFloorLayer.position.set(0, 0);
-        hiveFloorLayer.eventMode = 'none';
-        mapContainer.addChildAt(hiveFloorLayer, insertIndex);
+        if (hiveTileset) {
+          hiveFloorLayer = createHiveFloorLayer(hiveTileset, mapRenderer.width, mapRenderer.height, tile);
+          hiveFloorLayer.position.set(0, 0);
+          hiveFloorLayer.eventMode = 'none';
+          mapContainer.addChildAt(hiveFloorLayer, insertIndex);
+        }
 
         // Decorative floor accents along idle walls / corners
         const patternLayer = new Container();

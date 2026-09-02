@@ -3,6 +3,7 @@ import { CharacterSprite, type Direction, type AnimState } from './CharacterSpri
 import { findPath } from './pathfinding';
 import type { TiledMapRenderer } from './TiledMapRenderer';
 import { ThoughtBubble } from './ThoughtBubble';
+import type { HiveKitStatus } from './hiveKit';
 
 // Adapted from shahar061/the-office (office/characters/Character.ts).
 // Differences: keyed by our dynamic agentId (not a fixed role); seat tile +
@@ -67,12 +68,16 @@ interface CharacterOptions {
   seatDirection?: Direction;
   /** Loop the whole frame sequence continuously (e.g. a slithering Abathur). */
   continuous?: boolean;
+  /** Whether this agent is animated via the Hive Kit atlas. */
+  isHiveKit?: boolean;
   onClick?: (agentId: string) => void;
 }
 
 export class Character {
   readonly agentId: string;
   readonly sprite: CharacterSprite;
+  private isHiveKit: boolean = false;
+  private kitStatus: HiveKitStatus = 'idle';
 
   private state: CharacterAnimation = 'idle';
   private mapRenderer: TiledMapRenderer;
@@ -132,7 +137,8 @@ export class Character {
   constructor(options: CharacterOptions) {
     this.agentId = options.agentId;
     this.mapRenderer = options.mapRenderer;
-    this.sprite = new CharacterSprite(options.frames, options.continuous);
+    this.isHiveKit = options.isHiveKit ?? false;
+    this.sprite = new CharacterSprite(options.frames, options.continuous, this.isHiveKit);
     this.deskTile = options.seatTile;
     this.seatDirection = options.seatDirection ?? 'down';
     this.onClick = options.onClick;
@@ -177,6 +183,14 @@ export class Character {
     return this.mapRenderer.pixelToTile(this.px, this.py - 1);
   }
 
+  setKitStatus(status: HiveKitStatus): void {
+    this.kitStatus = status;
+    if (this.isHiveKit) {
+      const active = this.state === 'walk' ? 'moving' : status;
+      void this.sprite.setHiveKitStatus(active, this.direction);
+    }
+  }
+
   moveTo(tile: { x: number; y: number }): void {
     const path = findPath(this.mapRenderer, this.getTilePosition(), tile);
     if (path && path.length > 0) {
@@ -184,7 +198,11 @@ export class Character {
       this.sprite.setSeatedCrop(0); // show legs again while standing/walking
       this.path = path;
       this.state = 'walk';
-      this.sprite.setAnimation('walk', this.direction);
+      if (this.isHiveKit) {
+        void this.sprite.setHiveKitStatus('moving', this.direction);
+      } else {
+        this.sprite.setAnimation('walk', this.direction);
+      }
     }
   }
 
@@ -239,7 +257,11 @@ export class Character {
     this.path = [];
     this.sitting = true;
     this.direction = dir;
-    this.sprite.setAnimation('idle', dir);
+    if (this.isHiveKit) {
+      void this.sprite.setHiveKitStatus(this.kitStatus, dir);
+    } else {
+      this.sprite.setAnimation('idle', dir);
+    }
     // Slide toward the desk so the agent tucks in instead of floating in the
     // aisle, then crop the legs so they read as seated (no standing legs).
     let dx = 0, dy = 0;
@@ -774,13 +796,21 @@ export class Character {
       } else if (this.pendingWork) {
         this.state = this.pendingWork;
         this.pendingWork = null;
-        this.sprite.setAnimation(this.state as AnimState, this.seatDirection);
+        if (this.isHiveKit) {
+          void this.sprite.setHiveKitStatus(this.kitStatus, this.seatDirection);
+        } else {
+          this.sprite.setAnimation(this.state as AnimState, this.seatDirection);
+        }
       } else if (this.wandering) {
         // Reached a wander waypoint — pause, idle, then pick another later.
         this.state = 'idle';
         this.idleTimer = 0;
         this.idleWanderDelay = 1 + Math.random() * 3;
-        this.sprite.setAnimation('idle', this.direction);
+        if (this.isHiveKit) {
+          void this.sprite.setHiveKitStatus('idle', this.direction);
+        } else {
+          this.sprite.setAnimation('idle', this.direction);
+        }
       } else {
         this.setIdle();
       }
@@ -811,7 +841,11 @@ export class Character {
     this.px += (dx / dist) * step;
     this.py += (dy / dist) * step;
     this.direction = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-    this.sprite.setAnimation('walk', this.direction);
+    if (this.isHiveKit) {
+      void this.sprite.setHiveKitStatus('moving', this.direction);
+    } else {
+      this.sprite.setAnimation('walk', this.direction);
+    }
     this.sprite.setPosition(this.px, this.py);
   }
 
