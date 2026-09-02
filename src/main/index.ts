@@ -9412,6 +9412,14 @@ if (process.env.THEHIVE_DISABLE_GPU === '1') {
   app.disableHardwareAcceleration();
 }
 
+// Without this, Windows toast notifications are attributed to "electron.app".
+// Packaged builds must use the NSIS shortcut's AppUserModelId (electron-builder
+// defaults it to the `appId` in electron-builder.yml) so Windows resolves the
+// shortcut and shows its "The Hive" display name; in dev there is no shortcut,
+// so a plain "The Hive" is what the toast shows.
+app.setAppUserModelId(app.isPackaged ? 'dev.thehive.app' : 'The Hive');
+app.name = 'The Hive';
+
 app.whenReady().then(() => {
   // Realtime Abathur mic-gate hygiene (rt-8 / Pam rt-10 nit): the voice session
   // opens the mic permission gate by persisting realtimeVoiceEnabled=true and
