@@ -60,6 +60,7 @@ import type { UsageProvider } from './usage';
 import { MemoryManager } from './memory';
 import { KnowledgeManager } from './knowledge';
 import { MemoryReflector, type ReflectSettings } from './reflect';
+import { runHiddenClaude } from './hiddenClaude';
 import { PersistStore } from './db';
 import { readAgentUsage, readContextTokens, seedSessionTranscript, resolveSessionCwd } from './transcript';
 import { listIssues, listCIRuns } from './github';
@@ -5645,53 +5646,36 @@ ipcMain.on('app:readClipboardSync', (evt) => {
 // `claude config set -g theme`, which would also restyle the user's own
 // Claude sessions outside the app.
 
-// ─── IPC: AI text improvement ───────────────────────────────────────────────
-// Routes through `claude --print` so no separate API key is needed — uses the
-// same authentication as the running agent sessions.
-ipcMain.handle('ai:improveText', async (_evt, text: unknown, context: unknown) => {
-  if (typeof text !== 'string' || typeof context !== 'string') {
-    return { ok: false, error: 'text and context must be strings' };
+// ─── IPC: AI text improvement (Add/Edit Agent "✨ Improve") ──────────────────
+// Routes through a HIDDEN ephemeral claude session — the same mechanism the
+// memory reflector uses. It runs an interactive PTY, NOT `claude --print`, so the
+// call draws on the user's normal interactive Claude plan: no API key, and no
+// hit to the claim-required Agent-SDK credit pool (which is what made the old
+// `--print` path look like it needed a key). Haiku keeps it quick; the session
+// is text-only (no Edit/Write/Bash) and self-terminating.
+ipcMain.handle('ai:improveText', async (_evt, text: unknown, context: unknown): Promise<{ ok: boolean; result?: string; error?: string }> => {
+  if (typeof text !== 'string' || !text.trim()) return { ok: false, error: 'nothing to improve' };
+  const draft = text.trim();
+  if (draft.length > 4000) return { ok: false, error: 'text too long to improve' };
+  const kind = (typeof context === 'string' && context.trim()) ? context.trim().slice(0, 40) : 'agent objective';
+  const cwd = resolveHarnessHome() || process.cwd();
+  const prompt =
+    `Rewrite the following ${kind} so it is a clear, specific, actionable instruction for an AI agent. ` +
+    `Keep the author's original intent and scope — do not add new requirements — but make it sharper and more concrete. ` +
+    `Return ONLY the rewritten text: no preamble, no quotes, no commentary.\n\n\`\`\`\n${draft}\n\`\`\``;
+  try {
+    const result = await runHiddenClaude(prompt, {
+      model: 'claude-haiku-4-5',
+      cwd,
+      command: readConfig().defaultCommand,
+      disallowedTools: ['Edit', 'Write', 'NotebookEdit', 'Bash'],
+      timeoutMs: 90_000,
+    });
+    if (!result.ok || !result.text) return { ok: false, error: result.error ?? 'no response from the assistant' };
+    return { ok: true, result: result.text.trim() };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
-  // Completion-template format: Claude fills in the blank after "IMPROVED:" which
-  // prevents it from asking clarifying questions. Run in os.tmpdir() so no CLAUDE.md
-  // or git repo is picked up and Claude stays in pure text-transformation mode.
-  // Delimit the user's text with backticks so Claude treats it as content to transform,
-  // never as an instruction (even if the text itself is a verb like "Rewrite").
-  const prompt = `You are a text editor for AI agent configuration. The user has typed the following as an agent ${context}. Rewrite it to be specific, clear, and actionable. Output ONLY the improved version — no commentary, no preamble, no quotes.\n\nText to improve:\n\`\`\`\n${text}\n\`\`\`\n\nImproved version:`;
-  return new Promise<{ ok: boolean; result?: string; error?: string }>((resolve) => {
-    // Pipe prompt via stdin to avoid shell argument mangling (newlines, backticks).
-    // On Windows, .cmd files require cmd.exe — spawn them directly to avoid EINVAL.
-    // We invoke cmd.exe /c claude --print with stdio:pipe so the prompt flows through
-    // stdin without touching argv, keeping special characters intact.
-    const [cmd, args] = process.platform === 'win32'
-      ? ['cmd.exe', ['/c', 'claude', '--print']]
-      : ['claude', ['--print']];
-    const child = spawn(cmd, args, {
-      shell: false,
-      cwd: require('node:os').tmpdir(),
-      env: process.env,
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-    child.stdin?.write(prompt);
-    child.stdin?.end();
-    let stdout = '';
-    let stderr = '';
-    child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
-    child.on('close', (code) => {
-      const result = stdout.trim();
-      if (code === 0 && result) {
-        resolve({ ok: true, result });
-      } else {
-        resolve({ ok: false, error: stderr.trim() || `claude exited with code ${code}` });
-      }
-    });
-    child.on('error', (e: Error) => resolve({ ok: false, error: e.message }));
-    setTimeout(() => {
-      child.kill();
-      resolve({ ok: false, error: 'timed out after 30s' });
-    }, 30000);
-  });
 });
 
 // ─── IPC: folder picker ─────────────────────────────────────────────────────
