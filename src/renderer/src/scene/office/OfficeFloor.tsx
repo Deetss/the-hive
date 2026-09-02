@@ -189,6 +189,10 @@ const hiveDeskTile = (i: number): Tile => ({
   x: HIVE_DESK_GRID.originX + (i % HIVE_DESK_GRID.perRow) * HIVE_DESK_GRID.colGap,
   y: HIVE_DESK_GRID.originY + Math.floor(i / HIVE_DESK_GRID.perRow) * HIVE_DESK_GRID.rowGap,
 });
+// A parked coffee cup sits on the pod surface, positioned from the desk's seat
+// tile (its grid center) plus this fixed offset — so it moves with the desk and
+// rests on the deck instead of floating on the old office monitor shelf.
+const HIVE_CUP_OFFSET = { dx: 0.62, dy: -0.05 } as const;
 
 function createHiveFloorLayer(tile: number, width: number, height: number): Graphics {
   const layer = new Graphics();
@@ -331,6 +335,7 @@ function createHiveDeskAssets(renderer: Renderer, tile: number): HiveDeskAsset[]
     g.ellipse(width / 2, height * 0.88, width * 0.48, height * 0.17)
       .fill({ color: darken(deck, 0.52), alpha: 0.3 });
 
+    drawMonitor(g, width, height);   // every hive desk is a workstation with a screen
     decorate(g, width, height);
 
     const texture = renderer.generateTexture({ target: g, resolution: 2 });
@@ -381,9 +386,9 @@ function createHiveDeskAssets(renderer: Renderer, tile: number): HiveDeskAsset[]
       .fill({ color: mixColor(colors.ink[700], colors.accent.lemon, 0.25), alpha: 0.9 });
   };
 
-  const addCombMonitor = (g: Graphics, w: number, h: number) => {
-    const cx = w * 0.52;
-    const cy = h * 0.3;
+  const drawMonitor = (g: Graphics, w: number, h: number) => {
+    const cx = w * 0.5;
+    const cy = h * 0.32;
     g.rect(cx - 1.5, cy + 5, 3, 8).fill({ color: darken(colors.accent.lemon, 0.42), alpha: 0.9 });
     g.ellipse(cx, cy + 12, 7, 3).fill({ color: darken(colors.accent.lemon, 0.46), alpha: 0.85 });
     drawHex(g, cx, cy, w * 0.2, h * 0.16, mixColor(colors.accent.lemon, colors.ink[700], 0.32), {
@@ -409,11 +414,11 @@ function createHiveDeskAssets(renderer: Renderer, tile: number): HiveDeskAsset[]
     }
   };
 
+  // Every desk gets the monitor (drawn in build); variants add side clutter.
   return [
     build(addLamp),
     build(addLedger),
     build(addHoneyTools),
-    build(addCombMonitor),
     build(addPollenStack),
   ];
 }
@@ -2217,21 +2222,23 @@ export function OfficeFloor() {
         });
         character.show(charLayer);
         const rt: Runtime = { character, seatIndex, waitTile, charName };
-        // Standard desks paint the 2×2 PC monitor two rows above the seat —
-        // give those a DeskScreen (lights up while seated) and a cup spot
-        // beside the monitor, exactly where the tileset's baked-in mug used
-        // to sit before we cleared it (desks start clean now; cups only exist
-        // where an agent actually carried one).
-        if (mapRenderer.gidAt('furniture-above', seatTile.x, seatTile.y - 2) === theme.monitor.offTopLeftGid) {
+        const ts2 = mapRenderer.tileSize;
+        if (isHiveTheme) {
+          // Hive desks are honeycomb pods at the seat tile (no office monitor
+          // shelf), and every pod draws its own screen. Anchor the cup to the pod
+          // surface from the seat-tile grid center plus a fixed offset, so it
+          // sits on the deck and moves with the desk instead of floating.
+          character.setCupSpot({
+            x: (seatTile.x + HIVE_CUP_OFFSET.dx) * ts2,
+            y: (seatTile.y + HIVE_CUP_OFFSET.dy) * ts2,
+          });
+        } else if (mapRenderer.gidAt('furniture-above', seatTile.x, seatTile.y - 2) === theme.monitor.offTopLeftGid) {
+          // Standard desks paint the 2×2 PC monitor two rows above the seat —
+          // give those a DeskScreen (lights up while seated) and a cup spot
+          // beside the monitor, where the tileset's baked-in mug used to sit.
           const top = { x: seatTile.x, y: seatTile.y - 2 };
-          // The hive theme paints its own honeycomb desks over the office ones and
-          // has no screen surface where DeskScreen draws, so its content lands on
-          // bare desk. Deferred to the hive-tileset pass — skip it here for now.
-          if (!isHiveTheme) {
-            rt.screen = new DeskScreen(mapRenderer, top, theme.monitor);
-            charLayer.addChild(rt.screen.container);
-          }
-          const ts2 = mapRenderer.tileSize;
+          rt.screen = new DeskScreen(mapRenderer, top, theme.monitor);
+          charLayer.addChild(rt.screen.container);
           character.setCupSpot({ x: top.x * ts2 + 18, y: top.y * ts2 + 23 });
         }
         runtimes.set(agent.id, rt);
