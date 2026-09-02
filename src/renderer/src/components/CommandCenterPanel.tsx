@@ -194,13 +194,14 @@ function QrGlyph({ size = 1 }: { size?: number }) {
  *  cols/rows and corrupt the display. */
 export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }: { agent: Agent; fullscreen?: boolean; mobile?: boolean }) {
   const tabKey = `cth.tab.${agent.id}`;
-  // tab-ordering-by-usage: per-agent use count for each tab, so the strip can
-  // render most-used first (see `orderedTabs`). `lastUsed` is still recorded but
-  // no longer feeds the sort. Persisted in localStorage; a private-mode / quota
-  // failure just means the order resets.
+  // tab-ordering-by-usage: per-agent stats for each tab, folded into `orderedTabs`.
+  // `count` = clicks; `timeScore` = dwell credit (see the tick effect below);
+  // `lastUsed` is recorded but no longer feeds the sort. Persisted in localStorage;
+  // a private-mode / quota failure just means the order resets.
+  type TabStat = { lastUsed: number; count: number; timeScore?: number };
   const tabStatsKey = `cth.tabstats.${agent.id}`;
-  const [tabStats, setTabStats] = useState<Record<string, { lastUsed: number; count: number }>>(() => {
-    let stats: Record<string, { lastUsed: number; count: number }> = {};
+  const [tabStats, setTabStats] = useState<Record<string, TabStat>>(() => {
+    let stats: Record<string, TabStat> = {};
     try {
       const parsed = JSON.parse(localStorage.getItem(tabStatsKey) ?? '{}');
       if (parsed && typeof parsed === 'object') stats = parsed;
@@ -221,11 +222,31 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
     setTabState(next);
     setTabStats((prev) => {
       const cur = prev[next] ?? { lastUsed: 0, count: 0 };
-      const updated = { ...prev, [next]: { lastUsed: Date.now(), count: cur.count + 1 } };
+      const updated = { ...prev, [next]: { ...cur, lastUsed: Date.now(), count: cur.count + 1 } };
       try { localStorage.setItem(tabStatsKey, JSON.stringify(updated)); } catch { /* private mode */ }
       return updated;
     });
   };
+
+  // tab-ordering-time-dimension: while a tab is the active one, credit it ~1
+  // point per 3.5s of foreground dwell (capped) so a tab you live in ranks up
+  // even without repeated clicks. Same currency as a click — see `orderedTabs`.
+  const TAB_TIME_TICK_MS = 3500;
+  const TAB_TIME_SCORE_CAP = 100;
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      setTabStats((prev) => {
+        const cur = prev[tab] ?? { lastUsed: Date.now(), count: 0 };
+        const nextScore = Math.min((cur.timeScore ?? 0) + 1, TAB_TIME_SCORE_CAP);
+        if (nextScore === (cur.timeScore ?? 0)) return prev;
+        const updated = { ...prev, [tab]: { ...cur, timeScore: nextScore } };
+        try { localStorage.setItem(tabStatsKey, JSON.stringify(updated)); } catch { /* private mode */ }
+        return updated;
+      });
+    }, TAB_TIME_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [tab, tabStatsKey]);
 
   // The trigger-history ledger has nothing to say until an outside party can
   // reach us, so its tab appears only once an org key or a webhook exists. This
@@ -244,12 +265,13 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
     if (!agent.isOvermind && !workerTabs.has(t.key)) return false;
     return true;
   });
-  // tab-ordering-by-usage: most-used first, then alphabetical by label. Tabs with
-  // no recorded use (count 0) fall through to the alphabetical tiebreak. Re-sorts
-  // on every render, so a click re-orders the strip once its count changes.
+  // tab-ordering-by-usage: rank by clicks + dwell credit, then alphabetical by
+  // label. Tabs with no recorded use fall through to the alphabetical tiebreak.
+  // Re-sorts on every render, so a click or a dwell tick re-orders the strip.
+  const tabScore = (key: string) => (tabStats[key]?.count ?? 0) + (tabStats[key]?.timeScore ?? 0);
   const orderedTabs = [...visibleTabs].sort((a, b) => {
-    const cntA = tabStats[a.key]?.count ?? 0, cntB = tabStats[b.key]?.count ?? 0;
-    if (cntB !== cntA) return cntB - cntA;
+    const diff = tabScore(b.key) - tabScore(a.key);
+    if (diff !== 0) return diff;
     return a.label.localeCompare(b.label);
   });
 
