@@ -198,10 +198,10 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       : text;
 
   // Return the composer to a blank state after a message leaves it, so the next
-  // one is not pre-filled with the last body, subject, or attachments.
+  // one is not pre-filled with the last body, project, or attachments.
   const resetComposer = () => {
     setText('');
-    setDispSubject('');
+    setDispProject('');
     setAttachments([]);
   };
 
@@ -217,9 +217,13 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   // triage it.
   const dispatchIt = async () => {
     if (!canSend) return;
-    const body = buildBody().trim();
-    if (!body) return;
-    const subject = dispSubject.trim() || body.slice(0, 60);
+    const raw = buildBody().trim();
+    if (!raw) return;
+    const project = dispProject.trim();
+    // No message-payload field for project, so carry it as a body tag the
+    // Overmind can read to route by project context.
+    const body = project ? `[PROJECT: ${project}]\n\n${raw}` : raw;
+    const subject = raw.split('\n')[0].slice(0, 60);
     const suggested = target !== 'god' ? agents.find((a) => a.id === target) : undefined;
     const tasksPath = harnessHome ? `${harnessHome}\\hive\\tasks.json` : 'hive/tasks.json';
     const priorityDirective =
@@ -293,7 +297,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       }}
       onDrop={onDrop}
       style={{
-        // Dispatch mode adds the TO / act / priority / subject rows, which can
+        // Dispatch mode adds the TO / act / project / priority row, which can
         // push the composer past the terminal pane's height. It sits in a
         // column flex next to a `flex:1` xterm (basis 0), so the xterm yields
         // its space first; only if the composer STILL can't fit does it cap at
@@ -399,20 +403,37 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
             <option value="inform">Inform</option>
           </select>
         )}
+        {!sendLater && (
+          <>
+            <input
+              className="cth-input"
+              list="cth-dispatch-projects"
+              value={dispProject}
+              onChange={(e) => setDispProject(e.target.value)}
+              placeholder="Project (optional)"
+              style={{ ...selectStyle, width: 130 }}
+            />
+            <datalist id="cth-dispatch-projects">
+              {[...new Set(agents.map((a) => a.project).filter(Boolean))].map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
+          </>
+        )}
+        {/* Priority still matters for a queued message (an urgent one delivers
+            ahead of others), so these stay active in "send later" mode too. */}
         {(['urgent', 'normal', 'backlog'] as const).map((p) => (
           <button
             key={p}
             type="button"
-            disabled={sendLater}
             onClick={() => setDispPriority(p)}
-            title={sendLater ? 'Priority applies to a dispatch, not a queued message' : `Priority: ${p}`}
+            title={`Priority: ${p}`}
             style={{
               padding: '3px 8px', fontFamily: 'var(--cth-font-ui)', fontSize: 11,
-              textTransform: 'uppercase', letterSpacing: 0.5, border: 'none', borderRadius: 2,
-              cursor: sendLater ? 'default' : 'pointer', opacity: sendLater ? 0.4 : 1,
-              background: !sendLater && dispPriority === p ? 'var(--cth-ink-900)' : 'transparent',
-              color: !sendLater && dispPriority === p ? 'var(--cth-paper-100)' : 'var(--cth-ink-500)',
-              boxShadow: !sendLater && dispPriority === p ? 'none' : 'inset 0 0 0 1px var(--cth-ink-300)'
+              textTransform: 'uppercase', letterSpacing: 0.5, border: 'none', borderRadius: 2, cursor: 'pointer',
+              background: dispPriority === p ? 'var(--cth-ink-900)' : 'transparent',
+              color: dispPriority === p ? 'var(--cth-paper-100)' : 'var(--cth-ink-500)',
+              boxShadow: dispPriority === p ? 'none' : 'inset 0 0 0 1px var(--cth-ink-300)'
             }}
           >{p}</button>
         ))}
@@ -430,20 +451,6 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
         >send later</button>
         {dispMsg && <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{dispMsg}</span>}
       </div>
-      {!sendLater && (
-        <input
-          type="text"
-          className="cth-input"
-          value={dispSubject}
-          onChange={(e) => setDispSubject(e.target.value)}
-          placeholder="Subject (optional — defaults to the first line)"
-          style={{
-            width: '100%', padding: '6px 8px', fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 600,
-            background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)', border: 'none',
-            boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', outline: 'none', boxSizing: 'border-box'
-          }}
-        />
-      )}
 
       {/* Pending list */}
       {queue.length > 0 && (
