@@ -37,8 +37,9 @@ export function AskMeTab() {
   const openQA = useStore((s) => s.openHumanQAItems);
   const setOpenHumanQA = useStore((s) => s.setOpenHumanQA);
 
-  const [failOpen, setFailOpen] = useState<Record<string, boolean>>({});
-  const [failNotes, setFailNotes] = useState<Record<string, string>>({});
+  // Optional comment on a UAT item — rides along on PASS / FAIL, or stands alone
+  // as a "comment only" note.
+  const [comments, setComments] = useState<Record<string, string>>({});
   const [answerVals, setAnswerVals] = useState<Record<string, string>>({});
   const [busyTasks, setBusyTasks] = useState<Record<string, boolean>>({});
   const [sendingMsg, setSendingMsg] = useState<string | null>(null);
@@ -84,12 +85,7 @@ export function AskMeTab() {
       if (window.cth?.answerHumanQA) {
         await window.cth.answerHumanQA(taskId, question, verdict, note);
       }
-      setFailOpen((prev) => {
-        const next = { ...prev };
-        delete next[taskId];
-        return next;
-      });
-      setFailNotes((prev) => {
+      setComments((prev) => {
         const next = { ...prev };
         delete next[taskId];
         return next;
@@ -278,8 +274,7 @@ export function AskMeTab() {
 
           {openQA.map((item) => {
             const isBusy = !!busyTasks[item.taskId];
-            const isFailing = !!failOpen[item.taskId];
-            const noteVal = failNotes[item.taskId] ?? '';
+            const commentVal = comments[item.taskId] ?? '';
             const isUrgent = item.priority === 'urgent';
             const isDecision = item.kind === 'decision';
             const answerVal = answerVals[item.taskId] ?? '';
@@ -400,89 +395,66 @@ export function AskMeTab() {
                     </>
                   ) : (
                   <>
-                  {/* Failure note input field */}
-                  {isFailing && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
-                      <label style={{ fontSize: 12, color: 'var(--cth-coral)', fontWeight: 600 }}>
-                        Failure Reason / Feedback for {nameFor(item.assignee)}:
-                      </label>
-                      <textarea
-                        value={noteVal}
-                        onChange={(e) => setFailNotes((prev) => ({ ...prev, [item.taskId]: e.target.value }))}
-                        rows={2}
-                        placeholder="What didn't work? (e.g. icon still shows wrong symbol, button not clickable...)"
-                        style={{
-                          width: '100%', boxSizing: 'border-box', padding: '6px 8px',
-                          background: 'var(--cth-paper-100)', border: 'none',
-                          boxShadow: 'inset 0 0 0 1px var(--cth-coral)',
-                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none'
-                        }}
-                      />
-                    </div>
-                  )}
+                  {/* Optional comment — included in the PASS / FAIL answer, or
+                      sent on its own as a note with no verdict. */}
+                  <textarea
+                    value={commentVal}
+                    onChange={(e) => setComments((prev) => ({ ...prev, [item.taskId]: e.target.value }))}
+                    rows={2}
+                    placeholder="Optional comment…"
+                    style={{
+                      width: '100%', boxSizing: 'border-box', padding: '6px 8px',
+                      background: 'var(--cth-paper-100)', border: 'none',
+                      boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                      fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none'
+                    }}
+                  />
 
                   {/* Action buttons */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {!isFailing ? (
-                      <>
-                        <PixelButton
-                          variant="primary"
-                          size="sm"
-                          disabled={isBusy}
-                          onClick={() => void handleAnswer(item.taskId, item.question, 'PASS')}
-                        >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                            <Icon name="check" /> PASS ✓
-                          </span>
-                        </PixelButton>
+                    <PixelButton
+                      variant="primary"
+                      size="sm"
+                      disabled={isBusy}
+                      onClick={() => void handleAnswer(item.taskId, item.question, 'PASS', commentVal.trim() || undefined)}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <Icon name="check" /> PASS ✓
+                      </span>
+                    </PixelButton>
 
-                        <PixelButton
-                          variant="secondary"
-                          size="sm"
-                          disabled={isBusy}
-                          onClick={() => setFailOpen((prev) => ({ ...prev, [item.taskId]: true }))}
-                        >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--cth-coral)' }}>
-                            <Icon name="x" /> FAIL ✗
-                          </span>
-                        </PixelButton>
+                    <PixelButton
+                      variant="secondary"
+                      size="sm"
+                      disabled={isBusy}
+                      onClick={() => void handleAnswer(item.taskId, item.question, 'FAIL', commentVal.trim() || undefined)}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--cth-coral)' }}>
+                        <Icon name="x" /> FAIL ✗
+                      </span>
+                    </PixelButton>
 
-                        <PixelButton
-                          variant="secondary"
-                          size="sm"
-                          disabled={isBusy}
-                          onClick={() => void handleDismiss(item.taskId, item.question)}
-                        >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                            clear / dismiss
-                          </span>
-                        </PixelButton>
-                      </>
-                    ) : (
-                      <>
-                        <PixelButton
-                          variant="primary"
-                          size="sm"
-                          disabled={isBusy || !noteVal.trim()}
-                          onClick={() => void handleAnswer(item.taskId, item.question, 'FAIL', noteVal.trim())}
-                        >
-                          <span>Reject &amp; Send Feedback</span>
-                        </PixelButton>
+                    <PixelButton
+                      variant="secondary"
+                      size="sm"
+                      disabled={isBusy || !commentVal.trim()}
+                      onClick={() => void handleAnswer(item.taskId, item.question, 'ANSWER', commentVal.trim())}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        comment only
+                      </span>
+                    </PixelButton>
 
-                        <PixelButton
-                          variant="secondary"
-                          size="sm"
-                          disabled={isBusy}
-                          onClick={() => setFailOpen((prev) => {
-                            const next = { ...prev };
-                            delete next[item.taskId];
-                            return next;
-                          })}
-                        >
-                          Cancel
-                        </PixelButton>
-                      </>
-                    )}
+                    <PixelButton
+                      variant="secondary"
+                      size="sm"
+                      disabled={isBusy}
+                      onClick={() => void handleDismiss(item.taskId, item.question)}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        clear / dismiss
+                      </span>
+                    </PixelButton>
 
                     {isBusy && (
                       <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>
