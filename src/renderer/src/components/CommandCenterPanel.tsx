@@ -1148,30 +1148,31 @@ function FloorTab() {
                       resuming the prior conversation (--resume). Use this to redraw a
                       garbled TUI (e.g. after dragging the window across displays)
                       without losing the thread. */}
-                  {(agentProvider === 'claude' || agentPreset.resumeFlag || agentPreset.resumeSubcommand) && <>
-                    <span style={{ flex: 1 }} />
+                  <span style={{ flex: 1 }} />
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    {(agentProvider === 'claude' || agentPreset.resumeFlag || agentPreset.resumeSubcommand) && (
+                      <PixelButton
+                        variant="secondary"
+                        size="sm"
+                        disabled={restarting === a.id}
+                        onClick={() => restartWithModel(a, a.model, { resume: true })}
+                      >
+                        <span title="Kill and respawn this agent, resuming its current conversation — fixes a corrupted/garbled terminal without losing context">
+                          restart &amp; continue
+                        </span>
+                      </PixelButton>
+                    )}
                     <PixelButton
                       variant="secondary"
                       size="sm"
                       disabled={restarting === a.id}
-                      onClick={() => restartWithModel(a, a.model, { resume: true })}
+                      onClick={() => respawn(a)}
                     >
-                      <span title="Kill and respawn this agent, resuming its current conversation — fixes a corrupted/garbled terminal without losing context">
-                        restart &amp; continue
+                      <span title={`Archive ${a.name}'s current session and spawn a fresh one that resumes from memory.md`}>
+                        ↺ respawn
                       </span>
                     </PixelButton>
-                  </>}
-                  <span style={{ flex: 1 }} />
-                  <PixelButton
-                    variant="secondary"
-                    size="sm"
-                    disabled={restarting === a.id}
-                    onClick={() => respawn(a)}
-                  >
-                    <span title={`Archive ${a.name}'s current session and spawn a fresh one that resumes from memory.md`}>
-                      ↺ respawn
-                    </span>
-                  </PixelButton>
+                  </div>
                 </div>
               )}
               {restartErrors[a.id] && (
@@ -1207,47 +1208,50 @@ function FloorTab() {
                       <option key={m.label} value={m.id ?? ''}>{m.label}</option>
                     ))}
                   </Select>
-                  <PixelButton
-                    variant="secondary"
-                    size="sm"
-                    disabled={restarting === a.id}
-                    onClick={async () => {
-                      const currentProvider = inferAgentProvider(a.command, a.provider);
-                      if (engineProvider !== currentProvider) {
-                        if (!window.confirm("This restarts BeeYoncé; a conversation on a different engine can't be resumed.")) return;
-                      }
-                      await window.cth.updateConfig({ overmindProvider: engineProvider, overmindModel: engineModel });
-                      await restartWithModel(a, engineModel, { provider: engineProvider, resume: false });
-                    }}
-                  >
-                    {restarting === a.id ? 'restarting…' : 'apply'}
-                  </PixelButton>
-                  {/* Redraw a garbled terminal without losing the thread (resume the
-                      SAME engine+model). Kept here since the god has no per-agent row above. */}
-                  <PixelButton
-                    variant="secondary"
-                    size="sm"
-                    disabled={restarting === a.id}
-                    onClick={() => restartWithModel(a, a.model, { resume: true })}
-                  >
-                    <span title="Kill and respawn BeeYoncé, resuming the current conversation — fixes a corrupted/garbled terminal without losing context">
-                      restart &amp; continue
-                    </span>
-                  </PixelButton>
-                  {/* Respawn — the escape hatch for a quota-locked or wedged Overmind:
-                      archive this session and start a clean one that resumes from
-                      memory.md (does NOT continue the current conversation). Prominent
-                      here because it is the primary recovery action for the god. */}
-                  <PixelButton
-                    variant="primary"
-                    size="sm"
-                    disabled={restarting === a.id}
-                    onClick={() => respawn(a)}
-                  >
-                    <span title="Archive BeeYoncé's current session and spawn a fresh one that resumes from memory.md — use when the session is quota-locked or stuck">
-                      ↺ respawn
-                    </span>
-                  </PixelButton>
+                  <span style={{ flex: 1 }} />
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <PixelButton
+                      variant="secondary"
+                      size="sm"
+                      disabled={restarting === a.id}
+                      onClick={async () => {
+                        const currentProvider = inferAgentProvider(a.command, a.provider);
+                        if (engineProvider !== currentProvider) {
+                          if (!window.confirm("This restarts BeeYoncé; a conversation on a different engine can't be resumed.")) return;
+                        }
+                        await window.cth.updateConfig({ overmindProvider: engineProvider, overmindModel: engineModel });
+                        await restartWithModel(a, engineModel, { provider: engineProvider, resume: false });
+                      }}
+                    >
+                      {restarting === a.id ? 'restarting…' : 'apply'}
+                    </PixelButton>
+                    {/* Redraw a garbled terminal without losing the thread (resume the
+                        SAME engine+model). Kept here since the god has no per-agent row above. */}
+                    <PixelButton
+                      variant="secondary"
+                      size="sm"
+                      disabled={restarting === a.id}
+                      onClick={() => restartWithModel(a, a.model, { resume: true })}
+                    >
+                      <span title="Kill and respawn BeeYoncé, resuming the current conversation — fixes a corrupted/garbled terminal without losing context">
+                        restart &amp; continue
+                      </span>
+                    </PixelButton>
+                    {/* Respawn — the escape hatch for a quota-locked or wedged Overmind:
+                        archive this session and start a clean one that resumes from
+                        memory.md (does NOT continue the current conversation). Prominent
+                        here because it is the primary recovery action for the god. */}
+                    <PixelButton
+                      variant="primary"
+                      size="sm"
+                      disabled={restarting === a.id}
+                      onClick={() => respawn(a)}
+                    >
+                      <span title="Archive BeeYoncé's current session and spawn a fresh one that resumes from memory.md — use when the session is quota-locked or stuck">
+                        ↺ respawn
+                      </span>
+                    </PixelButton>
+                  </div>
                 </div>
               )}
             </AgentRosterItem>
