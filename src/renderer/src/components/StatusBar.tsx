@@ -114,7 +114,7 @@ function calcRatePace(pct: number, resetsAtIso: string, windowMins: number): Rat
     : paceRatio > 1.0
     ? 'var(--cth-lemon)'
     : 'var(--cth-mint)';
-  const label = `exp ${targetPct.toFixed(1)}%`;
+  const label = `${targetPct.toFixed(1)}%`;
   return { paceRatio, targetPct, projectedPct, color, label };
 }
 
