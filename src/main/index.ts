@@ -5545,13 +5545,13 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
     }
     hive.setArchived(id, true);
 
-    const harnessHome = entry.isOvermind ? resolveHarnessHome() : null;
-    if (entry.isOvermind && !harnessHome) return { ok: false, error: 'harnessHome unavailable' };
-    const overmindAgentDir = entry.isOvermind && harnessHome ? join(harnessHome, 'agents', 'god') : undefined;
-    const memPath = entry.isOvermind && overmindAgentDir
-      ? join(overmindAgentDir, 'memory.md')
-      : join(root, 'agents', id, 'memory.md');
-    const spawnCwd = entry.isOvermind && overmindAgentDir ? overmindAgentDir : (entry.cwd || root);
+    // Keep the agent's RECORDED cwd from the registry — never recompute it. The
+    // Overmind runs from its stored cwd (the harness root); the old code rebuilt
+    // it as <harnessHome>/agents/god, which does not exist and so failed every
+    // Queen respawn with "cwd does not exist". Every agent's memory.md lives at
+    // <hiveRoot>/agents/<id>/memory.md, Overmind included (id === "god").
+    const spawnCwd = entry.cwd || root;
+    const memPath = join(root, 'agents', id, 'memory.md');
 
     // 3) Overmind case: spawn directly via spawnAgentCore so the Queen comes back
     //    with her exact identity, godId, CLAUDE.md, and skills, rather than an
