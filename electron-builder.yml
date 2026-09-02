@@ -140,10 +140,8 @@ nsis:
   allowToChangeInstallationDirectory: true
   artifactName: The-Hive-${version}-win-x64-setup.exe
   shortcutName: The Hive
-  # Match app.setAppUserModelId('The Hive') in src/main/index.ts so Windows
-  # resolves this shortcut for toast notifications (name + icon) instead of
-  # falling back to "electron.app.Electron".
-  appUserModelId: The Hive
+  # app.setAppUserModelId('The Hive') is called in src/main/index.ts at runtime;
+  # NSIS has no appUserModelId field (removed: electron-builder 25.1.8 rejects it).
 
 portable:
   artifactName: The-Hive-${version}-win-x64-portable.exe
