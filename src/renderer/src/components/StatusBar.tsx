@@ -89,7 +89,7 @@ interface RatePaceInfo {
 }
 
 /**
- * Derive pace & target from rate-limit numbers:
+ * Derive expected pace target from rate-limit numbers:
  * targetPct = elapsedFraction * 100 (% you should be at for even burn across the window)
  * paceRatio = (used% / 100) / elapsedFraction (burn rate vs even burn)
  * projected% = used% / elapsedFraction (projected total at end of window)
@@ -106,8 +106,15 @@ function calcRatePace(pct: number, resetsAtIso: string, windowMins: number): Rat
   const targetPct = elapsedFraction * 100;
   const paceRatio = (pct / 100) / elapsedFraction;
   const projectedPct = pct / elapsedFraction;
-  const color = paceRatio > 1.5 ? 'var(--cth-coral)' : paceRatio > 1.0 ? 'var(--cth-lemon)' : 'var(--cth-mint)';
-  const label = `tgt ${targetPct.toFixed(1)}%`;
+  const isEarly = elapsedFraction < 0.03;
+  const color = isEarly && pct < 5
+    ? 'var(--cth-mint)'
+    : paceRatio > 1.5
+    ? 'var(--cth-coral)'
+    : paceRatio > 1.0
+    ? 'var(--cth-lemon)'
+    : 'var(--cth-mint)';
+  const label = `exp ${targetPct.toFixed(1)}%`;
   return { paceRatio, targetPct, projectedPct, color, label };
 }
 
