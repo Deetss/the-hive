@@ -433,7 +433,7 @@ export interface HarnessConfig {
    *  are those that can receive inbox (claude/codex/antigravity/qwen). */
   overmindProvider?: AgentProvider;
   /** The model Overmind runs on. Unset falls back to the provider preset's
-   *  `recommendedOrchestratorModel`, then MODEL_GOD. Default 'claude-opus-4-8'. */
+   *  `recommendedOrchestratorModel`, then MODEL_GOD. Default 'claude-sonnet-4-6[1m]'. */
   overmindModel?: string;
   /** @deprecated Renamed to overmindProvider in v0.5.0. Kept for back-compat
    *  so existing config.json files continue to deserialise without data loss. */
@@ -689,7 +689,7 @@ const DEFAULTS: HarnessConfig = {
   maxConcurrentWorkers: 4,
   workerIdleTimeoutMinutes: 20,
   integrations: [],
-  defaultWorkerTokenCap: 1_000_000,
+  defaultWorkerTokenCap: 16_000_000,
   semanticMemory: true,
   embeddingModel: 'minilm',
   missions: [OPS_STANDUP_MISSION],
