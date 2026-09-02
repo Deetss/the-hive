@@ -852,6 +852,50 @@ export function OfficeFloor() {
           vat.zIndex = 7.5 * tile;
           hiveDeskLayer.addChild(vat);
 
+          // Animated honey drips from the spout matching scene_frame.png
+          const vatDrips = new Graphics();
+          vatDrips.eventMode = 'none';
+          vatDrips.position.set(0.8 * tile, 6.2 * tile);
+          vatDrips.zIndex = 7.6 * tile;
+          hiveDeskLayer.addChild(vatDrips);
+
+          let vatDripTime = 0;
+          const vatTicker = (ticker: { deltaTime: number }) => {
+            const dt = (ticker?.deltaTime ?? 1) / 60;
+            vatDripTime += dt;
+            vatDrips.clear();
+
+            // Spout position relative to vat sprite (38x52)
+            const spoutX = 19;
+            const spoutY = 48;
+            const floorY = 62;
+
+            // Droplet animation cycle (2s period)
+            const period = 2.0;
+            const t = (vatDripTime % period) / period;
+
+            if (t < 0.45) {
+              // Droplet forming at spout tip
+              const grow = t / 0.45;
+              const r = 1 + grow * 1.6;
+              vatDrips.circle(spoutX, spoutY + grow * 2.5, r).fill({ color: 0xffb81c, alpha: 0.9 });
+              vatDrips.circle(spoutX, spoutY + grow * 2.5, r * 0.5).fill({ color: 0xffe28f, alpha: 0.95 });
+            } else {
+              // Droplet falling to floor
+              const fallProgress = (t - 0.45) / 0.55;
+              const dropY = spoutY + 2.5 + Math.pow(fallProgress, 2) * (floorY - spoutY - 2.5);
+              vatDrips.ellipse(spoutX, dropY, 1.2, 2.2).fill({ color: 0xffb81c, alpha: 0.9 });
+              vatDrips.circle(spoutX, dropY, 0.8).fill({ color: 0xffe28f, alpha: 0.95 });
+            }
+
+            // Floor puddles with subtle amber sheen pulse
+            const pulse = (Math.sin(vatDripTime * 2.8) + 1) / 2;
+            vatDrips.ellipse(spoutX - 4, floorY, 2.5 + pulse * 0.6, 1.2).fill({ color: 0xd98218, alpha: 0.7 });
+            vatDrips.ellipse(spoutX + 2, floorY + 1.2, 3.2 + pulse * 0.8, 1.5).fill({ color: 0xffb81c, alpha: 0.85 });
+            vatDrips.circle(spoutX + 2, floorY + 0.9, 1.0).fill({ color: 0xffe28f, alpha: 0.95 });
+          };
+          app.ticker.add(vatTicker);
+
           // Filing cabinets:
           // Cab 1: CEO room top-right corner against wall
           const cab1 = new Sprite(hiveProps.cabinet);
