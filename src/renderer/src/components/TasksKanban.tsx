@@ -556,7 +556,7 @@ export function TasksKanban({ mobile = false }: { mobile?: boolean } = {}) {
                           {qa.docPath}
                         </div>
                       ) : (
-                        <Markdown text={qa.q} style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px', color: 'var(--cth-ink-800)' }} />
+                        <Markdown text={qa.q} style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '15px', color: 'var(--cth-ink-800)', maxWidth: '72ch' }} />
                       )}
                     </div>
                     {/* Action row */}
@@ -1201,7 +1201,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
                       display: 'flex', gap: 6, alignItems: 'flex-start'
                     }}>
                       <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, flexShrink: 0 }}>Q</span>
-                      <Markdown text={e.q} style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', minWidth: 0, flex: 1 }} />
+                      <Markdown text={e.q} style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', minWidth: 0, flex: 1, maxWidth: '72ch' }} />
                     </div>
                     {e.a ? (
                       <div style={{
@@ -1210,7 +1210,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
                         display: 'flex', gap: 6, alignItems: 'flex-start'
                       }}>
                         <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, flexShrink: 0 }}>A</span>
-                        <Markdown text={e.a} style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', minWidth: 0, flex: 1 }} />
+                        <Markdown text={e.a} style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', minWidth: 0, flex: 1, maxWidth: '72ch' }} />
                       </div>
                     ) : (
                       <div style={{ fontSize: 13, color: 'var(--cth-coral)', fontFamily: 'var(--cth-font-ui)' }}>

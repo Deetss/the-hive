@@ -207,7 +207,7 @@ export function AskMeTab() {
                 </span>
               </div>
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <Markdown text={msg.body} style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-900)' }} />
+                <Markdown text={msg.body} style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-900)', maxWidth: '72ch' }} />
                 <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
                   <textarea
                     value={msg.replyDraft}
@@ -342,7 +342,7 @@ export function AskMeTab() {
                     background: 'var(--cth-paper-200)', padding: '8px 10px',
                     boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)'
                   }}>
-                    <Markdown text={item.question} />
+                    <Markdown text={item.question} style={{ maxWidth: '72ch' }} />
                   </div>
 
                   {isDecision ? (
