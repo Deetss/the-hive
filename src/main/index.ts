@@ -5527,8 +5527,13 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
 
     // 2) Kill the live PTY (if any) and run the shared teardown, which archives
     //    the agent. setArchived is a belt-and-suspenders no-op when it had no PTY.
+    //    Capture the outgoing PTY id first: the renderer's terminal is bound to
+    //    THAT id, and for the Overmind it is `pty-god` (GOD_PTY in
+    //    src/renderer/src/hooks/useHive.ts), not the bare agent id — so the fresh
+    //    session has to reclaim the same id or the terminal never reconnects.
+    let outgoingPtyId: string | undefined;
     for (const [ptyId, mappedAgent] of ptyToAgent.entries()) {
-      if (mappedAgent === id) { ptyManager.kill(ptyId); teardownPty(ptyId); break; }
+      if (mappedAgent === id) { outgoingPtyId = ptyId; ptyManager.kill(ptyId); teardownPty(ptyId); break; }
     }
     hive.setArchived(id, true);
 
@@ -5556,8 +5561,12 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
         autoMode: !!cfg.autoMode
       });
       const webContents = senderWc ?? liveWebContents();
+      // Reclaim the renderer's existing terminal binding. If the Queen had no
+      // live PTY to inherit an id from, fall back to GOD_PTY (`pty-god`) — the
+      // id the renderer always uses for the Overmind terminal.
+      const overmindPtyId = outgoingPtyId ?? 'pty-god';
       const spawnOpts: AgentSpawnOptions = {
-        id,
+        id: overmindPtyId,
         cwd: spawnCwd,
         command: launch.bin,
         args: launch.args,
@@ -5577,9 +5586,13 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
       };
       const res = await spawnAgentCore(spawnOpts, webContents);
       if (!res.ok) return { ok: false, error: res.error ?? 'failed to spawn Overmind' };
+      // Re-arm the renderer terminal bound to this id: clear its latched "process
+      // exited" line and reset the grid so the fresh session paints onto a clean,
+      // typeable screen (the same signal the post-install auto relaunch sends).
+      try { webContents?.send(`pty:relaunch:${overmindPtyId}`); } catch { /* window gone */ }
       setTimeout(() => {
         try {
-          ptyManager.write(id, `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.\r`);
+          ptyManager.write(overmindPtyId, `You are resuming as BeeYoncé, the Overmind, after a respawn. Read your memory at ${memPath} and your inbox, then continue orchestrating the floor as described in your CLAUDE.md and PROTOCOL.md.\r`);
         } catch { /* best-effort */ }
       }, 1500);
       return { ok: true };
