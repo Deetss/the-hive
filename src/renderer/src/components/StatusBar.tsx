@@ -82,15 +82,17 @@ const tail = (p: string) => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? p;
 
 interface RatePaceInfo {
   paceRatio: number;
+  targetPct: number;
   projectedPct: number;
   color: string;
   label: string;
 }
 
 /**
- * Derive pace from rate-limit numbers:
- * paceRatio = (used% / 100) / elapsedFraction
- * projected% = used% / elapsedFraction
+ * Derive pace & target from rate-limit numbers:
+ * targetPct = elapsedFraction * 100 (% you should be at for even burn across the window)
+ * paceRatio = (used% / 100) / elapsedFraction (burn rate vs even burn)
+ * projected% = used% / elapsedFraction (projected total at end of window)
  * Color cues: green <= 1x, amber <= 1.5x, red > 1.5x
  */
 function calcRatePace(pct: number, resetsAtIso: string, windowMins: number): RatePaceInfo | null {
@@ -101,11 +103,12 @@ function calcRatePace(pct: number, resetsAtIso: string, windowMins: number): Rat
   const now = Date.now();
   const elapsedMs = Math.max(1000, now - windowStartMs);
   const elapsedFraction = Math.min(1, Math.max(0.001, elapsedMs / windowMs));
+  const targetPct = elapsedFraction * 100;
   const paceRatio = (pct / 100) / elapsedFraction;
   const projectedPct = pct / elapsedFraction;
   const color = paceRatio > 1.5 ? 'var(--cth-coral)' : paceRatio > 1.0 ? 'var(--cth-lemon)' : 'var(--cth-mint)';
-  const label = `${paceRatio.toFixed(1)}x`;
-  return { paceRatio, projectedPct, color, label };
+  const label = `tgt ${targetPct.toFixed(1)}%`;
+  return { paceRatio, targetPct, projectedPct, color, label };
 }
 
 export function StatusBar() {
@@ -406,7 +409,7 @@ export function StatusBar() {
         return (
           <>
             <Sep />
-            <Chip title={`5h rate limit: ${worstFiveHour.pct}% used${pace ? ` · pace ${pace.label} (proj ${Math.round(pace.projectedPct)}%)` : ''} · resets ${fmtReset(worstFiveHour.resetsAt)}`}>
+            <Chip title={`5h rate limit: ${worstFiveHour.pct.toFixed(2)}% used${pace ? ` · target pace: ${pace.targetPct.toFixed(1)}% (${pace.paceRatio.toFixed(1)}x burn rate, proj ${Math.round(pace.projectedPct)}%)` : ''} · resets ${fmtReset(worstFiveHour.resetsAt)}`}>
               <span style={{ color: 'var(--cth-ink-500)' }}>5h</span>
               <span style={{
                 display: 'inline-block', width: 36, height: 5,
@@ -424,8 +427,8 @@ export function StatusBar() {
                 {worstFiveHour.pct.toFixed(2)}%
               </span>
               {pace && (
-                <span style={{ fontFamily: 'var(--cth-font-ui)', color: pace.color, fontSize: 13, fontWeight: 600 }}>
-                  {pace.label}
+                <span style={{ fontFamily: 'var(--cth-font-ui)', color: pace.color, fontSize: 12, fontWeight: 500 }}>
+                  ({pace.label})
                 </span>
               )}
               <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
@@ -441,7 +444,7 @@ export function StatusBar() {
         return (
           <>
             <Sep />
-            <Chip title={`7d rate limit: ${worstSevenDay.pct}% used${pace ? ` · pace ${pace.label} (proj ${Math.round(pace.projectedPct)}%)` : ''} · resets ${fmtReset(worstSevenDay.resetsAt)}`}>
+            <Chip title={`7d rate limit: ${worstSevenDay.pct.toFixed(2)}% used${pace ? ` · target pace: ${pace.targetPct.toFixed(1)}% (${pace.paceRatio.toFixed(1)}x burn rate, proj ${Math.round(pace.projectedPct)}%)` : ''} · resets ${fmtReset(worstSevenDay.resetsAt)}`}>
               <span style={{ color: 'var(--cth-ink-500)' }}>7d</span>
               <span style={{
                 display: 'inline-block', width: 36, height: 5,
@@ -459,8 +462,8 @@ export function StatusBar() {
                 {worstSevenDay.pct.toFixed(2)}%
               </span>
               {pace && (
-                <span style={{ fontFamily: 'var(--cth-font-ui)', color: pace.color, fontSize: 13, fontWeight: 600 }}>
-                  {pace.label}
+                <span style={{ fontFamily: 'var(--cth-font-ui)', color: pace.color, fontSize: 12, fontWeight: 500 }}>
+                  ({pace.label})
                 </span>
               )}
               <span style={{ fontFamily: 'var(--cth-font-ui)', color: 'var(--cth-ink-500)', fontSize: 13 }}>
