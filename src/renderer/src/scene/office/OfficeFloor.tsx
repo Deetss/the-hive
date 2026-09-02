@@ -175,6 +175,18 @@ interface HiveWallTextures {
   corner: Texture;
 }
 
+// Hive worker desks are laid out on ONE strict grid, not the reused office map's
+// scattered desk spawns. Worker index i (0-based, Queen excluded) maps purely by
+// formula: col = i % perRow, row = floor(i / perRow). No per-desk offsets. Origin
+// and gaps match the office map's known-walkable central band (rows y=13 and y=18,
+// columns x=2..22) so a seated bee can path to its seat. Tune here if a screenshot
+// shows the pixels off; nothing downstream hand-places a desk.
+const HIVE_DESK_GRID = { originX: 2, originY: 13, colGap: 4, rowGap: 5, perRow: 6 } as const;
+const hiveDeskTile = (i: number): Tile => ({
+  x: HIVE_DESK_GRID.originX + (i % HIVE_DESK_GRID.perRow) * HIVE_DESK_GRID.colGap,
+  y: HIVE_DESK_GRID.originY + Math.floor(i / HIVE_DESK_GRID.perRow) * HIVE_DESK_GRID.rowGap,
+});
+
 function createHiveFloorLayer(tile: number, width: number, height: number): Graphics {
   const layer = new Graphics();
   const base = mixColor(colors.accent.lemon, colors.cream[200], 0.18);
@@ -805,24 +817,24 @@ export function OfficeFloor() {
         mapContainer.addChildAt(hiveDeskLayer, charInsertIndex >= 0 ? charInsertIndex : mapContainer.children.length);
 
         const deskAssets = hiveDeskAssets;
-        // These senior desks sit at scattered spots in the reused office map
-        // (chief-architect/ui-ux-expert top-right, agent-organizer mid-top), so
-        // their pods break the hive's two tidy desk rows. Skip the decorative pod
-        // for them; the seat itself still works, and the Queen's CEO pod stays.
-        const offGridDesks = new Set(['desk-chief-architect', 'desk-ui-ux-expert', 'desk-agent-organizer']);
-        spawnEntries
-          .filter(([name]) => (name.startsWith('desk-') || name.startsWith('pc-')) && !offGridDesks.has(name))
-          .sort((a, b) => a[1].y - b[1].y || a[1].x - b[1].x)
-          .forEach(([, point]) => {
-            const deskNoise = Math.abs(pseudoNoise(point.x * 0.37, point.y * 0.41));
-            const variant = deskAssets[Math.floor(deskNoise * deskAssets.length) % deskAssets.length];
-            const deskSprite = new Sprite(variant.texture);
-            deskSprite.eventMode = 'none';
-            deskSprite.anchor.set(variant.anchorX, variant.anchorY);
-            deskSprite.position.set((point.x + 0.5) * tile, (point.y + 0.35) * tile);
-            deskSprite.zIndex = (point.y + 0.25) * tile;
-            hiveDeskLayer.addChild(deskSprite);
-          });
+        const placePod = (t: Tile): void => {
+          const variant = deskAssets[
+            Math.floor(Math.abs(pseudoNoise(t.x * 0.37, t.y * 0.41)) * deskAssets.length) % deskAssets.length
+          ];
+          const deskSprite = new Sprite(variant.texture);
+          deskSprite.eventMode = 'none';
+          deskSprite.anchor.set(variant.anchorX, variant.anchorY);
+          // Same fixed offset for every pod, so bees sit identically on each.
+          deskSprite.position.set((t.x + 0.5) * tile, (t.y + 0.35) * tile);
+          deskSprite.zIndex = (t.y + 0.25) * tile;
+          hiveDeskLayer.addChild(deskSprite);
+        };
+        // One pod per worker, placed purely from the grid formula (HIVE_DESK_GRID)
+        // so N workers form ceil(N/perRow) even rows. The Queen keeps her CEO desk.
+        const workerCount = useStore.getState().agents.filter((a) => !a.isOvermind).length;
+        for (let i = 0; i < workerCount; i++) placePod(hiveDeskTile(i));
+        const ceoTile = mapRenderer.getSpawnPoint('desk-ceo');
+        if (ceoTile) placePod(ceoTile);
         hiveDeskLayer.sortChildren();
       };
 
@@ -891,6 +903,19 @@ export function OfficeFloor() {
       // The bottom-right open area is the cafeteria (break room) — see the
       // coffee-break director below. It is deliberately NOT added as overflow
       // desk seating, so the café tables stay free for breaks.
+
+      // The hive seats its workers on the strict grid (HIVE_DESK_GRID) instead of
+      // the office map's scattered desk spawns, so seated bees line up in even
+      // rows directly under their honeycomb pods. Seat 0 (Queen's CEO desk) keeps
+      // its own spawn; the first two grid rows reuse the office's proven-walkable
+      // pc/named-desk tiles so bees can always path to their seat.
+      if (isHiveTheme) {
+        const ceo = seatTiles[0];
+        const workerSeatCount = Math.max(0, seatTiles.length - 1);
+        seatTiles.length = 0;
+        if (ceo) seatTiles.push(ceo);
+        for (let i = 0; i < workerSeatCount; i++) seatTiles.push(hiveDeskTile(i));
+      }
 
       // Waiting spots near the entrance — where a blocked agent walks to signal
       // it needs the user. Collected as walkable tiles in rings around the door.
