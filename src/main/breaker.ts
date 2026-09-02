@@ -133,6 +133,8 @@ export class CircuitBreaker {
 
   constructor(private getConfig: () => CircuitBreakerConfig & { costCapUsd?: number; costCapTokens?: number; agentTokenCaps?: Record<string, number> }) {}
 
+  public onRateLimit?: (agentId: string) => void;
+
   private cfg() {
     const c = this.getConfig() ?? {};
     return {
@@ -213,6 +215,7 @@ export class CircuitBreaker {
       s.quotaLimited = true;
       s.quotaReason = (message ?? '').slice(0, 200);
       s.errorCount = 0;
+      this.onRateLimit?.(agentId);
       return;
     }
     s.errorCount += 1;

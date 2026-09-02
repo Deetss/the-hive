@@ -72,7 +72,7 @@ import {
 } from './webhook';
 import {
   classifyInboundKind, isAutoAllowed,
-  DEFAULT_CONTEXT_TRIGGER, DEFAULT_ORG_TRIGGER, DEFAULT_TRIGGER_MODE, DEFAULT_WEBHOOK_SCHEMA,
+  DEFAULT_COMPACTION_FOCUS, DEFAULT_CONTEXT_TRIGGER, DEFAULT_ORG_TRIGGER, DEFAULT_TRIGGER_MODE, DEFAULT_WEBHOOK_SCHEMA,
   type ContextRule, type ContextTriggerConfig, type InboundKind, type OrgTriggerConfig,
   type TriggerHistoryEntry, type TriggerMode, type WebhookTrigger
 } from '../shared/triggers';
@@ -2196,6 +2196,8 @@ const lastAgentPtyCtx = new Map<string, number>();
 const lastAgentQuotaLimited = new Map<string, boolean>();
 /** Epoch ms when agent quota resets. */
 const lastAgentQuotaResetsAt = new Map<string, number>();
+/** Epoch ms when agent was last force-compacted for overage (debounced 60s). */
+const lastOverageCompactAt = new Map<string, number>();
 
 const AGY_TOOL_RE = /(?:(?:\[?\b(?:Tool|Calling tool|Running tool|Executing|Tool call|Tool Call|Action)\b\]?)\s*[:\s]\s*([A-Za-z0-9_.:-]+)|●\s+([A-Za-z][A-Za-z0-9_]*))/i;
 /** Parse token counts from PTY stdout. Matches: "tokens: 1234", "Used 1234 tokens", "1234 tokens", etc. */
@@ -2206,6 +2208,8 @@ const PTY_COST_RE = /(?:cost|usage|spent)[:\s]+\$?([\d.]+)|\$([\d.]+)/i;
 const PTY_CTX_RE = /(?:ctx|context)[:\s]+(\d+)%|(\d+)%\s+(?:of\s+)?(?:ctx|context)/i;
 /** Detect quota exhaustion. Matches: "Individual quota reached", "Rate limit reached", "quota exceeded". */
 const PTY_QUOTA_RE = /Individual quota reached|Rate limit reached|quota exceeded/i;
+/** Detect extra usage / overage. */
+const PTY_OVERAGE_RE = /extra usage|using extra usage|overage (?:active|in use|applied|charging)|overage tokens/i;
 /** Parse quota reset duration. Matches: "Resets in 1h12m", "Resets in 45m", etc. */
 const PTY_QUOTA_RESET_RE = /Resets in (\d+h)?(\d+m)?/i;
 
@@ -2356,13 +2360,18 @@ function notifyAgentPtyActivity(ptyId: string, chunk?: string): void {
       }
     }
 
-    // Detect quota exhaustion. Act only on the RISING EDGE (the marker scrolls
-    // past on every subsequent PTY chunk, so without this guard the flag would be
-    // re-set and god's inbox spammed once per frame).
+    // Detect quota exhaustion or extra/overage usage. Act only on the RISING EDGE
+    // (the marker scrolls past on every subsequent PTY chunk, so without this guard
+    // the flag would be re-set and god's inbox spammed once per frame).
     const quotaMatch = PTY_QUOTA_RE.exec(plain);
+    const overageMatch = PTY_OVERAGE_RE.exec(plain);
+    if (overageMatch) {
+      triggerOverageCompaction(agentId);
+    }
     if (quotaMatch && !lastAgentQuotaLimited.get(agentId)) {
       lastAgentQuotaLimited.set(agentId, true);
       lastAgentTool.set(agentId, 'quota');
+      triggerOverageCompaction(agentId);
 
       // Parse reset duration when the message carries one ("Resets in 1h12m").
       let resetTime = 'an unknown time';
@@ -2392,11 +2401,14 @@ function notifyAgentPtyActivity(ptyId: string, chunk?: string): void {
         needs_human: false,
         created_at: new Date().toISOString()
       };
-      const godInboxPath = join(HIVE_ROOT, 'agents', 'god', 'inbox', `${warnMsg.id}.json`);
-      try {
-        writeFileSync(godInboxPath, JSON.stringify(warnMsg, null, 2), 'utf8');
-      } catch (e) {
-        console.error('[quota-warn] Failed to write to god inbox:', e);
+      const root = hive.root();
+      if (root) {
+        const godInboxPath = join(root, 'agents', 'god', 'inbox', `${warnMsg.id}.json`);
+        try {
+          writeFileSync(godInboxPath, JSON.stringify(warnMsg, null, 2), 'utf8');
+        } catch (e) {
+          console.error('[quota-warn] Failed to write to god inbox:', e);
+        }
       }
     }
 
@@ -2592,6 +2604,9 @@ const breaker = new CircuitBreaker(() => {
   const c = readConfig();
   return { ...(c.circuitBreaker ?? {}), costCapUsd: c.costCapUsd, costCapTokens: c.costCapTokens, agentTokenCaps: c.agentTokenCaps };
 });
+breaker.onRateLimit = (agentId) => {
+  triggerOverageCompaction(agentId);
+};
 // Always-on beats (decoupled from the optional heartbeat): the live fleet snapshot
 // Abathur reads + the breaker beat, so guardrails + monitoring work even when the
 // heartbeat mission is disabled (it ships off).
@@ -2649,6 +2664,9 @@ const hookServer = new HookServer(
     } else if (event === 'PostCompact' || event === 'SessionStart' || event === 'Stop') {
       if (agentCompactingUntil.delete(agentId)) writeFleetSnapshot();
     }
+  },
+  (agentId) => {
+    triggerOverageCompaction(agentId);
   }
 );
 const memory = new MemoryManager(
@@ -3262,17 +3280,31 @@ function clearContextTimers(): void {
 
 /** Ask the renderer to run one half of the context trigger.
  *
- *  Both callers funnel through here — the legacy per-mission `autoCompact` flag
- *  and the context trigger's own timer — so there is exactly one path from main
- *  to the renderer for each action. */
-function emitContextTrigger(action: 'compact' | 'clear', rule: ContextRule): void {
-  try { liveWebContents()?.send('trigger:context', { action, rule }); } catch { /* window gone */ }
+ *  All callers funnel through here — the legacy per-mission `autoCompact` flag,
+ *  the context trigger's own timer, and overage/quota events — so there is exactly
+ *  one path from main to the renderer for each action. */
+function emitContextTrigger(action: 'compact' | 'clear', rule: ContextRule, targetAgentId?: string, force?: boolean): void {
+  try { liveWebContents()?.send('trigger:context', { action, rule, targetAgentId, force }); } catch { /* window gone */ }
   // TRANSITIONAL ALIAS: the renderer still carries the pre-Triggers
   // `mission:autoCompact` listener as a fallback. Both fire for compact until
   // every consumer has moved to `trigger:context`; then this line goes.
   if (action === 'compact') {
-    try { liveWebContents()?.send('mission:autoCompact'); } catch { /* window gone */ }
+    try { liveWebContents()?.send('mission:autoCompact', targetAgentId ? { targetAgentId } : undefined); } catch { /* window gone */ }
   }
+}
+
+/** Force-compact an agent immediately when its engine enters extra/overage usage.
+ *  Bypasses the normal minContextPct context pressure gate. */
+function triggerOverageCompaction(agentId: string): void {
+  const now = Date.now();
+  const last = lastOverageCompactAt.get(agentId) ?? 0;
+  if (now - last < 60_000) return;
+  lastOverageCompactAt.set(agentId, now);
+  console.log(`[compaction] forcing immediate overage compaction for agent ${agentId}`);
+  emitContextTrigger('compact', {
+    ...contextRule('compact'),
+    message: DEFAULT_COMPACTION_FOCUS
+  }, agentId, true);
 }
 
 /** (Re)arm both context timers from persisted config. Clear-then-arm, so calling
@@ -6553,13 +6585,13 @@ ipcMain.handle('tasks:openHumanQA', () => {
   for (const t of tasks) {
     if (!t) continue;
     const taskPriority: 'urgent' | 'normal' | 'backlog' =
-      (t.priority === 1 || t.priority === 'urgent' || (t as any).isUrgent) ? 'urgent' :
-      (t.priority === 3 || t.priority === 'backlog') ? 'backlog' : 'normal';
+      (t.priority === 1 || (t.priority as unknown) === 'urgent' || (t as any).isUrgent) ? 'urgent' :
+      ((t.priority as unknown) === 3 || (t.priority as unknown) === 'backlog') ? 'backlog' : 'normal';
 
     const qaList = Array.isArray(t.humanQA) ? t.humanQA : [];
     for (const qa of qaList) {
       if (qa && qa.q && !qa.a) {
-        const itemPriority = qa.priority === 'urgent' ? 'urgent' : qa.priority === 'backlog' ? 'backlog' : taskPriority;
+        const itemPriority = (qa as any).priority === 'urgent' ? 'urgent' : (qa as any).priority === 'backlog' ? 'backlog' : taskPriority;
         openItems.push({
           taskId: t.id,
           taskTitle: t.title || t.id,
@@ -9558,7 +9590,7 @@ function runGovernorBeat(): void {
         if (!settings.enabled) continue;
         if (settings.spawnGate.exemptAgents.has(id)) continue;
         if (!redSet.has(claudeAccountKey(a.profileId))) continue;
-        const provider = inferAgentProvider(a.command, a.provider ?? undefined);
+        const provider = inferAgentProvider((a as unknown as { command?: string }).command, a.provider ?? undefined);
         if (settings.mode === 'windows' && !isClaudeProvider(provider)) continue;
         const runtimeProfile = a.profileId ? runtimeProfiles.get(a.profileId) : undefined;
         const usageSample = telemetry.getAgentUsage(id);
@@ -9569,7 +9601,11 @@ function runGovernorBeat(): void {
         }
         if (settings.spawnGate.governModels.length && (!modelSlug || !settings.spawnGate.governModels.includes(modelSlug))) continue;
         if (!ptyForAgent(id)) continue;
-        try { control.pause(id, true); governorPausedAgents.add(id); } catch { /* */ }
+        try {
+          control.pause(id, true);
+          governorPausedAgents.add(id);
+          triggerOverageCompaction(id);
+        } catch { /* */ }
       }
       hive.send({
         to: 'god',

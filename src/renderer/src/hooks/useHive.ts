@@ -1149,10 +1149,11 @@ export function useHive(config: HarnessConfig | null): void {
   useEffect(() => {
     if (!config?.onboardingComplete) return;
 
-    const fire = (action: 'compact' | 'clear', rule: ContextRule): void => {
+    const fire = (action: 'compact' | 'clear', rule: ContextRule, targetAgentId?: string, force?: boolean): void => {
       const { agents, messageQueues, enqueueMessage } = useStore.getState();
       for (const a of agents) {
         if (!a.ptyId) continue;
+        if (targetAgentId && a.id !== targetAgentId) continue;
         const provider = inferAgentProvider(a.command, a.provider);
         const command = action === 'clear'
           ? clearCommandForProvider(provider, rule.message)
@@ -1160,30 +1161,14 @@ export function useHive(config: HarnessConfig | null): void {
         // No trustworthy command for this CLI (Crush's palette-only TUI, Copilot's
         // print mode, an unknown custom binary) — leave its terminal alone.
         if (!command) continue;
-        if (!passesContextPressure(a, rule)) continue;
+        if (!force && !passesContextPressure(a, rule)) continue;
         const verb = command.trimStart().split(/\s+/)[0];
         const queued = messageQueues[a.id] ?? [];
         if (queued.some((m) => m.text.trimStart().startsWith(verb))) continue;
-        // The latch, compact only. `used` reaches this gate from Claude's status
-        // line, which only reports after an API call. A /compact on an agent that
-        // has done nothing since the last one makes no call at all — Claude refuses
-        // it locally with "Not enough messages to compact" — so the count stays
-        // byte-identical and the pressure gate passes on the same number the next
-        // cycle, and the next. Seen in the wild: /compact every hour for 15 straight
-        // hours at exactly 400958 tokens, then 11 more at exactly 221772, each a
-        // no-op the agent still had to read and answer. Higher thresholds make it
-        // rarer, not absent: any agent parked above its bar repeats forever.
-        //
-        // So remember the count at the last compact queued and skip while it is
-        // byte-identical. Deliberately equality and not "hasn't grown": the rule's
-        // thresholds own that decision, and an agent still above them deserves its
-        // /compact whether the count moved up or down. A frozen count is the one
-        // state those thresholds cannot reason about, because nothing they could do
-        // would ever change it. /clear needs no equivalent — the queue drain zeroes
-        // the store reading when it lands.
+        // The latch, compact only.
         const used = a.contextTokens ?? 0;
         if (action === 'compact') {
-          if (lastCompactUsed.current[a.id] === used) continue;
+          if (!force && lastCompactUsed.current[a.id] === used) continue;
           lastCompactUsed.current[a.id] = used;
         }
         enqueueMessage(a.id, command);
@@ -1194,11 +1179,11 @@ export function useHive(config: HarnessConfig | null): void {
     // that emits it; access it defensively so this lands independently of that.
     const off = (window.cth as unknown as {
       onContextTrigger?: (
-        cb: (p: { action: 'compact' | 'clear'; rule: ContextRule }) => void
+        cb: (p: { action: 'compact' | 'clear'; rule: ContextRule; targetAgentId?: string; force?: boolean }) => void
       ) => () => void;
     }).onContextTrigger?.((p) => {
       if (!p?.rule) return;
-      fire(p.action === 'clear' ? 'clear' : 'compact', p.rule);
+      fire(p.action === 'clear' ? 'clear' : 'compact', p.rule, p.targetAgentId, p.force);
     });
 
     // LEGACY fallback: main still emits the old parameterless auto-compact until

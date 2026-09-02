@@ -96,7 +96,9 @@ export class HookServer {
     /** Optional observer of every hook boundary (agentId, event, message). The
      *  worker inbox-wake watchdog (workerWake.ts) feeds on this to learn when an
      *  agent is parked on a permission/HITL prompt so it never types into it. */
-    private onEvent?: (agentId: string | undefined, event: string, message: string | undefined) => void
+    private onEvent?: (agentId: string | undefined, event: string, message: string | undefined) => void,
+    /** Optional observer for when an agent enters rate-limit overage / extra usage. */
+    private onOverage?: (agentId: string) => void
   ) {}
 
   start(): void {
@@ -209,6 +211,20 @@ export class HookServer {
         const entry = { fiveHour, sevenDay, ts: Date.now() };
         this.rateLimitsById.set(agentId, entry);
         this.getWebContents()?.send('hive:rateLimitsUpdate', { agentId, ...entry });
+
+        const isOverage = Boolean(
+          (p as unknown as { is_overage?: boolean }).is_overage ||
+          (typeof (p as unknown as { extra_usage?: unknown }).extra_usage === 'boolean' && (p as unknown as { extra_usage?: boolean }).extra_usage) ||
+          (typeof (p as unknown as { extra_usage?: { is_active?: boolean } }).extra_usage === 'object' && (p as unknown as { extra_usage?: { is_active?: boolean } }).extra_usage?.is_active) ||
+          (rl as unknown as { is_overage?: boolean })?.is_overage ||
+          (rl as unknown as { extra_usage?: unknown })?.extra_usage === true ||
+          (typeof (rl as unknown as { extra_usage?: { is_active?: boolean } })?.extra_usage === 'object' && (rl as unknown as { extra_usage?: { is_active?: boolean } })?.extra_usage?.is_active) ||
+          (typeof fhRaw?.used_percentage === 'number' && fhRaw.used_percentage >= 100) ||
+          (typeof sdRaw?.used_percentage === 'number' && sdRaw.used_percentage >= 100)
+        );
+        if (isOverage) {
+          this.onOverage?.(agentId);
+        }
       }
       // The live model id: the card shows the spawn-time model, but the statusline
       // reports the ACTUAL running model, so a manual /model change in the terminal
