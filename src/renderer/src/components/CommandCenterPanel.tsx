@@ -3,6 +3,7 @@ import { PixelPanel } from './PixelPanel';
 import { PixelBadge } from './PixelBadge';
 import { PixelButton } from './PixelButton';
 import { SpritePortrait } from './SpritePortrait';
+import { AgentRosterItem } from './AgentRosterItem';
 import { PtyTerminalView } from './PtyTerminalView';
 import { MessageQueueComposer } from './MessageQueueComposer';
 import { TasksKanban } from './TasksKanban';
@@ -744,7 +745,7 @@ function FloorTab() {
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [issuesError, setIssuesError] = useState<string | null>(null);
   // Fleet token data from PTY-parsed fleet.json (fallback for non-Claude agents)
-  const [fleetTokens, setFleetTokens] = useState<Record<string, { tokens: number; ctxPct: number | null; usd: number }>>({});
+  const [fleetTokens, setFleetTokens] = useState<Record<string, { tokens: number; ctxPct: number | null; usd: number; quotaLimited?: boolean }>>({});
   const [harnessHome, setHarnessHome] = useState<string | null>(null);
 
   useEffect(() => {
@@ -766,6 +767,18 @@ function FloorTab() {
       setFleetTokens(data);
     });
     return unsubscribe;
+  }, []);
+
+  const [needsInputById, setNeedsInputById] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!window.cth.onAgentNeedsInput) return;
+    return window.cth.onAgentNeedsInput(({ agentId, prompt }) => {
+      setNeedsInputById((prev) => {
+        if (prompt) return { ...prev, [agentId]: prompt };
+        if (!(agentId in prev)) return prev;
+        const next = { ...prev }; delete next[agentId]; return next;
+      });
+    });
   }, []);
 
   // Restart an agent's PTY in place. `resume:true` reattaches its prior Claude
@@ -1055,304 +1068,189 @@ function FloorTab() {
           const agentPreset = providerPreset(agentProvider);
           const sample = samples[a.id];
           const breaker = breakers[a.id];
-          const armed = !!breaker && (breaker.level === 'constrained' || breaker.level === 'stopped');
           const tokens = sample ? sample.input + sample.output + sample.cacheRead + sample.cacheCreation : (fleetTokens[a.id]?.tokens ?? 0);
           const agentCap = agentTokenCaps[a.id]; // per-agent limit, if set
-          const denom = agentCap && agentCap > 0 ? agentCap : floorCap;
-          const pct = Math.min(100, Math.round((tokens / denom) * 100));
-          const meterColor = armed || pct >= 90 ? 'var(--cth-coral)' : pct >= 60 ? 'var(--cth-lemon)' : 'var(--cth-mint)';
-          // Sparkline only when the agent is actually burning tokens; otherwise the
-          // flat baseline is just a mystery line. Label it with the live rate.
           const sparkSeries = spark[a.id] ?? [];
-          const hasSpark = sparkSeries.some((v) => v > 0);
           const rateVal = Math.round(rate[a.id] ?? 0);
-          const rateLabel = rateVal > 0 ? `${fmtTokens(rateVal)}/m` : 'rate';
           const currentModelKnown = modelsForProvider(agentProvider)
             .some((model) => model.id === a.model);
           return (
-          <div key={a.id} style={{
-            display: 'flex', flexDirection: 'column', gap: 4,
-            padding: 6, marginBottom: 6,
-            background: armed ? 'var(--cth-coral-light)' : 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 24, height: 24, background: `var(--cth-${a.accent}-light)`,
-                boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', flexShrink: 0
-              }}>
-                <SpritePortrait character={a.character} agentId={a.id} isGod={a.isOvermind} scale={1} />
-              </div>
-              <button
-                onClick={() => select(a.id)}
-                style={{
-                  border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)',
-                  display: 'inline-flex', alignItems: 'center', gap: 6
-                }}
-              >
-                <span>{a.name}{a.isOvermind ? ' (Overmind)' : ''}</span>
-                {agentProvider !== 'claude' && (
-                  <span title={`Engine: ${agentPreset.label}`} style={{
-                    fontSize: 8, lineHeight: '11px', padding: '1px 4px 0',
-                    background: 'var(--cth-sky-light)', color: 'var(--cth-ink-900)',
-                    boxShadow: 'inset 0 0 0 1px var(--cth-sky)', textTransform: 'uppercase',
-                    fontWeight: 600
-                  }}>{agentProvider === 'antigravity' ? 'AGY' : agentPreset.label}</span>
-                )}
-              </button>
-              <PixelBadge status={armed ? 'looping' : a.status} />
-              {armed && <span title={breaker?.reason} style={{ color: 'var(--cth-coral)', fontSize: 12 }}>⚠</span>}
-              <button
-                type="button"
-                title={`Archive ${a.name}'s current session and spawn a fresh one (respawn)`}
-                onClick={(e) => { e.stopPropagation(); respawn(a); }}
-                style={{
-                  border: 'none', cursor: 'pointer', padding: '1px 4px',
-                  fontFamily: 'var(--cth-font-ui)', fontSize: 12,
-                  color: 'var(--cth-ink-500)', background: 'transparent',
-                  display: 'inline-flex', alignItems: 'center'
-                }}
-              >↺</button>
-              <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--cth-ink-500)' }}>
-                {(toolCounts[a.id] ?? 0)} tool calls
-              </span>
-              <TokenLimitEditor value={agentCap} onSet={(t) => setAgentCap(a.id, t)} />
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--cth-ink-500)', wordBreak: 'break-all' }}>{a.cwd}</div>
-            {/* Live telemetry (folded in from the old Fleet tab) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {hasSpark ? (
-                <span style={{ flex: 1, minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', flexShrink: 0 }}>{rateLabel}</span>
-                  <Sparkline series={sparkSeries} />
-                </span>
-              ) : (
-                <span style={{ flex: 1 }} />
-              )}
-              {lastTool[a.id] && (
-                <span style={{
-                  fontSize: 13, lineHeight: '14px', padding: '0 5px', flexShrink: 0,
-                  background: 'var(--cth-paper-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', color: 'var(--cth-ink-700)'
-                }}>{lastTool[a.id]}</span>
-              )}
-              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-300)', flexShrink: 0 }}>budget</span>
-              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', width: 56, textAlign: 'right' }}>{fmtTokens(tokens)}</span>
-              <div
-                title={`CUMULATIVE session usage: ${tokens.toLocaleString()} of ${denom.toLocaleString()} tokens${agentCap ? ' (agent limit)' : ' (floor budget)'} — not the context window`}
-                style={{ width: 96, height: 8, background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0 }}
-              >
-                <div style={{ width: `${pct}%`, height: '100%', background: meterColor }} />
-              </div>
-              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', width: 30, textAlign: 'right' }}>{pct}%</span>
-            </div>
-            {/* Context window — the SAME exact statusLine-fed numbers as the
-                avatar-card gauge (tokens currently in the window vs the real
-                200k/1M size). Distinct from the cumulative budget meter above,
-                which keeps growing forever and pins at 100% — that one is
-                spend, this one is headroom before compaction. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ flex: 1 }} />
-              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-300)', flexShrink: 0 }}>ctx</span>
-              {a.contextTokens !== undefined && a.contextLimit ? (() => {
-                const cpct = Math.min(100, Math.round((a.contextTokens! / a.contextLimit!) * 100));
-                const ccolor = cpct >= 88 ? 'var(--cth-coral)' : cpct >= 75 ? 'var(--cth-lemon)' : `var(--cth-${a.accent})`;
-                return (
-                  <>
-                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', width: 56, textAlign: 'right' }}>
-                      {fmtTokens(a.contextTokens!)}
+            <AgentRosterItem
+              key={a.id}
+              variant="command-center"
+              agent={a}
+              onClick={() => select(a.id)}
+              breaker={breaker}
+              tokens={tokens}
+              toolCount={toolCounts[a.id] ?? 0}
+              agentCap={agentCap}
+              onSetAgentCap={(t) => setAgentCap(a.id, t)}
+              floorCap={floorCap}
+              sparkSeries={sparkSeries}
+              rateVal={rateVal}
+              lastTool={lastTool[a.id]}
+              quotaLimited={fleetTokens[a.id]?.quotaLimited}
+              needsInput={needsInputById[a.id]}
+              onRespawn={() => respawn(a)}
+            >
+              {!a.isOvermind && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                  <Select
+                    value={encodeProviderModel(agentProvider, a.model)}
+                    disabled={restarting === a.id}
+                    onChange={(value) => {
+                      const choice = decodeProviderModel(value);
+                      if (!choice) return;
+                      // Switching model within the SAME provider continues the
+                      // conversation — that's the whole point of switching mid-task
+                      // ("this got hard, go up a tier"), and starting fresh threw
+                      // away the context that made the switch necessary.
+                      // `resume` is best-effort: restartWithModel already refuses it
+                      // across providers, and falls back to a fresh session when no
+                      // session id or transcript is recorded.
+                      void restartWithModel(a, choice.model, {
+                        provider: choice.provider,
+                        resume: choice.provider === agentProvider,
+                        resumeOptional: true
+                      });
+                    }}
+                  >
+                    {(!agentPreset.supportsModel || !currentModelKnown) && (
+                      <option value={encodeProviderModel(agentProvider, a.model)}>
+                        {agentPreset.label} · {a.model ?? 'current'}
+                      </option>
+                    )}
+                    {modelProvidersForAgent(a.isOvermind).map((preset) => (
+                      <optgroup key={preset.id} label={preset.label}>
+                        {modelsForProvider(preset.id).map((model) => {
+                          // `defaultModel` is a Claude model id, so it can only mark
+                          // an entry in the Claude group.
+                          const isHarnessDefault = preset.id === 'claude'
+                            && !!defaultModel && model.id === defaultModel;
+                          return (
+                            <option
+                              key={`${preset.id}:${model.id ?? 'cli-default'}`}
+                              value={encodeProviderModel(preset.id, model.id)}
+                            >
+                              {model.label}{isHarnessDefault ? ' · default' : ''}
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    ))}
+                  </Select>
+                  <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>
+                    {restarting === a.id
+                      ? 'restarting…'
+                      : `${agentPreset.label} model (restarts agent)`}
+                  </span>
+                  {/* Restart & Continue — kill + respawn keeping the SAME model and
+                      resuming the prior conversation (--resume). Use this to redraw a
+                      garbled TUI (e.g. after dragging the window across displays)
+                      without losing the thread. */}
+                  {(agentProvider === 'claude' || agentPreset.resumeFlag || agentPreset.resumeSubcommand) && <>
+                    <span style={{ flex: 1 }} />
+                    <PixelButton
+                      variant="secondary"
+                      size="sm"
+                      disabled={restarting === a.id}
+                      onClick={() => restartWithModel(a, a.model, { resume: true })}
+                    >
+                      <span title="Kill and respawn this agent, resuming its current conversation — fixes a corrupted/garbled terminal without losing context">
+                        restart &amp; continue
+                      </span>
+                    </PixelButton>
+                  </>}
+                  <span style={{ flex: 1 }} />
+                  <PixelButton
+                    variant="secondary"
+                    size="sm"
+                    disabled={restarting === a.id}
+                    onClick={() => respawn(a)}
+                  >
+                    <span title={`Archive ${a.name}'s current session and spawn a fresh one that resumes from memory.md`}>
+                      ↺ respawn
                     </span>
-                    <div
-                      title={`Context window: ${a.contextTokens!.toLocaleString()} of ${a.contextLimit!.toLocaleString()} tokens (${cpct}%)`}
-                      style={{ width: 96, height: 8, background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0 }}
-                    >
-                      <div style={{ width: `${cpct}%`, height: '100%', background: ccolor }} />
-                    </div>
-                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', width: 30, textAlign: 'right' }}>{cpct}%</span>
-                  </>
-                );
-              })() : fleetTokens[a.id]?.ctxPct !== null && fleetTokens[a.id]?.ctxPct !== undefined ? (() => {
-                const cpct = Math.min(100, fleetTokens[a.id].ctxPct!);
-                const ccolor = cpct >= 88 ? 'var(--cth-coral)' : cpct >= 75 ? 'var(--cth-lemon)' : `var(--cth-${a.accent})`;
-                return (
-                  <>
-                    <div
-                      title={`Context window: ${cpct}% (PTY-parsed)`}
-                      style={{ width: 96, height: 8, background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0 }}
-                    >
-                      <div style={{ width: `${cpct}%`, height: '100%', background: ccolor }} />
-                    </div>
-                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', width: 30, textAlign: 'right' }}>{cpct}%</span>
-                  </>
-                );
-              })() : (
-                <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-300)' }}>
-                  no status tick yet
-                </span>
+                  </PixelButton>
+                </div>
               )}
-            </div>
-            {/* Non-god agents get the cross-provider model picker + restart controls
-                here. The GOD agent's model lives in the engine row below
-                (provider+model+apply), so we DON'T render this second selector for
-                it — one model picker, not two. */}
-            {!a.isOvermind && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <Select
-                value={encodeProviderModel(agentProvider, a.model)}
-                disabled={restarting === a.id}
-                onChange={(value) => {
-                  const choice = decodeProviderModel(value);
-                  if (!choice) return;
-                  // Switching model within the SAME provider continues the
-                  // conversation — that's the whole point of switching mid-task
-                  // ("this got hard, go up a tier"), and starting fresh threw
-                  // away the context that made the switch necessary.
-                  // `resume` is best-effort: restartWithModel already refuses it
-                  // across providers, and falls back to a fresh session when no
-                  // session id or transcript is recorded.
-                  void restartWithModel(a, choice.model, {
-                    provider: choice.provider,
-                    resume: choice.provider === agentProvider,
-                    resumeOptional: true
-                  });
-                }}
-              >
-                {(!agentPreset.supportsModel || !currentModelKnown) && (
-                  <option value={encodeProviderModel(agentProvider, a.model)}>
-                    {agentPreset.label} · {a.model ?? 'current'}
-                  </option>
-                )}
-                {modelProvidersForAgent(a.isOvermind).map((preset) => (
-                  <optgroup key={preset.id} label={preset.label}>
-                    {modelsForProvider(preset.id).map((model) => {
-                      // `defaultModel` is a Claude model id, so it can only mark
-                      // an entry in the Claude group.
-                      const isHarnessDefault = preset.id === 'claude'
-                        && !!defaultModel && model.id === defaultModel;
-                      return (
-                        <option
-                          key={`${preset.id}:${model.id ?? 'cli-default'}`}
-                          value={encodeProviderModel(preset.id, model.id)}
-                        >
-                          {model.label}{isHarnessDefault ? ' · default' : ''}
-                        </option>
-                      );
-                    })}
-                  </optgroup>
-                ))}
-              </Select>
-              <span style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>
-                {restarting === a.id
-                  ? 'restarting…'
-                  : `${agentPreset.label} model (restarts agent)`}
-              </span>
-              {/* Restart & Continue — kill + respawn keeping the SAME model and
-                  resuming the prior conversation (--resume). Use this to redraw a
-                  garbled TUI (e.g. after dragging the window across displays)
-                  without losing the thread. */}
-              {(agentProvider === 'claude' || agentPreset.resumeFlag || agentPreset.resumeSubcommand) && <>
-                <span style={{ flex: 1 }} />
-                <PixelButton
-                  variant="secondary"
-                  size="sm"
-                  disabled={restarting === a.id}
-                  onClick={() => restartWithModel(a, a.model, { resume: true })}
-                >
-                  <span title="Kill and respawn this agent, resuming its current conversation — fixes a corrupted/garbled terminal without losing context">
-                    restart &amp; continue
-                  </span>
-                </PixelButton>
-              </>}
-              <span style={{ flex: 1 }} />
-              <PixelButton
-                variant="secondary"
-                size="sm"
-                disabled={restarting === a.id}
-                onClick={() => respawn(a)}
-              >
-                <span title={`Archive ${a.name}'s current session and spawn a fresh one that resumes from memory.md`}>
-                  ↺ respawn
-                </span>
-              </PixelButton>
-            </div>
-            )}
-            {restartErrors[a.id] && (
-              <div style={{ fontSize: 13, color: 'var(--cth-coral)' }}>
-                {restartErrors[a.id]}
-              </div>
-            )}
-            {a.isOvermind && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', flexShrink: 0 }}>engine:</span>
-                <Select
-                  value={engineProvider}
-                  disabled={restarting === a.id}
-                  onChange={(v) => {
-                    const p = v as AgentProvider;
-                    setEngineProvider(p);
-                    const preset = AGENT_PROVIDER_PRESETS.find((x) => x.id === p);
-                    setEngineModel(preset?.recommendedOrchestratorModel);
-                  }}
-                >
-                  {AGENT_PROVIDER_PRESETS.filter((p) => canReceiveInbox(p.id)).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}{p.id === 'claude' ? ' ★' : ''}
-                    </option>
-                  ))}
-                </Select>
-                <Select
-                  value={engineModel ?? ''}
-                  disabled={restarting === a.id}
-                  onChange={(v) => setEngineModel(v || undefined)}
-                >
-                  {modelsForProvider(engineProvider).map((m) => (
-                    <option key={m.label} value={m.id ?? ''}>{m.label}</option>
-                  ))}
-                </Select>
-                <PixelButton
-                  variant="secondary"
-                  size="sm"
-                  disabled={restarting === a.id}
-                  onClick={async () => {
-                    const currentProvider = inferAgentProvider(a.command, a.provider);
-                    if (engineProvider !== currentProvider) {
-                      if (!window.confirm("This restarts BeeYoncé; a conversation on a different engine can't be resumed.")) return;
-                    }
-                    await window.cth.updateConfig({ overmindProvider: engineProvider, overmindModel: engineModel });
-                    await restartWithModel(a, engineModel, { provider: engineProvider, resume: false });
-                  }}
-                >
-                  {restarting === a.id ? 'restarting…' : 'apply'}
-                </PixelButton>
-                {/* Redraw a garbled terminal without losing the thread (resume the
-                    SAME engine+model). Kept here since the god has no per-agent row above. */}
-                <PixelButton
-                  variant="secondary"
-                  size="sm"
-                  disabled={restarting === a.id}
-                  onClick={() => restartWithModel(a, a.model, { resume: true })}
-                >
-                  <span title="Kill and respawn BeeYoncé, resuming the current conversation — fixes a corrupted/garbled terminal without losing context">
-                    restart &amp; continue
-                  </span>
-                </PixelButton>
-                {/* Respawn — the escape hatch for a quota-locked or wedged Overmind:
-                    archive this session and start a clean one that resumes from
-                    memory.md (does NOT continue the current conversation). Prominent
-                    here because it is the primary recovery action for the god. */}
-                <PixelButton
-                  variant="primary"
-                  size="sm"
-                  disabled={restarting === a.id}
-                  onClick={() => respawn(a)}
-                >
-                  <span title="Archive BeeYoncé's current session and spawn a fresh one that resumes from memory.md — use when the session is quota-locked or stuck">
-                    ↺ respawn
-                  </span>
-                </PixelButton>
-              </div>
-            )}
-          </div>
+              {restartErrors[a.id] && (
+                <div style={{ fontSize: 13, color: 'var(--cth-coral)' }}>
+                  {restartErrors[a.id]}
+                </div>
+              )}
+              {a.isOvermind && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                  <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', flexShrink: 0 }}>engine:</span>
+                  <Select
+                    value={engineProvider}
+                    disabled={restarting === a.id}
+                    onChange={(v) => {
+                      const p = v as AgentProvider;
+                      setEngineProvider(p);
+                      const preset = AGENT_PROVIDER_PRESETS.find((x) => x.id === p);
+                      setEngineModel(preset?.recommendedOrchestratorModel);
+                    }}
+                  >
+                    {AGENT_PROVIDER_PRESETS.filter((p) => canReceiveInbox(p.id)).map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}{p.id === 'claude' ? ' ★' : ''}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    value={engineModel ?? ''}
+                    disabled={restarting === a.id}
+                    onChange={(v) => setEngineModel(v || undefined)}
+                  >
+                    {modelsForProvider(engineProvider).map((m) => (
+                      <option key={m.label} value={m.id ?? ''}>{m.label}</option>
+                    ))}
+                  </Select>
+                  <PixelButton
+                    variant="secondary"
+                    size="sm"
+                    disabled={restarting === a.id}
+                    onClick={async () => {
+                      const currentProvider = inferAgentProvider(a.command, a.provider);
+                      if (engineProvider !== currentProvider) {
+                        if (!window.confirm("This restarts BeeYoncé; a conversation on a different engine can't be resumed.")) return;
+                      }
+                      await window.cth.updateConfig({ overmindProvider: engineProvider, overmindModel: engineModel });
+                      await restartWithModel(a, engineModel, { provider: engineProvider, resume: false });
+                    }}
+                  >
+                    {restarting === a.id ? 'restarting…' : 'apply'}
+                  </PixelButton>
+                  {/* Redraw a garbled terminal without losing the thread (resume the
+                      SAME engine+model). Kept here since the god has no per-agent row above. */}
+                  <PixelButton
+                    variant="secondary"
+                    size="sm"
+                    disabled={restarting === a.id}
+                    onClick={() => restartWithModel(a, a.model, { resume: true })}
+                  >
+                    <span title="Kill and respawn BeeYoncé, resuming the current conversation — fixes a corrupted/garbled terminal without losing context">
+                      restart &amp; continue
+                    </span>
+                  </PixelButton>
+                  {/* Respawn — the escape hatch for a quota-locked or wedged Overmind:
+                      archive this session and start a clean one that resumes from
+                      memory.md (does NOT continue the current conversation). Prominent
+                      here because it is the primary recovery action for the god. */}
+                  <PixelButton
+                    variant="primary"
+                    size="sm"
+                    disabled={restarting === a.id}
+                    onClick={() => respawn(a)}
+                  >
+                    <span title="Archive BeeYoncé's current session and spawn a fresh one that resumes from memory.md — use when the session is quota-locked or stuck">
+                      ↺ respawn
+                    </span>
+                  </PixelButton>
+                </div>
+              )}
+            </AgentRosterItem>
           );
         })}
         {/* Fleet summary band */}

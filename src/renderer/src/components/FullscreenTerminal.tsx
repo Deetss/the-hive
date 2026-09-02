@@ -23,6 +23,7 @@ import { GitTab } from './GitTab';
 import { FilesTab } from './FilesTab';
 import { useAppTheme, toggleAppTheme } from '@/design/theme';
 import { UpdateBadge } from './UpdateBadge';
+import { AgentRosterItem } from './AgentRosterItem';
 import { inferAgentProvider, providerPreset, type HarnessConfig } from '@/store/config';
 
 /** Roster rail width. A fixed 232px is right on a 14" laptop but reads as a
@@ -193,6 +194,17 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
       const next: Record<string, boolean> = {};
       for (const [id, v] of Object.entries(data)) if (v?.quotaLimited) next[id] = true;
       setQuotaById(next);
+    });
+  }, []);
+  const [needsInputById, setNeedsInputById] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!window.cth.onAgentNeedsInput) return;
+    return window.cth.onAgentNeedsInput(({ agentId, prompt }) => {
+      setNeedsInputById((prev) => {
+        if (prompt) return { ...prev, [agentId]: prompt };
+        if (!(agentId in prev)) return prev;
+        const next = { ...prev }; delete next[agentId]; return next;
+      });
     });
   }, []);
   const profileNameById = useMemo(() => {
@@ -474,6 +486,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                   drag={drag}
                   scale={scale}
                   quotaLimited={quotaById[a.id]}
+                  needsInput={needsInputById[a.id]}
                   profileLabel={a.profileId ? profileNameById[a.profileId] : undefined}
                 />
               </div>
@@ -513,6 +526,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                     drag={drag}
                     scale={scale}
                     quotaLimited={quotaById[a.id]}
+                    needsInput={needsInputById[a.id]}
                     profileLabel={a.profileId ? profileNameById[a.profileId] : undefined}
                   />
                 ))}
@@ -679,29 +693,6 @@ function shortModel(model?: string): string | null {
     .trim();
 }
 
-/** Context fullness as a 3px rail. Colour tracks pressure rather than identity —
- *  an agent at 85% is about to compact, and that matters more than its accent. */
-function ContextBar({ tokens, limit, accent }: { tokens?: number; limit?: number; accent: string }) {
-  if (tokens === undefined || !limit) return null;
-  const pct = Math.max(0, Math.min(100, Math.round((tokens / limit) * 100)));
-  const color = pct >= 85 ? 'var(--cth-coral)' : pct >= 65 ? 'var(--cth-lemon)' : `var(--cth-${accent})`;
-  const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
-  return (
-    <div
-      title={`Context: ${k(tokens)} / ${k(limit)} tokens (${pct}%)`}
-      style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}
-    >
-      <span style={{
-        flex: 1, minWidth: 0, height: 3,
-        background: 'var(--cth-ink-100)', overflow: 'hidden'
-      }}>
-        <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: color }} />
-      </span>
-      <span style={{ flexShrink: 0, fontSize: 13, color: 'var(--cth-ink-500)' }}>{pct}%</span>
-    </div>
-  );
-}
-
 function SidebarRow({
   agent,
   active,
@@ -710,7 +701,8 @@ function SidebarRow({
   drag,
   scale,
   quotaLimited,
-  profileLabel
+  profileLabel,
+  needsInput
 }: {
   agent: Agent;
   active: boolean;
@@ -718,394 +710,23 @@ function SidebarRow({
   onNoteChange: (note: string) => void;
   drag: RowDrag;
   scale: ReturnType<typeof rosterScale>;
-  /** Parity with AgentCard: agent hit provider quota/rate limit. */
   quotaLimited?: boolean;
-  /** Parity with AgentCard: resolved runtime-profile name (from profileId). */
   profileLabel?: string;
+  needsInput?: string;
 }) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const noteRef = useRef<HTMLDivElement>(null);
-  const [notePosition, setNotePosition] = useState<{ left: number; top: number } | null>(null);
-
-  // The editor rides the terminal's zoom, capped — it's a short note, not a
-  // reading pane, and following the terminal all the way up turned it into a
-  // banner wider than the roster itself.
-  const noteFontSize = Math.min(useTerminalFontSize(), 14);
-  const noteLabelSize = Math.max(8, Math.round(noteFontSize * 0.6));
-  const noteWidth = Math.min(300, Math.round(noteFontSize * 20));
-  const noteHeight = Math.round(noteFontSize * 9);
-  // Total popover height, used only to keep it on screen near the bottom edge:
-  // the note textarea plus its label, the hint and the padding.
-  const popoverHeight = noteHeight + noteLabelSize * 2 + 40;
-
-  // One line of the note = one bullet on the row.
-  const bullets = (agent.note ?? '').split('\n').map(s => s.trim()).filter(Boolean);
-
-  const typing = useHasTerminalDraft(agent.ptyId);
-
-  // Parity with the floor roster (AgentCard): the identity row carries the same
-  // chips, badge derivation, and respawn control — the two rosters must agree on
-  // what they say about an agent.
-  const prov = inferAgentProvider(agent.command, agent.provider);
-  const isNonClaude = prov !== 'claude';
-  const preset = providerPreset(prov);
-  // #5C: a compacting agent reads as 'working' in the store until PostCompact —
-  // recover it here from the action text, exactly as AgentCard does.
-  const compacting = agent.status === 'compacting'
-    || ((agent.status === 'working' || agent.status === 'thinking') && /compact/i.test(agent.action ?? ''));
-  const badgeStatus: StatusKind = typing ? 'typing' : compacting ? 'compacting' : agent.status;
-  // Idle-with-no-activity past 2h = a reaping candidate; same threshold + label
-  // as AgentCard (which reads telemetry ts; the store's recentTextTs is the
-  // roster-local stand-in so no telemetry hook is needed here).
-  const IDLE_STALE_MS = 2 * 60 * 60 * 1000;
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
-  const idleMs = agent.status === 'idle' && !agent.isOvermind && agent.recentTextTs
-    ? Math.max(0, nowMs - agent.recentTextTs) : 0;
-  const idleStaleLabel = idleMs >= IDLE_STALE_MS ? `idle ${Math.floor(idleMs / 3_600_000)}h` : null;
-
-  const doRespawn = async () => {
-    if (!window.confirm(`Respawn ${agent.name}? This will archive the current session and start a fresh one. It will resume from memory.md.`)) return;
-    try {
-      const r = await window.cth.respawnAgent(agent.id);
-      if (r && !r.ok) console.error('[respawn] failed:', r.error);
-    } catch (e) {
-      console.error('[respawn] error:', e);
-    }
-  };
-
-  /** The ✎ button opens the editor beside the row — the bullets on the row are
-   *  the summary, this is where you write them. EXPLICIT open only (v0.3.4):
-   *  hovering the roster no longer pops editors under the pointer. */
-  const toggleEditor = () => {
-    if (notePosition) { setNotePosition(null); return; }
-    // An editor popping up mid-drag just gets in the way.
-    if (drag.dragId) return;
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    // The roster is a left rail, so the editor opens to the RIGHT of its row.
-    // Clamp so rows near an edge stay fully on screen.
-    setNotePosition({
-      left: Math.min(rect.right + 6, window.innerWidth - noteWidth - 8),
-      top: Math.max(8, Math.min(rect.top, window.innerHeight - popoverHeight - 8))
-    });
-  };
-
   return (
-    <>
-      <button
-        ref={buttonRef}
-        draggable
-        onDragStart={(e) => { drag.start(agent.id); e.dataTransfer.effectAllowed = 'move'; }}
-        onDragOver={(e) => {
-          if (!drag.dragId || drag.dragId === agent.id) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-          drag.over(agent.id);
-        }}
-        onDragLeave={() => drag.leave(agent.id)}
-        onDrop={(e) => { e.preventDefault(); drag.drop(agent.id); }}
-        onDragEnd={drag.end}
-        onClick={onClick}
-        aria-label={`${agent.name} · ${agent.project}`}
-        aria-current={active ? 'true' : undefined}
-        style={{
-          width: '100%',
-          padding: '6px 8px',
-          background: active ? 'var(--cth-cream-100)' : 'transparent',
-          border: 'none',
-          boxShadow: active
-            ? 'inset 3px 0 0 var(--cth-ink-900), inset 0 0 0 1px var(--cth-ink-100)'
-            // Insertion cue on the hovered drop target.
-            : drag.overId === agent.id && drag.dragId && drag.dragId !== agent.id
-            ? 'inset 0 2px 0 var(--cth-ink-900)'
-            : 'none',
-          opacity: drag.dragId === agent.id ? 0.4 : 1,
-          display: 'flex', alignItems: 'flex-start', gap: 8,
-          cursor: drag.dragId ? 'grabbing' : 'grab',
-          position: 'relative',
-          textAlign: 'left',
-          fontFamily: 'var(--cth-font-ui)', fontSize: 13,
-          color: 'var(--cth-ink-900)',
-          transition: 'opacity 120ms ease'
-        }}
-      >
-        <div style={{
-          width: scale.portrait, height: Math.round(scale.portrait * 1.3), flexShrink: 0,
-          background: `var(--cth-${agent.accent}-light)`,
-          boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-          // Anchor the sprite's TOP: the portrait is taller than this tile, and
-          // bottom-anchoring cropped the head — crop feet, not face (v0.3.4).
-          display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-          overflow: 'hidden'
-        }}>
-          {/* The sprite is drawn at exactly the tile's width, so the figure
-              grows with the tile instead of floating in it. */}
-          <SpritePortrait character={agent.character} scale={scale.portraitScale} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span style={{
-              flex: 1, minWidth: 0,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              fontFamily: 'var(--cth-font-ui)',
-              fontSize: scale.name, lineHeight: 1.5
-            }}>{agent.name.toUpperCase()}</span>
-            {agent.isOvermind && (
-              <span style={{
-                flexShrink: 0,
-                fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
-                background: `var(--cth-${agent.accent})`, color: 'var(--cth-ink-900)',
-                padding: '1px 4px 0'
-              }}>BOSS</span>
-            )}
-            {isNonClaude && (
-              <span title={`Engine: ${preset.label}`} style={{
-                flexShrink: 0,
-                fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '11px',
-                background: 'var(--cth-sky-light)', color: 'var(--cth-ink-900)',
-                boxShadow: 'inset 0 0 0 1px var(--cth-sky)',
-                padding: '1px 4px 0', textTransform: 'uppercase', fontWeight: 600
-              }}>{prov === 'antigravity' ? 'AGY' : preset.label}</span>
-            )}
-            {/* Your unsent text outranks the agent's own state here: an idle
-                agent with a draft on its prompt is not idle-and-free, it is
-                idle-and-held, and nothing else on screen said so. */}
-            <PixelBadge status={badgeStatus} />
-            {quotaLimited && (
-              <span title="Hit provider quota / rate limit — re-route or respawn on another profile" style={{
-                flexShrink: 0,
-                fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
-                padding: '1px 4px 0', textTransform: 'uppercase', fontWeight: 600,
-                background: 'var(--cth-coral)', color: 'var(--cth-paper-100)',
-                boxShadow: 'inset 0 0 0 1px var(--cth-ink-700)'
-              }}>⊘ quota</span>
-            )}
-            {idleStaleLabel && (
-              <span title={`Idle with no active task for ${idleStaleLabel.replace('idle ', '')} — reaping candidate (send home to save tokens)`} style={{
-                flexShrink: 0,
-                fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
-                padding: '1px 4px 0', textTransform: 'uppercase',
-                background: 'var(--cth-coral-light)', color: 'var(--cth-ink-900)',
-                boxShadow: 'inset 0 0 0 1px var(--cth-coral)'
-              }}>{idleStaleLabel}</span>
-            )}
-            {agent.onHold && (
-              <span title="Human has this agent 1:1 — floor automation paused" style={{
-                flexShrink: 0,
-                fontFamily: 'var(--cth-font-ui)', fontSize: 7, lineHeight: '11px',
-                padding: '1px 4px 0',
-                background: 'var(--cth-lemon)', color: 'var(--cth-ink-900)',
-                boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
-              }}>1:1</span>
-            )}
-            {/* Respawn — parity with AgentCard's ↺. A span, not a <button>:
-                we're inside the row's button element. */}
-            {!agent.isOvermind && (
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => { e.stopPropagation(); void doRespawn(); }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); void doRespawn(); }
-                }}
-                title={`Respawn ${agent.name} (archive session & start fresh from memory.md)`}
-                aria-label={`Respawn ${agent.name}`}
-                style={{
-                  flexShrink: 0, width: 20, height: 20,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 13, lineHeight: 1, color: 'var(--cth-ink-500)',
-                  background: 'var(--cth-paper-100)',
-                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                  cursor: 'pointer'
-                }}
-              >↺</span>
-            )}
-            {/* Explicit note edit — a real control instead of a hover surprise.
-                A span, not a <button>: we're inside the row's button element. */}
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => { e.stopPropagation(); toggleEditor(); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); toggleEditor(); }
-              }}
-              title={agent.note ? 'Edit private note' : 'Add private note'}
-              aria-label={`Edit note for ${agent.name}`}
-              style={{
-                flexShrink: 0, width: 20, height: 20,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, lineHeight: 1, color: 'var(--cth-ink-500)',
-                background: notePosition ? 'var(--cth-cream-200)' : 'var(--cth-paper-100)',
-                boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-                cursor: 'pointer'
-              }}
-            >✎</span>
-          </div>
-          {/* WHAT this agent is, at a glance: account · engine/model · repo.
-              The profile chip mirrors AgentCard so both rosters name the account
-              each agent runs under. */}
-          {(() => {
-            const isClaude = !isNonClaude;
-            const modelLabel = agent.model ? shortModel(agent.model) : (isClaude ? 'CLI default' : preset.label);
-            const engineTooltip = agent.model
-              ? `Model: ${agent.model} (${preset.label})`
-              : (isClaude ? 'Runs the CLI default model' : `Engine: ${preset.label}`);
-            return (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
-                fontSize: Math.max(11, scale.name - 2), lineHeight: 1.4,
-                color: 'var(--cth-ink-500)'
-              }}>
-                {profileLabel && (
-                  <span title={`Profile: ${profileLabel}`} style={{
-                    flexShrink: 0, maxWidth: '46%',
-                    fontFamily: 'var(--cth-font-ui)', fontSize: 8, lineHeight: '11px',
-                    padding: '1px 4px 0', textTransform: 'uppercase', fontWeight: 600,
-                    background: 'var(--cth-sky-light)', color: 'var(--cth-ink-900)',
-                    boxShadow: 'inset 0 0 0 1px var(--cth-sky)',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                  }}>{profileLabel}</span>
-                )}
-                <span style={{
-                  flexShrink: 0, maxWidth: '52%',
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  color: !isClaude ? 'var(--cth-ink-700)' : undefined,
-                  fontWeight: !isClaude ? 500 : undefined
-                }} title={engineTooltip}>
-                  {modelLabel}
-                </span>
-                <span style={{ flexShrink: 0, opacity: 0.5 }}>·</span>
-                <span style={{
-                  flex: 1, minWidth: 0,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                }} title={agent.worktreePath || agent.cwd}>
-                  {basename(agent.worktreePath || agent.cwd) || agent.project}
-                </span>
-              </div>
-            );
-          })()}
-          {/* Live activity: current tool/command from the pty stream. Quieter
-              than the animated office — just the text, no motion. Only shown
-              while the agent is actively doing something. */}
-          {(agent.status === 'working' || agent.status === 'thinking') && agent.action && (
-            <span
-              title={agent.action}
-              style={{
-                fontFamily: 'var(--cth-font-ui)',
-                fontSize: Math.max(8, scale.name - 4), lineHeight: 1.35,
-                color: 'var(--cth-ink-400, var(--cth-ink-500))',
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                minWidth: 0
-              }}
-            >
-              {agent.action}
-            </span>
-          )}
-          <ContextBar tokens={agent.contextTokens} limit={agent.contextLimit} accent={agent.accent} />
-          {/* Every line of every agent, always on screen — the roster's job is
-              to answer "who is on what" without a single interaction. */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {bullets.map((line, i) => (
-              <span
-                key={i}
-                title={line}
-                style={{
-                  display: 'flex', gap: 5, alignItems: 'baseline',
-                  fontSize: scale.note, lineHeight: 1.35,
-                  color: 'var(--cth-ink-500)'
-                }}
-              >
-                <span style={{ flexShrink: 0, color: 'var(--cth-ink-300)' }}>•</span>
-                {/* Exactly one line per bullet — a wrapping row would make the
-                    roster's height jump around as notes are typed. The full
-                    text is on hover (title, and the editor beside it). */}
-                <span style={{
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                }}>{line}</span>
-              </span>
-            ))}
-            {bullets.length === 0 && (
-              <span style={{
-                fontSize: scale.note, lineHeight: 1.35,
-                color: 'var(--cth-ink-300)', fontStyle: 'italic'
-              }}>no note</span>
-            )}
-          </div>
-        </div>
-      </button>
-      {notePosition && createPortal(
-        <>
-        {/* click-away backdrop — the editor stays until dismissed on purpose */}
-        <div
-          onClick={() => setNotePosition(null)}
-          style={{ position: 'fixed', inset: 0, zIndex: 449, background: 'transparent' }}
-        />
-        <div
-          ref={noteRef}
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            position: 'fixed',
-            left: notePosition.left,
-            top: notePosition.top,
-            width: noteWidth,
-            zIndex: 450,
-            padding: 8,
-            background: 'var(--cth-paper-100)',
-            boxShadow: 'inset 0 0 0 1.5px var(--cth-ink-500), 4px 4px 0 rgba(26,19,32,0.25)',
-            boxSizing: 'border-box'
-          }}
-        >
-          <div style={{
-            marginBottom: 6,
-            fontFamily: 'var(--cth-font-ui)',
-            fontSize: noteLabelSize,
-            lineHeight: `${Math.round(noteLabelSize * 1.5)}px`,
-            color: 'var(--cth-ink-700)'
-          }}>PRIVATE NOTE</div>
-          {/* A textarea, not an input: the note is a bullet list, so Enter has
-              to make a new line rather than doing nothing. autoFocus is safe
-              now that opening is an explicit click, not a pointer fly-by. */}
-          <textarea
-            autoFocus
-            value={agent.note ?? ''}
-            onChange={(e) => onNoteChange(e.target.value)}
-            onKeyDown={(e) => {
-              e.stopPropagation(); // don't let Esc/typing reach the fullscreen handler
-              if (e.key === 'Escape') {
-                setNotePosition(null);
-                buttonRef.current?.focus();
-              }
-            }}
-            placeholder="one line per bullet…"
-            aria-label={`Note for ${agent.name}`}
-            style={{
-              width: '100%',
-              height: noteHeight,
-              padding: '5px 7px',
-              border: 'none',
-              outline: 'none',
-              resize: 'vertical',
-              boxSizing: 'border-box',
-              background: 'var(--cth-cream-100)',
-              boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-              fontFamily: 'var(--cth-font-ui)',
-              fontSize: noteFontSize,
-              lineHeight: `${Math.round(noteFontSize * 1.6)}px`,
-              color: 'var(--cth-ink-900)'
-            }}
-          />
-          <div style={{
-            marginTop: 5, fontSize: 13, color: 'var(--cth-ink-500)'
-          }}>one line = one bullet · esc to close</div>
-        </div>
-        </>,
-        document.body
-      )}
-    </>
+    <AgentRosterItem
+      variant="rail"
+      agent={agent}
+      active={active}
+      onClick={onClick}
+      onNoteChange={onNoteChange}
+      drag={drag}
+      scale={scale}
+      quotaLimited={quotaLimited}
+      profileLabel={profileLabel}
+      needsInput={needsInput}
+    />
   );
 }
 

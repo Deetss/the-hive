@@ -245,6 +245,9 @@ const configFixture = {
 const TARGETS = [
   { name: 'PixelBadge', entry: 'src/renderer/src/components/PixelBadge.tsx', export: 'PixelBadge', props: { status: 'compacting' }, render: true },
   { name: 'PixelButton', entry: 'src/renderer/src/components/PixelButton.tsx', export: 'PixelButton', props: { children: 'ok' }, render: true },
+  { name: 'AgentRosterItem', entry: 'src/renderer/src/components/AgentRosterItem.tsx', export: 'AgentRosterItem', props: { agent: agentFixture, variant: 'card' }, render: true },
+  { name: 'AgentCard', entry: 'src/renderer/src/components/AgentCard.tsx', export: 'AgentCard', props: { name: 'Smoke', character: 'michael', accent: 'lemon', status: 'idle', project: 'TheHive' }, render: true },
+  { name: 'RosterList', entry: 'src/renderer/src/components/RosterList.tsx', export: 'RosterList', props: { agents: [agentFixture] }, render: true },
   { name: 'TasksKanban', entry: 'src/renderer/src/components/TasksKanban.tsx', export: 'TasksKanban', props: {}, render: true },
   { name: 'SettingsModal', entry: 'src/renderer/src/components/SettingsModal.tsx', export: 'SettingsModal', props: { config: configFixture, onClose() {} }, render: false },
   { name: 'CommandCenterPanel', entry: 'src/renderer/src/components/CommandCenterPanel.tsx', export: 'CommandCenterPanel', props: { agent: agentFixture }, render: false }
