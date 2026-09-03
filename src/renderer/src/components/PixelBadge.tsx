@@ -63,24 +63,30 @@ export function PixelBadge({ status, label, style }: PixelBadgeProps) {
         // Same reason as PixelButton: a status chip that shrinks spills its text
         // under the controls beside it instead of holding its own width.
         flexShrink: 0,
-        gap: 6,
-        padding: '2px 8px 0',
-        background: 'var(--cth-cream-100)',
-        boxShadow: `inset 0 0 0 1px ${colorByStatus[status]}`,
+        gap: 5,
+        padding: '1px 8px 1px 6px',
+        // Fully rounded + a soft tinted fill + no box-shadow border: PixelButton
+        // is always sharp-cornered with an inset-border/drop-shadow pair, which
+        // is what read as "pressable" here. A pill with none of that geometry
+        // can't be mistaken for a control.
+        borderRadius: 999,
+        background: `color-mix(in srgb, ${colorByStatus[status]} 16%, transparent)`,
+        boxShadow: 'none',
         fontFamily: 'var(--cth-font-ui)',
-        fontSize: 'var(--cth-text-body-sm)',
-        lineHeight: '18px',
-        color: 'var(--cth-ink-900)',
+        fontSize: '11px',
+        lineHeight: '16px',
+        color: 'var(--cth-ink-500)',
         userSelect: 'none',
         ...style
       }}
     >
       <span
         style={{
-          width: 8,
-          height: 8,
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
           background: colorByStatus[status],
-          boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
+          flexShrink: 0
         }}
       />
       {text}
