@@ -337,6 +337,16 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
   const zoom = (delta: number) => setTerminalFontSize(getTerminalFontSize() + delta);
   const resetZoom = () => setTerminalFontSize(DEFAULT_FONT_SIZE);
 
+  // Re-attach to an already-live pty whose pane failed to paint, without
+  // touching the process: no kill, no token reset, no spawn-request. This is
+  // the view actually on screen for this pty, so the reflow always has a real,
+  // connected host to fit against (unlike a reconnect fired from the roster
+  // list, which may target a pty nobody is currently looking at).
+  const doReconnect = () => {
+    void window.cth.redrawPty(ptyId);
+    reflowTerminal(ptyId);
+  };
+
   // Keyboard zoom: Cmd/Ctrl + '=' / '-' / '0'
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -382,6 +392,12 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
           {/* v0.3.4: the theme + enter-fullscreen buttons moved to the TITLE BAR
               (top right) — more accessible, and the theme now darkens the whole
               app. Only the EXIT affordance stays here, in fullscreen. */}
+          <button
+            onClick={doReconnect}
+            title="Reconnect terminal (re-attach without restarting the agent)"
+            aria-label="Reconnect terminal"
+            style={{ ...zoomBtnStyle, width: 'auto', padding: '0 4px', marginRight: 4 }}
+          >⟲</button>
           <button
             onClick={() => zoom(-1)}
             disabled={fontSize <= MIN_FONT_SIZE}

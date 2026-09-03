@@ -5772,7 +5772,12 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
     const dir = spawnRequestsDir();
     if (!dir) return { ok: false, error: 'spawn-requests dir unavailable' };
     mkdirSync(dir, { recursive: true });
-    const reqId = `respawn-${id}-${Date.now().toString(36)}`;
+    // `id` may already be a PRIOR respawn's workerId (worker-respawn-<base>-<ts>,
+    // built below from this very reqId): strip it first so repeated respawns
+    // cap at one 'worker-respawn-' level instead of compounding into
+    // worker-respawn-worker-respawn-....
+    const baseId = id.replace(/^(?:worker-respawn-)+/, '');
+    const reqId = `respawn-${baseId}-${Date.now().toString(36)}`;
     const objective = `You are a respawn of ${entry.name || id}. First read your prior session's memory at ${memPath}, then resume that work where the previous session left off.${entry.role ? ` Role: ${entry.role}.` : ''}`;
     const req: SpawnRequest = {
       id: reqId,
@@ -5789,6 +5794,7 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
     };
     const reqFile = join(dir, `${reqId}.json`);
     writeFileSync(reqFile, JSON.stringify(req, null, 2), 'utf8');
+    console.log(`[respawn] worker ${id} -> worker-${reqId}: tokenCap=${entry.tokenCap ?? '(none - uncapped)'}`);
     void processSpawnRequest(reqFile).catch((e) => console.error('[respawn] processSpawnRequest failed:', e));
     return { ok: true };
   } catch (e) {

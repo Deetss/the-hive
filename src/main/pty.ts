@@ -780,13 +780,19 @@ export class PtyManager {
   }
 
   /** Ask the foreground TUI for a fresh frame without changing its geometry.
-   *  Startup output may predate the renderer subscription, and a same-sized
-   *  first fit otherwise emits no resize. */
+   *  A resize to the SAME size is a no-op on Windows ConPTY: it never raises a
+   *  WINDOW_BUFFER_SIZE_EVENT, so nothing tells the child to repaint and the
+   *  pane stays blank (this is what made the reconnect button do nothing).
+   *  Shrink by a row then resize back: the two REAL size changes each raise
+   *  the event and the child's own resize handler repaints the full screen. */
   redraw(id: string): { ok: boolean; error?: string } {
     const s = this.sessions.get(id);
     if (!s) return { ok: false, error: `no pty: ${id}` };
     try {
-      s.proc.resize(s.proc.cols, s.proc.rows);
+      const { cols, rows } = s.proc;
+      const nudgedRows = rows > 1 ? rows - 1 : rows + 1;
+      s.proc.resize(cols, nudgedRows);
+      s.proc.resize(cols, rows);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
