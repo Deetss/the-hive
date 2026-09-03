@@ -103,7 +103,15 @@ const MAIL_LANES = { mid: 186, front: 266 };
 /** The human has no desk to walk an envelope from, so a message they dispatch
  *  flies in from off the right edge instead of running mailroom leg 1. */
 const HUMAN_ENVELOPE_FROM: [number, number] = [W + 24, MAIL_STATION.stand[1]];
+/** Flight target is the mailbox's own center, not the bee `stand` spot beside
+ *  it — the stand sits outside the box (see MAIL_STATION comment above), so
+ *  aiming there made the envelope overshoot past the box. */
+const MAIL_STATION_CENTER: [number, number] = [
+  MAIL_STATION.x + MAIL_STATION.w / 2,
+  MAIL_STATION.y + MAIL_STATION.h / 2
+];
 const HUMAN_ENVELOPE_DURATION = 0.5;
+const HUMAN_ENVELOPE_LAND_DURATION = 0.25;
 const COSTUME_POOL: Costume[] = ['hardhat', 'headset', 'labcoat', 'visor', 'hivis', 'chefhat'];
 
 function mapAgentStatus(status: Agent['status']): BeeStatus {
@@ -194,8 +202,10 @@ interface SceneState {
   mailAgents: Record<string, MailAgentCfg>;
   /** Off-screen envelope flights queued by human dispatches; only the head
    *  entry animates, the rest wait their turn before joining the mailroom
-   *  station box for the normal courier leg. */
-  humanMail: Array<{ t: number; to: string }>;
+   *  station box for the normal courier leg. `landed` flips once it reaches
+   *  the mailbox center, while the entry lingers a bit longer to play the
+   *  shrink-and-slide-in before being dequeued. */
+  humanMail: Array<{ t: number; to: string; landed: boolean }>;
   motes: Mote[];
   drips: Array<{ x: number; y: number }>;
   fillStep: number;
@@ -440,9 +450,12 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
   if (scene.humanMail.length) {
     const head = scene.humanMail[0];
     head.t += dt;
-    if (head.t >= HUMAN_ENVELOPE_DURATION) {
-      scene.humanMail.shift();
+    if (!head.landed && head.t >= HUMAN_ENVELOPE_DURATION) {
+      head.landed = true;
       scene.mail?.box.push({ from: 'human', to: head.to, label: null });
+    }
+    if (head.t >= HUMAN_ENVELOPE_DURATION + HUMAN_ENVELOPE_LAND_DURATION) {
+      scene.humanMail.shift();
     }
   }
   scene.mail?.step(dt);
@@ -518,11 +531,25 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
 
   scene.mail?.drawStation(x, f);
   if (scene.humanMail.length) {
-    const progress = Math.min(1, scene.humanMail[0].t / HUMAN_ENVELOPE_DURATION);
-    const ease = 1 - (1 - progress) * (1 - progress);
-    const ex = HUMAN_ENVELOPE_FROM[0] + (MAIL_STATION.stand[0] - HUMAN_ENVELOPE_FROM[0]) * ease;
-    const ey = HUMAN_ENVELOPE_FROM[1] + (MAIL_STATION.stand[1] - HUMAN_ENVELOPE_FROM[1]) * ease;
-    A.drawEnvelope(x, ex, ey, false);
+    const head = scene.humanMail[0];
+    if (!head.landed) {
+      const progress = Math.min(1, head.t / HUMAN_ENVELOPE_DURATION);
+      const ease = 1 - (1 - progress) * (1 - progress);
+      const ex = HUMAN_ENVELOPE_FROM[0] + (MAIL_STATION_CENTER[0] - HUMAN_ENVELOPE_FROM[0]) * ease;
+      const ey = HUMAN_ENVELOPE_FROM[1] + (MAIL_STATION_CENTER[1] - HUMAN_ENVELOPE_FROM[1]) * ease;
+      A.drawEnvelope(x, ex, ey, false);
+    } else {
+      const landProgress = Math.min(1, (head.t - HUMAN_ENVELOPE_DURATION) / HUMAN_ENVELOPE_LAND_DURATION);
+      const scale = 1 - landProgress * 0.6;
+      const [cx, cy] = MAIL_STATION_CENTER;
+      const ey = cy + landProgress * (MAIL_STATION.h / 2);
+      x.save();
+      x.globalAlpha = 1 - landProgress;
+      x.translate(cx, ey);
+      x.scale(scale, scale);
+      A.drawEnvelope(x, -6, -4.5, false);
+      x.restore();
+    }
   }
   scene.mail?.drawWalkers(x, f);
 
@@ -606,7 +633,7 @@ export function HiveScene(): React.JSX.Element {
       if (!from || !to || from === to) return;
       if (from === 'human') {
         if (!scene.mailAgents[to] || !scene.mail) return;
-        scene.humanMail.push({ t: 0, to });
+        scene.humanMail.push({ t: 0, to, landed: false });
         return;
       }
       if (!scene.mailAgents[from] || !scene.mailAgents[to]) return;
