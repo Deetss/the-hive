@@ -7030,21 +7030,31 @@ ipcMain.handle('tasks:chatHumanQA', async (_evt, taskId: unknown, question: unkn
 
   if (res.assignee) {
     try {
+      const godId = hive.registry().godId ?? 'god';
+      const assigneeEntry = hive.registry().agents[res.assignee];
+      const isAssigneeLive = liveWorkers.has(res.assignee) || (!!assigneeEntry && !assigneeEntry.archived);
+      const target = isAssigneeLive ? res.assignee : godId;
       const title = res.title ?? taskId;
       hive.send({
-        to: res.assignee,
+        to: target,
         act: 'inform',
         subject: `Chat on your ASK ME item — ${title}`,
         body: `The human is chatting about your ASK ME item on "${title}":\n\n${body}\n\n`
           + `Reply by dropping a JSON file in your outbox: `
           + `{"act":"humanQA-chat","taskId":"${taskId}","question":${JSON.stringify(question)},"text":"<your reply>"}`
       }, 'human');
+      const ptyId = ptyForAgent(target);
+      if (ptyId) {
+        nudgeWorker(ptyId, hive.inbox(target));
+      }
     } catch (e) {
       console.error('[humanQA] chat notify to assignee failed:', e);
     }
   }
 
   broadcastHumanQAChanged();
+  liveWebContents()?.send('hive:tasksChanged');
+  broadcastBrowserEvent('hive:tasksChanged', []);
   return { ok: true };
 });
 
