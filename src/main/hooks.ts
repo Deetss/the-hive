@@ -456,18 +456,33 @@ export class HookServer {
       };
     }
 
-    // A Notification hook that means "the agent is blocked waiting for the user"
-    // (idle prompt) deserves a desktop toast too — distinct from a permission
-    // request, which surfaces natively in the agent's own Claude Code session
-    // (approvable remotely via /remote-control).
-    if (
-      event === 'Notification' &&
-      (p.notification_type === 'idle' ||
-        (p.message ?? '').toLowerCase().includes('waiting for your input'))
-    ) {
-      const name = this.getAgentName(agentId);
-      const msg = (p.message ?? '').trim() || 'Waiting for your input';
-      this.notify(name, msg);
+    if (event === 'Notification') {
+      const lower = (p.message ?? '').toLowerCase();
+      const isPermission = p.notification_type === 'permission_prompt' ||
+        lower.includes('permission') ||
+        lower.includes('approve') ||
+        lower.includes('confirm') ||
+        lower.includes('allow');
+      const isIdle = p.notification_type === 'idle' || lower.includes('waiting for your input');
+
+      if (agentId && (isPermission || isIdle)) {
+        const promptLabel = p.message?.trim() || (isPermission ? 'Tool permission required' : 'Waiting for your input');
+        try {
+          this.getWebContents()?.send('agent:needsInput', { agentId, prompt: promptLabel });
+        } catch { /* ignore */ }
+      }
+
+      if (isIdle || isPermission) {
+        const name = this.getAgentName(agentId);
+        const msg = (p.message ?? '').trim() || (isPermission ? 'Tool permission required' : 'Waiting for your input');
+        this.notify(name, msg);
+      }
+    }
+
+    if ((event === 'UserPromptSubmit' || event === 'PostToolUse' || event === 'SessionStart') && agentId) {
+      try {
+        this.getWebContents()?.send('agent:needsInput', { agentId, prompt: null });
+      } catch { /* ignore */ }
     }
 
     // Forward everything else to the renderer so avatars reflect real activity.

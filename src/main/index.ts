@@ -2231,13 +2231,23 @@ const INTERACTIVE_PROMPT_SIGNATURES: RegExp[] = [
   /do you trust the (files|contents|authors)/i,
   /trust (this|the) (workspace|folder|directory)/i,
   /\(y\/n\)/i,
+  /\[y\/n\]/i,
+  /\(y\/n\/[a-z]\)/i,
+  /\[y\/n\/[a-z]\]/i,
   /\byes,\s*(proceed|and)\b/i,
-  /^\s*1\.\s*yes\b/im,
+  /^\s*1\.\s*(yes|allow|proceed)\b/im,
+  /❯\s*\d+\.\s*(yes|allow|proceed)/i,
+  /allow\s+([a-z0-9_-]+)\s+to\s+run/i,
+  /allow\s+this\s+(command|tool)/i,
+  /allow\s+(once|always)\b/i,
+  /do\s+you\s+want\s+to\s+(run|execute|proceed|allow)/i,
+  /\b(y)es\b.*\b(n)o\b/i,
   /press\s+enter\s+to\s+(continue|confirm)/i,
   /continue\?\s*\[y\/n\]/i,
   /\bsign in to\b/i,
   /paste (the|your) (code|url|token|key)/i,
-  /https?:\/\/\S*(oauth|\/auth|login|callback|authorize)/i
+  /https?:\/\/\S*(oauth|\/auth|login|callback|authorize)/i,
+  /permission\s+(required|needed|denied|prompt)/i
 ];
 /** ms of output quiet before a matched signature is treated as a real "waiting"
  *  state (so a signature scrolling past mid-run doesn't false-fire). */

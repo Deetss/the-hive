@@ -28,10 +28,18 @@ const TOOLKIND_BY_NAME: Record<string, ToolKind> = {
 // repaint — making it flip-flop between working and blocked.
 const BLOCK_HINTS = [
   /Do you want to proceed/i,
-  /❯\s*\d+\.\s*Yes/i,            // numbered approval menu, cursor on "1. Yes"
+  /Do you want to (run|execute|proceed|allow)/i,
+  /Allow\s+([A-Za-z0-9_-]+)\s+to\s+run/i,
+  /Allow\s+this\s+(command|tool)/i,
+  /Allow\s+(once|always)\b/i,
+  /❯\s*\d+\.\s*(Yes|Allow|Proceed)/i,
+  /^\s*\d+\.\s*(Yes|Allow|Proceed)\b/im,
   /Yes, and don't ask again/i,
   /\(y\/n\)/i,
   /\[y\/n\]/i,
+  /\[y\/n\/[a-z]\]/i,
+  /\(y\/n\/[a-z]\)/i,
+  /\b(y)es\b.*\b(n)o\b/i,
 ];
 
 // Interactive terminal prompts that only a human can answer: codex trust dialogs,
@@ -39,9 +47,13 @@ const BLOCK_HINTS = [
 // sub-agent is stuck here the human needs to open the terminal and respond.
 const INTERACTIVE_PROMPT_HINTS = [
   /Press enter to confirm/i,
-  /Do you trust the contents of this directory/i,
+  /Do you trust the (contents|files|authors) of this directory/i,
+  /Do you trust the (files|contents|authors)/i,
+  /trust (this|the) (workspace|folder|directory)/i,
   /Set up the Codex agent sandbox/i,
   /continue\?.*\[y\/n\]/i,
+  /paste (the|your) (code|url|token|key)/i,
+  /https?:\/\/\S*(oauth|\/auth|login|callback|authorize)/i,
 ];
 
 // The /context output prints "235.3k/1m tokens (24%)" — sniff the DENOMINATOR
@@ -170,6 +182,8 @@ export function usePtyParser(agentId: string) {
     if (isBlocked) {
       const storeState = useStore.getState();
       const isOvermind = !!storeState.agents.find((a) => a.id === agentId)?.isOvermind;
+      const promptText = recent.trim().split('\n').filter(l => l.trim()).slice(-6).join('\n');
+      const agentName = storeState.agents.find((a) => a.id === agentId)?.name ?? agentId;
 
       if (isOvermind) {
         updateAgent(agentId, {
@@ -178,23 +192,28 @@ export function usePtyParser(agentId: string) {
           currentStation: 'mailbox',
           blockReason: {
             summary: 'Waiting for your reply',
-            detail: 'Claude is waiting for input. Check the terminal for the exact prompt.',
+            detail: promptText || 'Claude is waiting for input. Check the terminal for the exact prompt.',
             actions: [
               { label: 'Approve', kind: 'approve', send: 'y\r' },
               { label: 'Deny',    kind: 'deny',    send: 'n\r' }
             ]
           }
         });
-      } else if (isInteractive) {
-        // Sub-agent stuck on an interactive terminal prompt (codex trust dialog,
-        // sandbox setup, etc.) — only a human can answer it.
-        const promptText = recent.trim().split('\n').filter(l => l.trim()).slice(-6).join('\n');
-        const agentName = storeState.agents.find((a) => a.id === agentId)?.name ?? agentId;
-
+      } else {
+        // Worker agent stuck on an interactive terminal or tool permission prompt
         updateAgent(agentId, {
           status: 'prompt',
-          action: 'needs input',
-          blockReason: { kind: 'prompt', summary: 'Waiting for terminal input', detail: promptText, actions: [] }
+          action: isInteractive ? 'needs input' : 'needs permission',
+          currentStation: 'terminal',
+          blockReason: {
+            kind: isInteractive ? 'prompt' : 'circuit',
+            summary: isInteractive ? 'Waiting for terminal input' : 'Tool permission needed',
+            detail: promptText,
+            actions: [
+              { label: 'Approve (y)', kind: 'approve', send: 'y\r' },
+              { label: 'Deny (n)',    kind: 'deny',    send: 'n\r' }
+            ]
+          }
         });
 
         if (!promptBlockedRef.current) {
@@ -202,7 +221,7 @@ export function usePtyParser(agentId: string) {
           storeState.addHumanMessage({
             id: `prompt:${agentId}`,
             from: agentId,
-            subject: `${agentName} needs terminal input`,
+            subject: `${agentName} needs ${isInteractive ? 'terminal input' : 'tool approval'}`,
             body: promptText,
             act: 'prompt',
             arrivedAt: Date.now(),
@@ -210,17 +229,6 @@ export function usePtyParser(agentId: string) {
             replyDraft: '',
           });
         }
-      } else {
-        if (promptBlockedRef.current) {
-          promptBlockedRef.current = false;
-          useStore.getState().resolveHumanMessage(`prompt:${agentId}`);
-        }
-        updateAgent(agentId, {
-          status: 'waiting',
-          action: 'waiting on the Queen',
-          currentStation: 'desk',
-          blockReason: undefined
-        });
       }
       return;
     }
