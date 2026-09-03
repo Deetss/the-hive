@@ -94,7 +94,7 @@ import { RosterStore } from './roster';
 import { buildWorkerLaunch } from './workerLaunch';
 import { ControlRegistry } from './control';
 import { WorkerWakeWatchdog, type WorkerWakeFacts } from './workerWake';
-import { inboxNudgeText } from '../shared/hiveNudge';
+import { inboxNudgeText, type InboxMessageSummary } from '../shared/hiveNudge';
 import { fetchHireManifest, readHireManifestFiles } from './hire';
 import { parseHireDeepLink, type HireManifest } from '../shared/hire';
 import { ClosingTimeController } from './closingTime';
@@ -8528,7 +8528,7 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   // worker-wake watchdog stay as backstops.
   setTimeout(() => {
     if (!liveWorkers.has(workerId)) return;
-    const pending = hive.inbox(workerId).map((m) => m.id).filter(Boolean);
+    const pending = hive.inbox(workerId);
     if (!pending.length) return;
     try {
       liveWebContents()?.send('hive:enqueueToAgent', { targetId: workerId, text: inboxNudgeText(pending) });
@@ -9247,12 +9247,12 @@ function typeAndSubmit(ptyId: string, text: string): Promise<void> {
 
 /** Type the renderer's guarded nudge into one worker's PTY and submit it once
  *  the readline is ready. Best-effort + never throws. */
-function nudgeWorker(ptyId: string, ids: string[] = []): void {
+function nudgeWorker(ptyId: string, messages: InboxMessageSummary[] = []): void {
   // Same text the renderer queues (#187's inboxNudgeText), so the two wake paths
   // produce byte-identical nudges: the queue's one-pending rule recognises either
   // via isInboxNudge, and a watchdog nudge names its ids so the agent can still
   // tell "I filed this last turn" from "woken for nothing".
-  void typeAndSubmit(ptyId, inboxNudgeText(ids));
+  void typeAndSubmit(ptyId, inboxNudgeText(messages));
 }
 
 /** Main-process inbox-wake beat (issue #151, fix A): the renderer's idle nudge
@@ -9292,10 +9292,10 @@ function runWorkerWakeBeat(): void {
     // Re-read at delivery time, not from the facts snapshot: the agent may have
     // drained the mail during the beat, and a nudge naming ids it already filed
     // is the exact staleness #187 exists to stop.
-    const ids = hive.inbox(agentId).map((m) => m.id).filter(Boolean);
-    if (!ids.length) { console.log(`[worker-wake] ${agentId} drained before delivery, skipping`); continue; }
-    console.log(`[worker-wake] nudging ${agentId} on ${ptyId} (${ids.length} pending)`);
-    nudgeWorker(ptyId, ids);
+    const pending = hive.inbox(agentId);
+    if (!pending.length) { console.log(`[worker-wake] ${agentId} drained before delivery, skipping`); continue; }
+    console.log(`[worker-wake] nudging ${agentId} on ${ptyId} (${pending.length} pending)`);
+    nudgeWorker(ptyId, pending);
   }
 }
 

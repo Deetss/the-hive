@@ -23,19 +23,24 @@ const loadTs = require('./load-ts.cjs');
 
 const { inboxNudgeText, isInboxNudge } = loadTs('src/shared/hiveNudge.ts');
 
+/** Build a minimal InboxMessageSummary for a test. */
+function msg(id, over) {
+  return { id, from: 'sender', subject: 'subject', body: 'body text', ...over };
+}
+
 // — the queue's one-pending-nudge invariant depends entirely on this predicate —
 
 test('every nudge the app builds is recognised as one, whatever ids it carries', () => {
   for (const ids of [[], ['a'], ['2026-08-19T18-01-00-000Z-ryan-notify-race', 'b-2']]) {
-    assert.equal(isInboxNudge(inboxNudgeText(ids)), true, JSON.stringify(ids));
+    assert.equal(isInboxNudge(inboxNudgeText(ids.map((id) => msg(id)))), true, JSON.stringify(ids));
   }
 });
 
 test('two nudges with different ids both match, so the duplicate is dropped', () => {
   // The real queued shape: a second poll names different mail. Matching the whole
   // string instead of the fixed head would never dedupe, which is the bug.
-  const first = inboxNudgeText(['msg-1']);
-  const second = inboxNudgeText(['msg-2', 'msg-3']);
+  const first = inboxNudgeText([msg('msg-1')]);
+  const second = inboxNudgeText([msg('msg-2'), msg('msg-3')]);
   assert.notEqual(first, second);
   assert.equal([first].some((t) => isInboxNudge(t)) && isInboxNudge(second), true);
 });
@@ -51,14 +56,14 @@ test('prose that merely mentions the inbox is NOT a nudge', () => {
 // — the payload —
 
 test('the nudge names the messages that prompted it', () => {
-  const text = inboxNudgeText(['2026-08-19T17-10-00-000Z-broadcast-retro-rule']);
+  const text = inboxNudgeText([msg('2026-08-19T17-10-00-000Z-broadcast-retro-rule')]);
   assert.match(text, /2026-08-19T17-10-00-000Z-broadcast-retro-rule/);
 });
 
 test('the nudge keeps the pending inbox authoritative, not the id list', () => {
   // A nudge suppressed by the one-pending rule leaves its ids unnamed, so an
   // agent that stopped at the list would miss that mail entirely.
-  const text = inboxNudgeText(['msg-1']);
+  const text = inboxNudgeText([msg('msg-1')]);
   assert.match(text, /authoritative/);
   assert.match(text, /inbox\/\.done\//);
 });
@@ -67,4 +72,25 @@ test('a nudge with no ids is still a well-formed nudge', () => {
   const text = inboxNudgeText([]);
   assert.equal(isInboxNudge(text), true);
   assert.doesNotMatch(text, /at least:/);
+});
+
+// — inline content —
+
+test('the nudge inlines each message\'s from, subject, and body', () => {
+  const text = inboxNudgeText([msg('msg-1', { from: 'god', subject: 'ship it', body: 'do the thing' })]);
+  assert.match(text, /from god/);
+  assert.match(text, /ship it/);
+  assert.match(text, /do the thing/);
+});
+
+test('inlined content is capped so one huge message cannot balloon the nudge', () => {
+  const huge = msg('msg-1', { body: 'x'.repeat(20000) });
+  const text = inboxNudgeText([huge]);
+  assert.ok(text.length < 8000, `nudge was ${text.length} chars`);
+  assert.match(text, /truncated/);
+});
+
+test('a nudge with no ids inlines no content block', () => {
+  const text = inboxNudgeText([]);
+  assert.doesNotMatch(text, /---/);
 });

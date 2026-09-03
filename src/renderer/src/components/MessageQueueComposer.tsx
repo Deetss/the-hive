@@ -294,7 +294,13 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       // waiting up to ~4s for the inbox poll to notice it — enqueue the same
       // inbox-nonempty nudge that poll would; the queue drains it on its next
       // tick, and drops it harmlessly if she reads the inbox herself first.
-      if (sentId) enqueueMessage('god', inboxNudgeText([sentId]), { precondition: 'inbox-nonempty' });
+      if (sentId) {
+        enqueueMessage(
+          'god',
+          inboxNudgeText([{ id: sentId, from: 'human', subject, body: full }]),
+          { precondition: 'inbox-nonempty' }
+        );
+      }
       rememberProject(dispProject);
       resetComposer();
     }

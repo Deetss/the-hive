@@ -765,7 +765,7 @@ export function useHive(config: HarnessConfig | null): void {
             // inbox as the authority rather than at the list.
             useStore.getState().enqueueMessage(
               a.id,
-              inboxNudgeText(fresh.map((m) => m.id)),
+              inboxNudgeText(fresh),
               { precondition: 'inbox-nonempty' }
             );
             for (const m of fresh) seen.add(m.id);
