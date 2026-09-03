@@ -6770,26 +6770,50 @@ ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: un
 
   if (task.assignee) {
     try {
+      // A finished/reaped worker is archived (or gone from the registry
+      // entirely) with a dead inbox — route there instead to god so the
+      // result isn't lost until the next heartbeat re-discovers it.
+      const godId = hive.registry().godId ?? 'god';
+      const assigneeEntry = hive.registry().agents[task.assignee];
+      const isAssigneeLive = liveWorkers.has(task.assignee) || (!!assigneeEntry && !assigneeEntry.archived);
+      const target = isAssigneeLive ? task.assignee : godId;
+
       if (v === 'PASS') {
         hive.send({
-          to: task.assignee,
+          to: target,
           act: 'inform',
           subject: 'UAT passed',
-          body: `Your task "${task.title}" passed UAT. Task is closed.`
+          body: isAssigneeLive
+            ? `Your task "${task.title}" passed UAT. Task is closed.`
+            : `UAT passed for "${task.title}" but assignee ${task.assignee} is archived/gone. Task is closed; routing here for the record.`
         }, 'human');
       } else if (v === 'FAIL') {
         hive.send({
-          to: task.assignee,
+          to: target,
           act: 'warn',
           subject: 'UAT failed',
-          body: `Your task "${task.title}" failed UAT: ${n || 'No details provided'}. Fix and report done again.`
+          body: isAssigneeLive
+            ? `Your task "${task.title}" failed UAT: ${n || 'No details provided'}. Fix and report done again.`
+            : `UAT failed for "${task.title}" but assignee ${task.assignee} is archived/gone — routing to you for re-dispatch. Failure: ${n || 'No details provided'}.`
         }, 'human');
+        // Belt-and-suspenders: CC god on every FAIL, even when the assignee is
+        // still live, so god can track the card without waiting on the heartbeat.
+        if (isAssigneeLive && target !== godId) {
+          hive.send({
+            to: godId,
+            act: 'warn',
+            subject: `UAT failed (CC): ${task.title}`,
+            body: `Assignee ${task.assignee} was notified of a UAT FAIL on "${task.title}": ${n || 'No details provided'}.`
+          }, 'human');
+        }
       } else {
         hive.send({
-          to: task.assignee,
+          to: target,
           act: 'inform',
           subject: `Answer to your question — ${task.title}`,
-          body: `The human answered your ASK ME question on "${task.title}":\n\n${n}`
+          body: isAssigneeLive
+            ? `The human answered your ASK ME question on "${task.title}":\n\n${n}`
+            : `The human answered an ASK ME question on "${task.title}" but assignee ${task.assignee} is archived/gone. Answer:\n\n${n}`
         }, 'human');
       }
     } catch (e) {
