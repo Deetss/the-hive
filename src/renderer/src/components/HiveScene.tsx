@@ -94,7 +94,10 @@ const COURIER_SEAT_INDEX = 5;
 const COURIER_POST: [number, number] = [SEAT_COLS[0] + 8, SEAT_ROWS[1] + 30];
 const QUEEN = { x: 212, y: 112 };
 const QUEEN_APPROACH: [number, number] = [208, 146];
-const MAIL_STATION = { x: 208, y: 222, w: 44, h: 26, stand: [228, 266] as [number, number] };
+/* stand sits outside the station's x-span (208-252): hive-mailroom.js routes both the
+ * sender approach and courier delivery legs as a straight vertical line between the mid
+ * lane and stand, so a stand.x inside the box makes every leg cut through the mailbox. */
+const MAIL_STATION = { x: 208, y: 222, w: 44, h: 26, stand: [202, 266] as [number, number] };
 const MAIL_LANES = { mid: 186, front: 266 };
 /** The human has no desk to walk an envelope from, so a message they dispatch
  *  flies in from off the right edge instead of running mailroom leg 1. */
