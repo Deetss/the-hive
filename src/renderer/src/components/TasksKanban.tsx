@@ -565,6 +565,11 @@ const TaskCard = memo(function TaskCard({ task, accent, assigneeName, onOpen, on
             color: 'var(--cth-ink-900)',
             display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
           }}>{task.title}</span>
+          {(task.planId || task.phaseId) && (
+            <span style={{ fontSize: 13, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-ui)' }}>
+              {[task.planId, task.phaseId].filter(Boolean).join(' · ')}
+            </span>
+          )}
           {typeof task.progress === 'number' && <ProgressBar value={task.progress} />}
           {assigneeName && (
             <span style={{ fontSize: 13, color: 'var(--cth-ink-700)', fontFamily: 'var(--cth-font-ui)' }}>

@@ -42,6 +42,7 @@ import { MCP_CATALOG } from '../shared/mcpCatalog';
 import { selectBroadcastTargets } from '../shared/broadcast';
 import { preferredAgentRole } from '../shared/agentRole';
 import { mergeTaskLedger } from '../shared/taskLedger';
+import { mergePlanLedger } from '../shared/planLedger';
 import { expandTilde } from './fs';
 
 /** The subset of HarnessConfig the hive consumes for the default-MCP merge.
@@ -138,6 +139,12 @@ export interface HumanQA {
   askedAt?: string;
   answeredAt?: string;
   dismissedAt?: string;
+  /** action entries: ISO timestamp when the human completed the action. */
+  doneAt?: string;
+  /** review entries: path to the document or report to review, e.g. `plans/<id>.json`. */
+  docPath?: string;
+  /** review entries: true = approved, false = changes requested. undefined = pending. */
+  approved?: boolean;
   /** "Chat about this": a back-and-forth between the human and the assigned agent,
    *  additive to the answer. Appended by tasks:chatHumanQA (human) and the
    *  humanQA-chat outbox intercept in routeOnce (agent). */
@@ -2127,6 +2134,42 @@ export class HiveManager {
     return true;
   }
 
+  /** List every GSD plan under `hive/plans/*.json`. Agents write these files
+   *  directly (see PROTOCOL.md's GSD-style planning section) — this only
+   *  reads them back for the UI. Malformed files are skipped rather than
+   *  crashing the list. */
+  plans(): unknown[] {
+    const root = this.root();
+    if (!root) return [];
+    const dir = join(root, 'plans');
+    if (!existsSync(dir)) return [];
+    const out: unknown[] = [];
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.json')) continue;
+      const plan = this.readJson<unknown>(join(dir, name), null);
+      if (plan) out.push(plan);
+    }
+    return out;
+  }
+
+  /** Patch one plan file at `hive/plans/<id>.json`, merging against whatever
+   *  is currently on disk (`mergePlanLedger`) so this never clobbers a field
+   *  a planning agent wrote that the patch doesn't mention — same reasoning
+   *  as `writeTasks`/`mergeTaskLedger`, scoped to a single plan file instead
+   *  of a single-file array ledger. */
+  patchPlan(id: string, patch: Record<string, unknown>): boolean {
+    const root = this.root();
+    if (!root) return false;
+    const path = join(root, 'plans', `${id}.json`);
+    if (!existsSync(path)) return false;
+    const current = this.readJson<unknown>(path, null);
+    const merged = mergePlanLedger(current, patch);
+    this.writeJson(path, merged);
+    this.appendLog({ kind: 'plan-patch', planId: id });
+    this.commit(`hive: plan ${id}`);
+    return true;
+  }
+
   /** Delete only the named card from the latest on-disk ledger. */
   deleteTask(id: string): boolean {
     const ledger = this.tasks() as { tasks?: HiveTask[] };
@@ -2221,6 +2264,58 @@ export class HiveManager {
     });
     if (affected.length === 0) return [];
     this.writeTasks(updated);
+    return affected;
+  }
+
+  /**
+   * Mirror image of `promoteTodoWithOpenHumanQA`: when a `humanQA` review
+   * entry whose `docPath` points at a plan (`plans/<id>.json`) is answered
+   * with `approved:true`, flip that plan's `status` to `'approved'` and
+   * promote its first phase's tasks from `todo` to `doing` — the plan-review
+   * equivalent of a human unblocking work. Rejection (`approved:false`) is
+   * left alone: the plan stays in `review` with the human's comment on the
+   * thread, same as any other review-kind ask today. Naturally idempotent
+   * (an already-approved plan with already-`doing` tasks is a no-op), so
+   * it's safe to call on every `hive:tasks`/`tasks:openHumanQA` load like
+   * its task-side counterpart.
+   */
+  promoteApprovedPlans(): string[] {
+    const root = this.root();
+    if (!root) return [];
+    const ledger = this.tasks() as { tasks?: HiveTask[] };
+    const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+    const approvedPlanIds = new Set<string>();
+    for (const t of tasks) {
+      if (!t || !Array.isArray(t.humanQA)) continue;
+      for (const qa of t.humanQA) {
+        if (qa?.kind === 'review' && qa.approved === true
+          && typeof qa.docPath === 'string' && qa.docPath.startsWith('plans/')) {
+          const id = qa.docPath.slice('plans/'.length).replace(/\.json$/, '');
+          if (id) approvedPlanIds.add(id);
+        }
+      }
+    }
+    if (approvedPlanIds.size === 0) return [];
+
+    const firstPhaseTaskIds = new Set<string>();
+    for (const id of approvedPlanIds) {
+      const path = join(root, 'plans', `${id}.json`);
+      const plan = this.readJson<Record<string, unknown>>(path, null as unknown as Record<string, unknown>);
+      if (!plan) continue;
+      if (plan.status !== 'approved') this.patchPlan(id, { status: 'approved' });
+      const phases = Array.isArray(plan.phases) ? plan.phases as Record<string, unknown>[] : [];
+      const ids = Array.isArray(phases[0]?.taskIds) ? phases[0].taskIds as string[] : [];
+      for (const taskId of ids) firstPhaseTaskIds.add(taskId);
+    }
+    if (firstPhaseTaskIds.size === 0) return [];
+
+    const affected: string[] = [];
+    const updated = tasks.map((t) => {
+      if (!t || t.status !== 'todo' || !firstPhaseTaskIds.has(t.id)) return t;
+      affected.push(t.id);
+      return { ...t, status: 'doing' as const };
+    });
+    if (affected.length > 0) this.writeTasks(updated);
     return affected;
   }
   memory(id: string): string {
@@ -3271,6 +3366,46 @@ to-dos with the same WHERE / WHAT / EXPECT rigour.
 The ASK ME board renders \`q\` and \`a\` text as **markdown**, so format it for skim-reading: a
 numbered or bulleted list for multi-step checks, **bold** for the key term and the pass / fail
 verdict words, and \`code\` for file paths, commands, commit hashes, and UI labels.
+
+## GSD-style planning
+Planning a multi-phase piece of work is a file convention, not a slash command — it works the
+same for every provider because it's just files you already know how to write.
+
+1. Draft or update \`hive/plans/<planId>.json\`, one file per plan:
+\`\`\`json
+{
+  "id": "plan-<slug>",
+  "title": "...",
+  "goal": "one-liner: what this plan delivers",
+  "status": "draft",
+  "createdAt": "<iso>",
+  "createdBy": "<your agent id>",
+  "decisions": ["durable calls made while planning"],
+  "phases": [
+    {
+      "id": "phase-1",
+      "index": 0,
+      "title": "...",
+      "goal": "...",
+      "acceptanceCriteria": ["verifiable outcome 1", "verifiable outcome 2"],
+      "taskIds": ["<HiveTask id you also create in tasks.json>"],
+      "status": "todo"
+    }
+  ]
+}
+\`\`\`
+2. Create a \`HiveTask\` card in \`tasks.json\` for each phase's work (\`status:'todo'\`, wired via
+\`dependsOn\` for sequencing), and list those ids in the matching phase's \`taskIds\`. Set \`planId\`
+and \`phaseId\` on each card so the kanban shows a "Plan · Phase" breadcrumb — everything else about
+the card (progress, progressLog, humanQA) is unchanged from a normal task.
+3. Push a \`humanQA\` entry of \`kind:'review'\` with \`docPath:'plans/<planId>.json'\` onto a planning
+task card, asking the human to sign off on the plan. Approving it (\`approved:true\`) automatically
+flips the plan's \`status\` to \`'approved'\` and promotes its first phase's tasks from \`todo\` to
+\`doing\` — the same auto-promote mechanism that unblocks a card on any other open \`humanQA\`.
+Rejection leaves the plan in \`review\` with the human's comment on the thread.
+
+The Plans tab in the UI is a read-only view over these files (same pattern as the ASK ME board over
+\`humanQA\`) — there is no IPC write path for agents, only the file convention above.
 
 ## 1:1 mode (on-hold agents)
 When the human takes an agent "1:1" it is flagged \`onHold\`: the Overmind leaves it alone (no

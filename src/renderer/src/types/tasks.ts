@@ -75,6 +75,11 @@ export interface HiveTask {
   /** First-class human feedback: the god appends {q} when a card needs the human;
    *  the ASK ME view fills in {a}. Full history stays on the card. */
   humanQA?: HumanQA[];
+  /** Set when this card was created from a GSD plan's phase (`hive/plans/<planId>.json`)
+   *  — the phase's `taskIds` list this card's id. Purely a display join: the kanban
+   *  card shows a "Plan · Phase" breadcrumb, nothing else reads these. */
+  planId?: string;
+  phaseId?: string;
 }
 
 /** A single timestamped progress note written by an agent during task execution. */
