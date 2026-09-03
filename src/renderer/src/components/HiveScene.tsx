@@ -515,6 +515,12 @@ export function HiveScene(): React.JSX.Element {
     const onHandoff = (): void => hook();
     window.addEventListener('message', onMessage);
     window.addEventListener('cth:handoff', onHandoff);
+    // Real router traffic and the no-live-hive mock loop both flew envelopes on
+    // the old OfficeFloor scene via these two feeds; HiveScene only had the
+    // generic postMessage/CustomEvent hooks above, so the courier never ran off
+    // actual agent-to-agent messages. Mirror OfficeFloor's wiring.
+    const offHiveMessage = window.cth?.onHiveMessage ? window.cth.onHiveMessage(hook) : undefined;
+    window.addEventListener('cth:demo-handoff', onHandoff);
 
     const tick = (now: number): void => {
       if (disposed) return;
@@ -543,6 +549,8 @@ export function HiveScene(): React.JSX.Element {
       ro.disconnect();
       window.removeEventListener('message', onMessage);
       window.removeEventListener('cth:handoff', onHandoff);
+      window.removeEventListener('cth:demo-handoff', onHandoff);
+      offHiveMessage?.();
       if (win.hiveSendMessage === hook) delete win.hiveSendMessage;
     };
   }, []);
