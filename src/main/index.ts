@@ -5197,11 +5197,21 @@ function toWslCwd(cwd: string): string {
   return m ? '/' + m[1].replace(/\\/g, '/') : cwd;
 }
 
+/** Single-quote a shell word for bash, escaping embedded single quotes. */
+function shellQuote(word: string): string {
+  return `'${word.replace(/'/g, `'\\''`)}'`;
+}
+
 /** Rewrite the launch command so the worker's Claude process runs INSIDE WSL —
  *  a worker whose cwd is a WSL path needs WSL tools (git, npm, gsd-tools) and
- *  the WSL filesystem, neither of which a Windows PowerShell/cmd spawn can reach. */
+ *  the WSL filesystem, neither of which a Windows PowerShell/cmd spawn can reach.
+ *  Routed through `bash -lc` (a LOGIN shell) rather than exec'd directly: a
+ *  non-login shell never sources ~/.profile, so asdf/NVM never lands on PATH
+ *  and `claude` fails to resolve — the worker's PTY then exits immediately
+ *  with nothing written to it. */
 function toWslArgs(cwd: string, command: string, claudeArgs: string[]): { cmd: string; args: string[] } {
-  return { cmd: 'wsl.exe', args: ['--cd', toWslCwd(cwd), '--', command, ...claudeArgs] };
+  const shellCmd = [command, ...claudeArgs].map(shellQuote).join(' ');
+  return { cmd: 'wsl.exe', args: ['--cd', toWslCwd(cwd), '--', 'bash', '-lc', shellCmd] };
 }
 
 async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebContents | null): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; seedPrompt?: string }> {
