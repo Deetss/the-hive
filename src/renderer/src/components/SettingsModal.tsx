@@ -117,7 +117,7 @@ const SLACK_CONNECT_STEPS = `Connect The Hive to Slack
  *  shares one server and one tunnel and is told apart by its id in the path, so
  *  `<tunnel>` is the public base URL and `<webhookId>` picks the endpoint. The
  *  secret/token go in headers so they stay out of URLs and access logs. */
-const WEBHOOK_API_DOC = `Webhook API
+const webhookApiDoc = (orchestratorName: string) => `Webhook API
 
 Every webhook has its own URL, its own secret and its own mode. They share one
 server and one tunnel; the id in the path says which one you are calling.
@@ -144,7 +144,7 @@ token you were handed still reads that task once it is routed. The secret
 authorizes new work, the token only reads one task's status. Keep both private.
 
 Each webhook checks bodies against its own JSON schema — edit that in the
-Triggers tab of Abathur's Command Center.`;
+Triggers tab of ${orchestratorName}'s Command Center.`;
 
 /** Clear every renderer-side persisted key so a relaunch starts truly empty. */
 function clearLocalState(): void {
@@ -181,6 +181,9 @@ const PROMPT_FIELDS: { key: string; label: string; desc: string; minHeight: numb
 ];
 
 export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initialSection }: SettingsModalProps) {
+  // The god/orchestrator agent's live display name (e.g. "BeeYoncé") -- read from
+  // the roster rather than hardcoded, so a renamed orchestrator shows up here too.
+  const orchestratorName = useStore((s) => s.agents.find((a) => a.isOvermind)?.name) ?? 'the orchestrator';
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [activeSection, setActiveSection] = useState<Section>(initialSection ?? 'General');
@@ -1094,7 +1097,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                   <Icon name="bell" />
                 </div>
                 <div style={{ flex: 1, fontSize: 15, lineHeight: '22px', color: 'var(--cth-ink-700)' }}>
-                  This permanently erases all of Abathur's memories and the entire hive,
+                  This permanently erases all of {orchestratorName}&rsquo;s memories and the entire hive,
                   and cannot be undone. Any running sessions will be terminated and the app
                   will relaunch into onboarding. Are you sure?
                 </div>
@@ -1404,7 +1407,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
-                            Every newly spawned Claude agent (Abathur included) starts on this model unless picked per-agent.
+                            Every newly spawned Claude agent ({orchestratorName} included) starts on this model unless picked per-agent.
                             Marked “· default” in the model pickers.
                           </span>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1496,12 +1499,12 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                             </span>
                             <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
                               {orchSpawnOn
-                                ? 'Abathur can hire on his own. Every agent he starts spends tokens you did not approve.'
-                                : 'Only you. Abathur can still ask, and his request waits in the queue instead of failing.'}
+                                ? `${orchestratorName} can hire on their own. Every agent they start spends tokens you did not approve.`
+                                : `Only you. ${orchestratorName} can still ask, and their request waits in the queue instead of failing.`}
                             </span>
                           </div>
                           <PixelButton variant={orchSpawnOn ? 'primary' : 'secondary'} size="sm" onClick={toggleOrchSpawn}>
-                            {orchSpawnOn ? 'me and Abathur' : 'only me'}
+                            {orchSpawnOn ? `me and ${orchestratorName}` : 'only me'}
                           </PixelButton>
                         </div>
                       </div>
@@ -2012,7 +2015,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               >i</button>
                             </span>
                             <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
-                              Pipe a Slack channel's messages straight into Abathur's queue.
+                              Pipe a Slack channel's messages straight into {orchestratorName}&rsquo;s queue.
                             </span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2216,7 +2219,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                             boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
                             fontFamily: 'var(--cth-font-mono)', fontSize: 13, lineHeight: '16px',
                             color: 'var(--cth-ink-700)'
-                          }}>{WEBHOOK_API_DOC}</pre>
+                          }}>{webhookApiDoc(orchestratorName)}</pre>
                         )}
 
                         {/* Public surface warning. Loud, not buried. */}
@@ -2356,7 +2359,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                         <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
                           Callers POST to a webhook's URL with its secret in the{' '}
                           <code>x-md-webhook-secret</code> header. Each one checks bodies against its own JSON
-                          schema — edit that in the Triggers tab of Abathur's Command Center, where the history
+                          schema — edit that in the Triggers tab of {orchestratorName}&rsquo;s Command Center, where the history
                           of everything that arrived lives too.
                         </span>
 
@@ -2595,14 +2598,14 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                           fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '12px',
                           color: 'var(--cth-ink-700)', textTransform: 'uppercase', marginBottom: 2
                         }}>
-                          Realtime Abathur
+                          Realtime {orchestratorName}
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span style={{ fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
-                            Voice chat with Abathur
+                            Voice chat with {orchestratorName}
                           </span>
                           <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
-                            Talk to the orchestrator in real time. Toggle it on from Abathur's tab; choose which
+                            Talk to the orchestrator in real time. Toggle it on from {orchestratorName}&rsquo;s tab; choose which
                             microphone and speaker the voice loop uses here.
                           </span>
                         </div>
@@ -2627,7 +2630,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                             OpenAI API key · voice
                           </span>
                           <span style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-700)' }}>
-                            Talking to Abathur runs on OpenAI&rsquo;s Realtime API — speech in, speech out, over a
+                            Talking to {orchestratorName} runs on OpenAI&rsquo;s Realtime API — speech in, speech out, over a
                             live connection to <strong style={{ fontFamily: 'var(--cth-font-ui)' }}>{REALTIME_MODEL}</strong>.
                             That is a different service from the Claude subscription your agents run on, so it needs
                             its own <strong>OpenAI API key</strong>.
@@ -2667,7 +2670,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                               boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
                             }} />
                             {openAiVoiceNote || (hasOpenAiKey
-                              ? 'Key saved — Talk is ready. Start it from Abathur’s card.'
+                              ? `Key saved — Talk is ready. Start it from ${orchestratorName}’s card.`
                               : 'No key yet — Talk stays disabled until one is saved.')}
                           </span>
                         </div>
@@ -2712,7 +2715,7 @@ export function SettingsModal({ config, onClose, onOpenProfileWalkthrough, initi
                         color: '#6E1423'
                       }}>DANGER ZONE</div>
                       <p style={{ margin: 0, fontSize: 13, lineHeight: '20px', color: 'var(--cth-ink-700)' }}>
-                        Reset wipes Abathur's memories, the entire hive (every agent, message,
+                        Reset wipes {orchestratorName}&rsquo;s memories, the entire hive (every agent, message,
                         task, and the board), the semantic-memory palace, and all settings -
                         then takes you back to onboarding.
                       </p>
