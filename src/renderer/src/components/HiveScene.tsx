@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useStore, type Agent } from '@/store/store';
 import '@/assets/hive-art.js';
 import '@/assets/hive-screens.js';
+import '@/assets/hive-mailroom.js';
 
 type BeeStatus = 'idle' | 'thinking' | 'working' | 'moving' | 'blocked' | 'done' | 'handoff';
 type ScreenName = 'terminal' | 'app' | 'video' | 'site' | 'chat' | 'code' | 'chart';
@@ -34,13 +35,66 @@ function hiveArt(): HiveArtApi | undefined {
   return (window as unknown as { HiveArt?: HiveArtApi }).HiveArt;
 }
 
+interface MailAgentCfg {
+  post: [number, number];
+  costume?: Costume;
+  approach?: [number, number];
+  kind?: 'queen';
+}
+
+interface HiveMailroomJobOpts {
+  from?: string;
+  to?: string;
+  label?: string | null;
+}
+
+interface HiveMailroomConfig {
+  station: { x: number; y: number; w: number; h: number; stand: [number, number] };
+  lanes: { mid: number; front: number };
+  agents: Record<string, MailAgentCfg>;
+  courier: { post: [number, number]; costume?: Costume };
+  onPostChange?: (id: string, hidden: boolean, status: BeeStatus | null) => void;
+  speedAgent?: number;
+  speedCourier?: number;
+}
+
+interface HiveMailroomInstance {
+  send: (opts: HiveMailroomJobOpts) => boolean;
+  busy: () => boolean;
+  deliveredTo: () => string | null;
+  step: (dt: number) => void;
+  drawStation: (ctx: CanvasRenderingContext2D, f: number) => void;
+  drawWalkers: (ctx: CanvasRenderingContext2D, f: number, opts?: { chips?: boolean }) => void;
+}
+
+interface HiveMailroomApi {
+  create: (cfg: HiveMailroomConfig) => HiveMailroomInstance;
+}
+
+function hiveMailroom(): HiveMailroomApi | undefined {
+  return (window as unknown as { HiveMailroom?: HiveMailroomApi }).HiveMailroom;
+}
+
 const W = 512;
 const H = 288;
 const SEAT_COLS = [30, 118, 206, 294, 382];
 const SEAT_ROWS = [145, 210];
-const MAX_SEATS = SEAT_COLS.length * SEAT_ROWS.length;
+/** Row-2 centre bay (col index 2, row index 1) is reserved for the mail
+ *  station — the handoff spec requires a clear desk-sized bay there, so
+ *  live agents skip that physical slot when seated. */
+const STATION_SEAT_INDEX = 7;
+const SEAT_SLOTS: Array<{ col: number; row: number }> = [];
+for (let i = 0; i < SEAT_COLS.length * SEAT_ROWS.length; i++) {
+  if (i === STATION_SEAT_INDEX) continue;
+  SEAT_SLOTS.push({ col: i % SEAT_COLS.length, row: Math.floor(i / SEAT_COLS.length) });
+}
+const MAX_SEATS = SEAT_SLOTS.length;
 const COURIER_SEAT_INDEX = 5;
+const COURIER_POST: [number, number] = [SEAT_COLS[0] + 8, SEAT_ROWS[1] + 30];
 const QUEEN = { x: 212, y: 112 };
+const QUEEN_APPROACH: [number, number] = [208, 146];
+const MAIL_STATION = { x: 208, y: 222, w: 44, h: 26, stand: [228, 266] as [number, number] };
+const MAIL_LANES = { mid: 186, front: 266 };
 const COSTUME_POOL: Costume[] = ['hardhat', 'headset', 'labcoat', 'visor', 'hivis', 'chefhat'];
 
 function mapAgentStatus(status: Agent['status']): BeeStatus {
@@ -91,17 +145,6 @@ interface Seat {
   hidden?: boolean;
 }
 
-interface CourierState {
-  path: Array<[number, number]>;
-  leg: number;
-  tt: number;
-  x: number;
-  y: number;
-  dir: Dir;
-  phase: 'out' | 'hand' | 'back';
-  wait: number;
-}
-
 interface Mote {
   x: number;
   y: number;
@@ -119,8 +162,10 @@ interface SceneState {
   seatByAgent: Map<string, Seat>;
   queenStatus: BeeStatus;
   queenUntil: number;
-  courier: CourierState | null;
-  lastAutoRun: number;
+  queenHidden: boolean;
+  overmindId: string | null;
+  mail: HiveMailroomInstance | null;
+  mailAgents: Record<string, MailAgentCfg>;
   motes: Mote[];
   drips: Array<{ x: number; y: number }>;
   fillStep: number;
@@ -165,8 +210,10 @@ function createScene(): SceneState {
     seatByAgent: new Map(),
     queenStatus: 'idle',
     queenUntil: 0,
-    courier: null,
-    lastAutoRun: 0,
+    queenHidden: false,
+    overmindId: null,
+    mail: null,
+    mailAgents: {},
     motes: Array.from({ length: 46 }, () => ({
       x: Math.random() * W,
       y: 110 + Math.random() * 170,
@@ -243,89 +290,64 @@ function paintBackground(A: HiveArtApi, b: CanvasRenderingContext2D): void {
   A.rect(b, 186, 141, 68, 1, 'n');
 }
 
-function startCourier(scene: SceneState): void {
-  if (scene.courier) return;
-  const seat = scene.seats[COURIER_SEAT_INDEX];
-  const startX = seat ? seat.x : SEAT_COLS[0] + 8;
-  const startY = seat ? seat.y : SEAT_ROWS[1] + 30;
-  scene.courier = {
-    path: [
-      [startX, startY],
-      [startX, 186],
-      [206, 186],
-      [208, 146]
-    ],
-    leg: 0,
-    tt: 0,
-    x: startX,
-    y: startY,
-    dir: 'up',
-    phase: 'out',
-    wait: 0
-  };
-  if (seat) seat.hidden = true;
+/** Keeps the mailroom's `agents` map (a stable object the HiveMailroom
+ *  instance closes over) in sync with the queen and each seated agent's
+ *  real id, so real hive from/to ids resolve to a post position. Mutates
+ *  in place rather than rebuilding so a trip already under way keeps its
+ *  captured actor reference. */
+function syncMailAgents(scene: SceneState, overmind: Agent | undefined): void {
+  const desired = new Set<string>();
+  if (overmind) {
+    desired.add(overmind.id);
+    if (!scene.mailAgents[overmind.id]) {
+      scene.mailAgents[overmind.id] = {
+        post: [QUEEN.x, QUEEN.y],
+        costume: 'crown',
+        approach: QUEEN_APPROACH,
+        kind: 'queen'
+      };
+    }
+  }
+  scene.seatByAgent.forEach((seat, id) => {
+    desired.add(id);
+    const existing = scene.mailAgents[id];
+    if (!existing || existing.post[0] !== seat.x || existing.post[1] !== seat.y || existing.costume !== seat.costume) {
+      scene.mailAgents[id] = { post: [seat.x, seat.y], costume: seat.costume };
+    }
+  });
+  Object.keys(scene.mailAgents).forEach((id) => {
+    if (!desired.has(id)) delete scene.mailAgents[id];
+  });
 }
 
-function stepCourier(scene: SceneState, dt: number, t: number): void {
-  const c = scene.courier;
-  if (!c) return;
-  if (c.phase === 'hand') {
-    c.wait -= dt;
-    if (c.wait <= 0) {
-      c.phase = 'back';
-      c.leg = 0;
-      c.tt = 0;
-      const seat = scene.seats[COURIER_SEAT_INDEX];
-      c.path = seat
-        ? [
-            [208, 146],
-            [206, 186],
-            [seat.x, 186],
-            [seat.x, seat.y]
-          ]
-        : [
-            [208, 146],
-            [206, 186]
-          ];
+function createMailroom(scene: SceneState): HiveMailroomInstance | null {
+  const HM = hiveMailroom();
+  if (!HM) return null;
+  return HM.create({
+    station: MAIL_STATION,
+    lanes: MAIL_LANES,
+    agents: scene.mailAgents,
+    courier: { post: COURIER_POST, costume: 'couriercap' },
+    onPostChange: (id, hidden, status) => {
+      if (id === 'courier') {
+        const seat = scene.seats[COURIER_SEAT_INDEX];
+        if (seat) seat.hidden = hidden;
+        return;
+      }
+      if (scene.overmindId && id === scene.overmindId) {
+        scene.queenHidden = hidden;
+        if (status) {
+          scene.queenStatus = status;
+          scene.queenUntil = 2.4;
+        }
+        return;
+      }
+      const seat = scene.seatByAgent.get(id);
+      if (!seat) return;
+      seat.hidden = hidden;
+      if (status) seat.status = status;
     }
-    return;
-  }
-  const speed = 44;
-  const a = c.path[c.leg];
-  const b = c.path[c.leg + 1];
-  if (!b) {
-    if (c.phase === 'out') {
-      c.phase = 'hand';
-      c.wait = 1.5;
-      c.dir = 'up';
-      scene.queenStatus = 'done';
-      scene.queenUntil = 2.4;
-    } else {
-      const seat = scene.seats[COURIER_SEAT_INDEX];
-      if (seat) seat.hidden = false;
-      scene.courier = null;
-      // Idle countdown starts when the courier actually goes idle, not when it
-      // launched — a round trip to a far seat (~13-14s) is longer than the 11s
-      // auto-run interval, so measuring from launch made the next run fire the
-      // instant this one landed (looked like the courier never stopped).
-      scene.lastAutoRun = t;
-    }
-    return;
-  }
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
-  const len = Math.hypot(dx, dy) || 1;
-  c.tt += (speed * dt) / len;
-  if (c.tt >= 1) {
-    c.tt = 0;
-    c.leg += 1;
-    c.x = b[0];
-    c.y = b[1];
-    return;
-  }
-  c.x = a[0] + dx * c.tt;
-  c.y = a[1] + dy * c.tt;
-  c.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+  });
 }
 
 function syncSeats(scene: SceneState, agents: Agent[]): void {
@@ -338,10 +360,9 @@ function syncSeats(scene: SceneState, agents: Agent[]): void {
     scene.seatOrder = liveIds;
     const nextSeats: Seat[] = [];
     liveIds.forEach((id, i) => {
-      const col = i % SEAT_COLS.length;
-      const row = Math.floor(i / SEAT_COLS.length);
-      const deskX = SEAT_COLS[col];
-      const deskY = SEAT_ROWS[row];
+      const slot = SEAT_SLOTS[i];
+      const deskX = SEAT_COLS[slot.col];
+      const deskY = SEAT_ROWS[slot.row];
       const prior = scene.seatByAgent.get(id);
       const seat: Seat = {
         deskX,
@@ -384,10 +405,7 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
     scene.lastFillTick = t;
     scene.fillStep = (scene.fillStep % 8) + 1;
   }
-  if (!scene.courier && t - scene.lastAutoRun > 11) {
-    startCourier(scene);
-  }
-  stepCourier(scene, dt, t);
+  scene.mail?.step(dt);
   if (scene.queenUntil > 0) {
     scene.queenUntil -= dt;
     if (scene.queenUntil <= 0) scene.queenStatus = overmindStatus;
@@ -428,9 +446,13 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
     x.restore();
   });
 
-  A.drawBee(x, QUEEN.x, QUEEN.y, { status: scene.queenStatus, dir: 'down', frame: f, costume: 'crown' });
-  if (scene.queenStatus !== 'idle') A.drawChip(x, QUEEN.x + 1, QUEEN.y - 15, scene.queenStatus);
-  if (scene.courier && scene.courier.phase === 'hand') A.drawEnvelope(x, QUEEN.x + 16, QUEEN.y + 2, true);
+  if (!scene.queenHidden) {
+    A.drawBee(x, QUEEN.x, QUEEN.y, { status: scene.queenStatus, dir: 'down', frame: f, costume: 'crown' });
+    if (scene.queenStatus !== 'idle') A.drawChip(x, QUEEN.x + 1, QUEEN.y - 15, scene.queenStatus);
+  }
+  if (scene.overmindId && scene.mail?.deliveredTo() === scene.overmindId) {
+    A.drawEnvelope(x, QUEEN.x + 16, QUEEN.y + 2, true);
+  }
 
   x.save();
   x.translate(436, 150);
@@ -446,20 +468,18 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
     x.translate(s.deskX, s.deskY);
     A.PROPS.desk.draw(x, (f + i) % 4, screenForStatus(s.status));
     x.restore();
-    if (s.hidden) return;
-    A.drawBee(x, s.x, s.y, { status: s.status, dir: 'down', frame: f + s.phase, costume: s.costume });
-    A.drawChip(x, s.x + 1, s.y - 15, s.status, s.status === 'blocked' && f % 2 === 0);
+    const deliveredHere = scene.mail?.deliveredTo() === scene.seatOrder[i];
+    if (!s.hidden) {
+      A.drawBee(x, s.x, s.y, { status: s.status, dir: 'down', frame: f + s.phase, costume: s.costume });
+      A.drawChip(x, s.x + 1, s.y - 15, s.status, s.status === 'blocked' && f % 2 === 0);
+    }
+    if (deliveredHere) A.drawEnvelope(x, s.x + 16, s.y + 2, true);
   });
 
-  if (scene.courier) {
-    const c = scene.courier;
-    const status: BeeStatus = c.phase === 'hand' ? 'handoff' : 'moving';
-    A.drawBee(x, Math.round(c.x), Math.round(c.y), { status, dir: c.dir, frame: fFast, costume: 'couriercap' });
-    if (c.phase !== 'hand') A.drawEnvelope(x, Math.round(c.x) + 3, Math.round(c.y) + 5, false);
-    A.drawChip(x, Math.round(c.x) + 1, Math.round(c.y) - 15, status);
-  }
+  scene.mail?.drawStation(x, f);
+  scene.mail?.drawWalkers(x, f);
 
-  // Order per spec: courier, dust motes, light shafts, vignette.
+  // Order per spec: mail station + walkers, dust motes, light shafts, vignette.
   for (const m of scene.motes) {
     m.x += m.vx * dt * 0.6;
     m.y += m.vy * dt * 0.6;
@@ -528,20 +548,38 @@ export function HiveScene(): React.JSX.Element {
     const ro = new ResizeObserver(resize);
     ro.observe(container);
 
-    const win = window as unknown as { hiveSendMessage?: () => void };
-    const hook = (): void => startCourier(scene);
-    win.hiveSendMessage = hook;
-    const onMessage = (e: MessageEvent): void => {
-      if (e.data && (e.data as { type?: string }).type === 'hive:message') hook();
+    // Two-leg mail delivery: the sending agent walks its envelope to the
+    // station, the courier routes it to the recipient's seat. Both ids must
+    // already be posted in scene.mailAgents (queen + live seats) or the send
+    // is silently dropped — mirrors OfficeFloor's posFor() guard for a
+    // sender/recipient that isn't on the floor (e.g. "human").
+    const sendMail = (from?: string, to?: string): void => {
+      if (!from || !to || from === to) return;
+      if (!scene.mailAgents[from] || !scene.mailAgents[to]) return;
+      scene.mail?.send({ from, to });
     };
-    const onHandoff = (): void => hook();
+    const win = window as unknown as { hiveSendMessage?: (opts?: { from?: string; to?: string }) => void };
+    const sendMailHook = (opts?: { from?: string; to?: string }): void => sendMail(opts?.from, opts?.to);
+    win.hiveSendMessage = sendMailHook;
+    const onMessage = (e: MessageEvent): void => {
+      const d = e.data as { type?: string; from?: string; to?: string } | null;
+      if (d && d.type === 'hive:message') sendMail(d.from, d.to);
+    };
+    const onHandoff = (ev: Event): void => {
+      const d = (ev as CustomEvent<{ from?: string; to?: string }>).detail;
+      if (d) sendMail(d.from, d.to);
+    };
     window.addEventListener('message', onMessage);
     window.addEventListener('cth:handoff', onHandoff);
     // Real router traffic and the no-live-hive mock loop both flew envelopes on
     // the old OfficeFloor scene via these two feeds; HiveScene only had the
     // generic postMessage/CustomEvent hooks above, so the courier never ran off
     // actual agent-to-agent messages. Mirror OfficeFloor's wiring.
-    const offHiveMessage = window.cth?.onHiveMessage ? window.cth.onHiveMessage(hook) : undefined;
+    const offHiveMessage = window.cth?.onHiveMessage
+      ? window.cth.onHiveMessage((e) => {
+          for (const target of e.targets) sendMail(e.from, target);
+        })
+      : undefined;
     window.addEventListener('cth:demo-handoff', onHandoff);
 
     const tick = (now: number): void => {
@@ -558,7 +596,10 @@ export function HiveScene(): React.JSX.Element {
       }
       const agents = useStore.getState().agents;
       const overmind = agents.find((a) => a.isOvermind);
+      scene.overmindId = overmind?.id ?? null;
       syncSeats(scene, agents);
+      syncMailAgents(scene, overmind);
+      if (!scene.mail) scene.mail = createMailroom(scene);
       const t = (now - t0) / 1000;
       renderFrame(A, scene, t, overmind ? mapAgentStatus(overmind.status) : 'idle');
       if (displayCtx) displayCtx.drawImage(scene.fc, 0, 0, canvas.width, canvas.height);
@@ -573,7 +614,7 @@ export function HiveScene(): React.JSX.Element {
       window.removeEventListener('cth:handoff', onHandoff);
       window.removeEventListener('cth:demo-handoff', onHandoff);
       offHiveMessage?.();
-      if (win.hiveSendMessage === hook) delete win.hiveSendMessage;
+      if (win.hiveSendMessage === sendMailHook) delete win.hiveSendMessage;
     };
   }, []);
 
