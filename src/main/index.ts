@@ -5804,7 +5804,72 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
       return { ok: true };
     }
 
-    // 4) Worker case: queue a fresh spawn-request and immediately process it so
+    // 4) Directly-added agent case (e.g. Add Agent modal, pointed at a plain
+    //    workspace folder — never hired through the worker spawn-request queue).
+    //    Its id never picked up a "worker-" prefix, so routing it through the
+    //    worker case below would build a NEW id (processSpawnRequest always
+    //    computes `worker-${reqId}`) instead of reclaiming this one: the old
+    //    floor card would never be told to archive (teardownPty's wasWorker
+    //    check only fires for ids registered in liveWorkers) while a second,
+    //    differently-id'd card appeared for the new spawn — a duplicate.
+    //    processSpawnRequest hardcodes `role: 'worker'` for every agent it
+    //    spawns, so its absence here reliably means "not a hive worker".
+    //    Respawn it the same way the Overmind is respawned above: directly via
+    //    spawnAgentCore, reclaiming the exact same id and pty.
+    if (entry.role !== 'worker') {
+      hive.setArchived(id, false);
+      const cfg = readConfig();
+      const profile = getRuntimeProfile(entry.profileId);
+      const effectiveProvider = (entry.provider || profile?.provider || cfg.godProvider || 'claude') as AgentProvider;
+      const launch = buildWorkerLaunch({
+        requestProvider: effectiveProvider,
+        requestModel: profile?.model,
+        defaultCommand: cfg.defaultCommand,
+        autoMode: !!cfg.autoMode
+      });
+      const webContents = senderWc ?? liveWebContents();
+      // Reclaim the renderer's existing terminal binding, falling back to the
+      // AddAgentModal's `pty-${id}` convention when no live pty was found.
+      const agentPtyId = outgoingPtyId ?? `pty-${id}`;
+      const spawnOpts: AgentSpawnOptions = {
+        id: agentPtyId,
+        cwd: spawnCwd,
+        command: launch.bin,
+        args: launch.args,
+        cols: 100,
+        rows: 30,
+        resume: false,
+        provider: effectiveProvider,
+        isolate: false,
+        hive: {
+          id,
+          name: entry.name || id,
+          provider: effectiveProvider,
+          profileId: entry.profileId,
+          cwd: spawnCwd,
+          role: entry.role,
+          capabilities: entry.capabilities,
+          tokenCap: entry.tokenCap
+        }
+      };
+      console.log(`[respawn] agent ${id}: outgoingPty=${outgoingPtyId ?? '(none)'} newPty=${agentPtyId} cwd=${spawnCwd}`);
+      const res = await spawnAgentCore(spawnOpts, webContents);
+      if (!res.ok) { console.error(`[respawn] agent spawn failed: ${res.error}`); return { ok: false, error: res.error ?? 'failed to spawn agent' }; }
+      const rearm = () => { try { webContents?.send(`pty:relaunch:${agentPtyId}`); } catch { /* window gone */ } };
+      rearm();
+      setTimeout(rearm, 600);
+      setTimeout(() => {
+        try {
+          liveWebContents()?.send('hive:enqueueToAgent', {
+            targetId: id,
+            text: `You are resuming as ${entry.name || id} after a respawn. Read your memory at ${memPath} and your inbox, then continue where the previous session left off.`
+          });
+        } catch { /* window gone */ }
+      }, 800);
+      return { ok: true };
+    }
+
+    // 5) Worker case: queue a fresh spawn-request and immediately process it so
     //    an operator-initiated respawn runs even if orchestratorMaySpawn is false.
     const dir = spawnRequestsDir();
     if (!dir) return { ok: false, error: 'spawn-requests dir unavailable' };
