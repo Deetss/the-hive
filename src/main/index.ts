@@ -92,6 +92,7 @@ import * as integrations from './integrations';
 import { validateBaseUrl, buildAuthHeaders, resolveUpstreamUrl, secretRefFor, INTEGRATION_TEMPLATES } from '../shared/integrations';
 import { RosterStore } from './roster';
 import { buildWorkerLaunch } from './workerLaunch';
+import { detectInstalledPersonas } from './personas';
 import { ControlRegistry } from './control';
 import { WorkerWakeWatchdog, type WorkerWakeFacts } from './workerWake';
 import { inboxNudgeText, type InboxMessageSummary } from '../shared/hiveNudge';
@@ -5979,6 +5980,12 @@ ipcMain.handle('agent:respawn', async (evt, agentId: unknown) => {
 ipcMain.handle('session:resolveCwd', (_evt, sessionId: unknown) =>
   (typeof sessionId === 'string' ? resolveSessionCwd(sessionId) : null));
 
+// Detect installed subagent personas (GSD skills and custom Claude Code agents)
+ipcMain.handle('agents:detectPersonas', (_evt, projectDir: unknown) => {
+  const dir = typeof projectDir === 'string' && projectDir.trim() ? projectDir.trim() : undefined;
+  return detectInstalledPersonas(dir);
+});
+
 // ─── IPC: clipboard ─────────────────────────────────────────────────────────
 ipcMain.handle('app:copyToClipboard', (_evt, text: unknown) => {
   if (typeof text !== 'string') return { ok: false, error: 'invalid text' };
@@ -8443,6 +8450,8 @@ interface SpawnRequest {
   command?: string;                                   // engine CLI; default = config.defaultCommand
   provider?: AgentProvider;                           // optional explicit provider
   model?: string;                                     // optional --model override (Claude)
+  gsdAgent?: string;                                  // optional GSD-core subagent persona (e.g. gsd-codebase-mapper)
+  persona?: string;                                   // optional generic subagent persona name
   profile?: string;                                   // optional runtime-profile id (engine+account+model bundle)
   cwd?: string;                                        // repo the worker (and its worktree) runs in
   name?: string;                                       // display name
@@ -8623,10 +8632,17 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   // per-account Claude login dir is applied later in spawnAgentCore via profileId.
   const profile = getRuntimeProfile(raw.profile);
   const effectiveProvider = (typeof raw.provider === 'string' && raw.provider.trim()) ? raw.provider : profile?.provider;
+  const gsdAgent = (typeof raw.gsdAgent === 'string' && raw.gsdAgent.trim())
+    ? raw.gsdAgent.trim()
+    : (typeof raw.persona === 'string' && raw.persona.trim())
+      ? raw.persona.trim()
+      : undefined;
   const launch = buildWorkerLaunch({
     requestCommand: (typeof raw.command === 'string' && raw.command.trim()) ? raw.command : profile?.command,
     requestProvider: effectiveProvider,
     requestModel: (typeof raw.model === 'string' && raw.model.trim()) ? raw.model : profile?.model,
+    requestGsdAgent: gsdAgent,
+    cwd,
     defaultCommand: cfgSpawn.defaultCommand,
     autoMode: !!cfgSpawn.autoMode
   });
@@ -8668,7 +8684,8 @@ async function processSpawnRequest(filePath: string): Promise<void> {
     profileId: profile?.id,
     role: 'worker',
     cwd,
-    tokenCap
+    tokenCap,
+    gsdAgent
   };
   // Phase 2: grant this worker a broker capability over the currently-enabled
   // integrations and inject the broker URL + a per-worker capability TOKEN (a handle,

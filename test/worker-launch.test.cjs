@@ -91,7 +91,7 @@ test('a multi-token auto flag appends whole, and the stance check is by token', 
 
 test("an explicit request provider picks that provider's flag for a custom binary", () => {
   const l = launch({ requestCommand: 'my-codex-wrapper', requestProvider: 'codex', autoMode: true });
-  assert.deepEqual(l.args, ['--dangerously-bypass-approvals-and-sandbox']);
+  assert.deepEqual(l.args, ['--dangerously-bypass-approvals-and-sandbox', '--dangerously-bypass-hook-trust']);
 });
 
 test('a missing command falls back to the provider default, then configured default, then claude', () => {
@@ -104,4 +104,9 @@ test('main and renderer split with the SAME tokenizer (shared module)', () => {
   // The old inline copy was byte-identical to the renderer's; now it IS the
   // renderer's. One example locks the routing through the shared function.
   assert.deepEqual(tokenizeCommand(`a "b c" 'd e' f`), ['a', 'b c', 'd e', 'f']);
+});
+
+test('a GSD agent request defaults provider to claude if unset', () => {
+  const l = launch({ requestGsdAgent: 'gsd-codebase-mapper' });
+  assert.equal(l.bin, 'claude');
 });
