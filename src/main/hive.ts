@@ -509,7 +509,7 @@ export class HiveManager {
     if (!root) return null;
     if (process.platform === 'win32') {
       const id = createHash('sha1').update(root).digest('hex').slice(0, 12);
-      const suffix = app.isPackaged ? '' : '-dev';
+      const suffix = (typeof app !== 'undefined' && app?.isPackaged) ? '' : '-dev';
       return `\\\\.\\pipe\\the-hive-${id}${suffix}`;
     }
     return join(root, 'hooks.sock');
@@ -1111,7 +1111,7 @@ export class HiveManager {
           opts.mcpDefaults,
           opts.theme,
           this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs),
-          (opts.knowledgeBaseSources ?? []).filter((s) => s.type !== 'folder').map((s) => s.value)
+          opts.knowledgeBaseSources
         )
       );
       args.push('--settings', settingsPath);
@@ -1326,13 +1326,13 @@ export class HiveManager {
    *  (W3) the default MCP bundle merged into this PER-SESSION settings file. cwd
    *  scopes the filesystem/git servers; cfg (the consent map) gates which servers
    *  are written. Claude-only — this is invoked solely on the Claude spawn path. */
-  private hookSettings(
+  private  hookSettings(
     shim: string,
     cwd: string,
     cfg: McpDefaultsMap,
     theme?: 'light' | 'dark',
     writableDirs: string[] = [],
-    kbMcpUrls: string[] = []
+    knowledgeBaseSources: KbSource[] = []
   ): unknown {
     const hookCommand = this.hookShimCommand(shim);
     const statusCommand = this.hookShimCommand(shim, { withStatus: true });
@@ -1340,7 +1340,7 @@ export class HiveManager {
       ...(matcher ? { matcher } : {}),
       hooks: [{ type: 'command', command: hookCommand }]
     });
-    const mcpServers = this.buildDefaultMcpServers(cwd, cfg, kbMcpUrls);
+    const mcpServers = this.buildDefaultMcpServers(cwd, cfg, knowledgeBaseSources);
     return {
       // Match the TUI's truecolor palette to the harness terminal theme —
       // PER SESSION, so the user's global Claude theme (their own terminals
@@ -1392,7 +1392,7 @@ export class HiveManager {
   private buildDefaultMcpServers(
     cwd: string,
     cfg: McpDefaultsMap,
-    kbMcpUrls: string[] = []
+    kbSources: KbSource[] = []
   ): Record<string, McpServerSpec> {
     const out: Record<string, McpServerSpec> = {};
     for (const e of MCP_CATALOG) {
@@ -1418,9 +1418,19 @@ export class HiveManager {
     // orientation line uses the same numbering. An OAuth-gated endpoint (e.g.
     // Outline) still needs a one-time `/mcp` auth in the agent session — this
     // makes the server available, not pre-authenticated.
-    kbMcpUrls.forEach((raw, i) => {
-      const url = (raw ?? '').trim();
-      if (/^https:\/\//i.test(url)) out[`hive-kb-${i + 1}`] = { type: 'http', url };
+    const kbMcps = (kbSources ?? []).filter((s) => s.type === 'outline-mcp' || s.type === 'custom-mcp');
+    kbMcps.forEach((s, i) => {
+      let url = (s.value ?? '').trim();
+      if (/^https?:\/\//i.test(url)) {
+        // Outline MCP servers serve their Streamable HTTP MCP endpoint at /mcp.
+        // Normalize instance URLs so Claude Code talks directly to the MCP handler.
+        if (s.type === 'outline-mcp') {
+          if (!url.endsWith('/mcp') && !url.endsWith('/mcp/')) {
+            url = url.replace(/\/+$/, '') + '/mcp';
+          }
+        }
+        out[`hive-kb-${i + 1}`] = { type: 'http', url };
+      }
     });
     return out;
   }
