@@ -356,9 +356,30 @@ if (typeof window.cth !== 'undefined') { /* Electron — preload handles IPC */ 
     retryDelay = Math.min(Math.round(retryDelay * 1.5), RETRY_MAX_MS);
   }
 
+  function getToken() {
+    if (typeof window !== 'undefined') {
+      if (window.__HIVE_TOKEN__) return window.__HIVE_TOKEN__;
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('token')) return params.get('token');
+        if (params.get('secret')) return params.get('secret');
+      } catch {}
+      try {
+        const last = JSON.parse(localStorage.getItem('hive_last_setup') || '{}');
+        if (last && last.secret) return last.secret;
+        if (localStorage.getItem('hive_mobile_secret')) return localStorage.getItem('hive_mobile_secret');
+        if (localStorage.getItem('hive_secret')) return localStorage.getItem('hive_secret');
+        if (localStorage.getItem('token')) return localStorage.getItem('token');
+      } catch {}
+    }
+    return '';
+  }
+
   function connect() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${window.location.host}/bridge`;
+    const token = getToken();
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+    const url = `${protocol}//${window.location.host}/bridge${tokenParam}`;
     info('connecting to', url);
     try {
       socket = new WebSocket(url);

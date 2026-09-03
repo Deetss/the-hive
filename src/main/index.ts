@@ -206,10 +206,79 @@ type BrowserBridgeOutbound =
 
 type BrowserBridgeInvokeMessage = Extract<BrowserBridgeInbound, { type: 'invoke' }>;
 
+function isBridgeAuthed(req: IncomingMessage, url?: URL): boolean {
+  const secret = ensureMobileApiSecret();
+  if (!secret) return false;
+
+  let token = '';
+  if (url && (url.searchParams.has('token') || url.searchParams.has('secret'))) {
+    token = (url.searchParams.get('token') ?? url.searchParams.get('secret') ?? '').trim();
+  }
+  if (!token && req.url) {
+    try {
+      const parsed = new URL(req.url, 'http://127.0.0.1');
+      if (parsed.searchParams.has('token') || parsed.searchParams.has('secret')) {
+        token = (parsed.searchParams.get('token') ?? parsed.searchParams.get('secret') ?? '').trim();
+      }
+    } catch { /* ignore */ }
+  }
+  if (!token) {
+    const authHeader = req.headers['authorization'];
+    if (typeof authHeader === 'string') {
+      const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+      token = match ? match[1].trim() : authHeader.trim();
+    }
+  }
+  if (!token && typeof req.headers['x-hive-secret'] === 'string') {
+    token = (req.headers['x-hive-secret'] as string).trim();
+  }
+  if (!token && typeof req.headers['sec-websocket-protocol'] === 'string') {
+    const parts = req.headers['sec-websocket-protocol'].split(',').map((s) => s.trim());
+    for (const p of parts) {
+      if (p.startsWith('token.')) {
+        token = p.slice(6).trim();
+        break;
+      } else if (p.startsWith('bearer.')) {
+        token = p.slice(7).trim();
+        break;
+      } else if (p && p.toLowerCase() !== 'bearer' && p.toLowerCase() !== 'token' && !p.includes('/')) {
+        token = p;
+        break;
+      }
+    }
+  }
+
+  if (!token) return false;
+
+  const expectedBuf = Buffer.from(secret, 'utf8');
+  const tokenBuf = Buffer.from(token, 'utf8');
+  if (expectedBuf.length !== tokenBuf.length) {
+    return false;
+  }
+  try {
+    return timingSafeEqual(expectedBuf, tokenBuf);
+  } catch {
+    return false;
+  }
+}
+
 function setupBrowserSocketServer(server: HttpServer): void {
   if (browserSocketServer) return;
 
-  const wss = new WebSocket.Server({ server, path: '/bridge', perMessageDeflate: false });
+  const wss = new WebSocket.Server({
+    server,
+    path: '/bridge',
+    perMessageDeflate: false,
+    verifyClient: (info, callback) => {
+      const authed = isBridgeAuthed(info.req);
+      if (!authed) {
+        console.warn(`[browser-bridge] rejecting unauthenticated connection from ${info.req.socket?.remoteAddress || 'unknown'}`);
+        callback(false, 401, 'Unauthorized');
+        return;
+      }
+      callback(true);
+    }
+  });
   browserSocketServer = wss;
   wss.on('connection', (socket: WebSocket) => {
     const client: BrowserBridgeClient = { socket, subscriptions: new Set(), id: ++browserBridgeClientSeq };
@@ -480,36 +549,7 @@ function atomicWriteJson(filePath: string, data: unknown): void {
 }
 
 function isMobileAuthed(req: IncomingMessage, url?: URL): boolean {
-  const secret = ensureMobileApiSecret();
-  if (!secret) return false;
-
-  let token = '';
-  if (url && url.searchParams.has('token')) {
-    token = (url.searchParams.get('token') ?? '').trim();
-  }
-  if (!token) {
-    const authHeader = req.headers['authorization'];
-    if (typeof authHeader === 'string') {
-      const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
-      token = match ? match[1].trim() : authHeader.trim();
-    }
-  }
-  if (!token && typeof req.headers['x-hive-secret'] === 'string') {
-    token = (req.headers['x-hive-secret'] as string).trim();
-  }
-
-  if (!token) return false;
-
-  const expectedBuf = Buffer.from(secret, 'utf8');
-  const tokenBuf = Buffer.from(token, 'utf8');
-  if (expectedBuf.length !== tokenBuf.length) {
-    return false;
-  }
-  try {
-    return timingSafeEqual(expectedBuf, tokenBuf);
-  } catch {
-    return false;
-  }
+  return isBridgeAuthed(req, url);
 }
 
 function buildFleetPayload(hiveRoot: string | null) {
@@ -1962,13 +2002,15 @@ function ensureBrowserServer(): Promise<string> {
           res.end();
           return;
         }
-        // Inject browser-bridge.js into index.html — Vite strips the <script> tag
+        // Inject browser-bridge.js and auth token into index.html — Vite strips the <script> tag
         // during build, so we add it back server-side before the page is served.
         if (contentType.startsWith('text/html')) {
           const html = readFileSync(filePath, 'utf8');
+          const secret = ensureMobileApiSecret();
+          const tokenScript = `<script>window.__HIVE_TOKEN__ = ${JSON.stringify(secret)};</script>`;
           const injected = html.includes('browser-bridge.js')
-            ? html
-            : html.replace('</head>', '<script type="module" src="/browser-bridge.js"></script></head>');
+            ? (html.includes('<head>') ? html.replace('<head>', `<head>${tokenScript}`) : `${tokenScript}${html}`)
+            : (html.includes('</head>') ? html.replace('</head>', `${tokenScript}<script type="module" src="/browser-bridge.js"></script></head>`) : `${html}${tokenScript}`);
           const buf = Buffer.from(injected, 'utf8');
           res.writeHead(status, { 'Content-Type': contentType, 'Cache-Control': cacheControl, 'Content-Length': buf.byteLength });
           res.end(buf);
@@ -2028,8 +2070,10 @@ function ensureBrowserServer(): Promise<string> {
 async function openRendererInBrowser(): Promise<string> {
   try {
     const url = await ensureBrowserServer();
-    await shell.openExternal(url);
-    return url;
+    const secret = ensureMobileApiSecret();
+    const authedUrl = `${url}?token=${encodeURIComponent(secret)}`;
+    await shell.openExternal(authedUrl);
+    return authedUrl;
   } catch (err) {
     console.error('[browser-server] unable to open browser view:', err);
     throw err;
