@@ -417,7 +417,7 @@ export function WorkersTab() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   <span style={pill} title="provider">{p.provider ?? 'claude'}</span>
                   <span style={pill} title="per-worker token cap">
-                    {p.tokenCap !== null ? `${fmtTokens(p.tokenCap)} tokens` : 'uncapped'}
+                    {p.tokenCap != null ? `${fmtTokens(p.tokenCap)} tokens` : 'uncapped'}
                   </span>
                   <span style={pill} title="runs in a fresh isolated worktree">
                     {p.isolate ? 'isolated' : 'not isolated'}
