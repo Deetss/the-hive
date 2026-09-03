@@ -96,6 +96,7 @@ export function AskMeTab() {
       if (window.cth?.answerHumanQA) {
         await window.cth.answerHumanQA(taskId, question, verdict, note, image ? [image] : undefined);
       }
+      setOpenHumanQA(openQA.filter((q) => !(q.taskId === taskId && q.question === question)));
       setComments((prev) => {
         const next = { ...prev };
         delete next[taskId];

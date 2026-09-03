@@ -6730,27 +6730,28 @@ ipcMain.handle('tasks:answerHumanQA', async (_evt, taskId: unknown, question: un
 
   const task = { ...tasks[taskIndex] };
   const qaList = Array.isArray(task.humanQA) ? [...task.humanQA] : [];
-  let qaIndex = qaList.findIndex((qa) => qa.q === question && !qa.a);
-  if (qaIndex < 0) {
-    qaIndex = qaList.findIndex((qa) => qa.q === question);
-  }
   const answerText = v === 'ANSWER' ? (n as string) : n ? `${v}: ${n}` : v;
   const answerValue: HumanQA['a'] = imgs.length > 0 ? { text: answerText, images: imgs } : answerText;
   const nowIso = new Date().toISOString();
 
-  if (qaIndex >= 0) {
-    qaList[qaIndex] = {
-      ...qaList[qaIndex],
-      a: answerValue,
-      answeredAt: nowIso
-    };
+  // Resolve EVERY open duplicate of this question, not just the first match —
+  // a question asked twice (agent retry/race) left a second, invisible open
+  // copy that survived PASS/FAIL/dismiss and made the card look stuck.
+  const openIndices = qaList
+    .map((qa, i) => (qa.q === question && !qa.a ? i : -1))
+    .filter((i) => i >= 0);
+
+  if (openIndices.length > 0) {
+    for (const i of openIndices) {
+      qaList[i] = { ...qaList[i], a: answerValue, answeredAt: nowIso };
+    }
   } else {
-    qaList.push({
-      q: question,
-      a: answerValue,
-      askedAt: nowIso,
-      answeredAt: nowIso
-    });
+    const qaIndex = qaList.findIndex((qa) => qa.q === question);
+    if (qaIndex >= 0) {
+      qaList[qaIndex] = { ...qaList[qaIndex], a: answerValue, answeredAt: nowIso };
+    } else {
+      qaList.push({ q: question, a: answerValue, askedAt: nowIso, answeredAt: nowIso });
+    }
   }
 
   task.humanQA = qaList;
@@ -6853,27 +6854,26 @@ ipcMain.handle('tasks:dismissHumanQA', async (_evt, taskId: unknown, question: u
 
   const task = { ...tasks[taskIndex] };
   const qaList = Array.isArray(task.humanQA) ? [...task.humanQA] : [];
-  let qaIndex = qaList.findIndex((qa) => qa.q === question && !qa.a);
-  if (qaIndex < 0) {
-    qaIndex = qaList.findIndex((qa) => qa.q === question);
-  }
   const nowIso = new Date().toISOString();
 
-  if (qaIndex >= 0) {
-    qaList[qaIndex] = {
-      ...qaList[qaIndex],
-      a: 'dismissed by user',
-      dismissedAt: nowIso,
-      answeredAt: nowIso
-    };
+  // Dismiss EVERY open duplicate of this question, not just the first match —
+  // a question asked twice (agent retry/race) left a second, invisible open
+  // copy that survived dismiss and made the card look stuck.
+  const openIndices = qaList
+    .map((qa, i) => (qa.q === question && !qa.a ? i : -1))
+    .filter((i) => i >= 0);
+
+  if (openIndices.length > 0) {
+    for (const i of openIndices) {
+      qaList[i] = { ...qaList[i], a: 'dismissed by user', dismissedAt: nowIso, answeredAt: nowIso };
+    }
   } else {
-    qaList.push({
-      q: question,
-      a: 'dismissed by user',
-      askedAt: nowIso,
-      dismissedAt: nowIso,
-      answeredAt: nowIso
-    });
+    const qaIndex = qaList.findIndex((qa) => qa.q === question);
+    if (qaIndex >= 0) {
+      qaList[qaIndex] = { ...qaList[qaIndex], a: 'dismissed by user', dismissedAt: nowIso, answeredAt: nowIso };
+    } else {
+      qaList.push({ q: question, a: 'dismissed by user', askedAt: nowIso, dismissedAt: nowIso, answeredAt: nowIso });
+    }
   }
 
   task.humanQA = qaList;
