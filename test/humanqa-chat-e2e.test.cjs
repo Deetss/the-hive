@@ -32,10 +32,21 @@ test('full e2e chat flow: human chats, outbox routes, reply appends', () => {
     // 1. Human chats
     const humanRes = hive.appendHumanQAThread(
       'task-chat-e2',
-      '**UAT Question**\nFplease verify chat routing.',
+      '**UAT Question**\n\nplease verify chat routing.',
       { from: 'human', text: 'How does this look?', ts: new Date().toISOString() }
     );
     assert.equal(humanRes.ok, true);
+
+    // Verify inbox message delivery to assignee (god)
+    const sentMsg = hive.send({
+      to: humanRes.assignee || 'god',
+      act: 'inform',
+      subject: `Chat on your ASK ME item — ${humanRes.title ?? 'task-chat-e2'}`,
+      body: 'The human is chatting about your ASK ME item'
+    }, 'human');
+    const godInbox = path.join(hive.root(), 'agents', 'god', 'inbox');
+    const inboxFiles = fs.readdirSync(godInbox).filter(f => f.endsWith('.json'));
+    assert.ok(inboxFiles.length > 0, 'inbox file should be delivered to god inbox');
 
     // 2. Agent drops outbox file
     const agentOutbox = path.join(hive.root(), 'agents', 'god', 'outbox');

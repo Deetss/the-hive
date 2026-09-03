@@ -1802,11 +1802,19 @@ export class HiveManager {
    *  Returns false when the recipient has no inbox, so the caller can bounce and
    *  log the drop rather than let the message vanish. */
   private deliver(msg: HiveMessage, toId: string): boolean {
-    const inbox = join(this.agentDir(toId), 'inbox');
-    if (!existsSync(inbox)) return false; // unknown recipient — the caller reports it
-    const prefix = msg.priority === 'urgent' ? '0000-' : '';
-    this.atomicWriteJson(join(inbox, `${prefix}${msg.id}.json`), msg);
-    return true;
+    const reg = this.registry();
+    const godId = reg.godId ?? 'god';
+    const agentDir = this.agentDir(toId);
+    if (toId === godId || toId === 'god' || reg.agents[toId] || existsSync(agentDir)) {
+      const inbox = join(agentDir, 'inbox');
+      if (!existsSync(inbox)) {
+        try { mkdirSync(inbox, { recursive: true }); } catch { /* best effort */ }
+      }
+      const prefix = msg.priority === 'urgent' ? '0000-' : '';
+      this.atomicWriteJson(join(inbox, `${prefix}${msg.id}.json`), msg);
+      return true;
+    }
+    return false;
   }
 
   /** Inject a message directly (used by the orchestrator / UI / tests). */
@@ -2096,17 +2104,36 @@ export class HiveManager {
   ): { ok: boolean; assignee?: string | null; title?: string } {
     const ledger = this.tasks() as { tasks?: HiveTask[] };
     const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
-    const ti = tasks.findIndex((t) => t?.id === taskId);
-    if (ti < 0) return { ok: false };
+    let ti = tasks.findIndex((t) => t?.id === taskId);
+    if (ti < 0) {
+      // If task does not exist yet, auto-create a placeholder card
+      const newTask: HiveTask = {
+        id: taskId,
+        title: taskId,
+        status: 'doing',
+        assignee: undefined,
+        dependsOn: [],
+        priority: 2,
+        createdAt: new Date().toISOString(),
+        humanQA: [{
+          q: question || taskId,
+          askedAt: new Date().toISOString(),
+          thread: [msg]
+        }]
+      };
+      tasks.push(newTask);
+      this.writeTasks(tasks);
+      return { ok: true, assignee: null, title: taskId };
+    }
+
     const task = { ...tasks[ti] };
     const qaList = Array.isArray(task.humanQA) ? [...task.humanQA] : [];
-    if (qaList.length === 0) return { ok: false };
 
     const norm = (s: string) => (s || '').replace(/\r\n/g, '\n').replace(/`n/g, '\n').replace(/\s+/g, ' ').trim().toLowerCase();
     const qNorm = question ? norm(question) : '';
 
     let qi = -1;
-    if (qNorm) {
+    if (qNorm && qaList.length > 0) {
       // 1. Exact normalized match (open question first, then any)
       qi = qaList.findIndex((qa) => norm(qa.q) === qNorm && !qa.a);
       if (qi < 0) qi = qaList.findIndex((qa) => norm(qa.q) === qNorm);
@@ -2115,13 +2142,22 @@ export class HiveManager {
       if (qi < 0) qi = qaList.findIndex((qa) => norm(qa.q).includes(qNorm) || qNorm.includes(norm(qa.q)));
     }
     // 3. Fallback to the first unanswered question if not found or question was omitted
-    if (qi < 0) qi = qaList.findIndex((qa) => !qa.a);
+    if (qi < 0 && qaList.length > 0) qi = qaList.findIndex((qa) => !qa.a);
     // 4. Fallback to the latest question on the task card
-    if (qi < 0) qi = qaList.length - 1;
+    if (qi < 0 && qaList.length > 0) qi = qaList.length - 1;
 
-    const entry = qaList[qi];
-    const thread = Array.isArray(entry.thread) ? [...entry.thread, msg] : [msg];
-    qaList[qi] = { ...entry, thread };
+    if (qi < 0 || qaList.length === 0) {
+      qaList.push({
+        q: question || task.title || taskId,
+        askedAt: new Date().toISOString(),
+        thread: [msg]
+      });
+    } else {
+      const entry = qaList[qi];
+      const thread = Array.isArray(entry.thread) ? [...entry.thread, msg] : [msg];
+      qaList[qi] = { ...entry, thread };
+    }
+
     task.humanQA = qaList;
     const updated = [...tasks];
     updated[ti] = task;

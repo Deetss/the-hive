@@ -7026,7 +7026,6 @@ ipcMain.handle('tasks:chatHumanQA', async (_evt, taskId: unknown, question: unkn
     ts: new Date().toISOString(),
     ...(imgs.length > 0 ? { images: imgs } : {})
   });
-  if (!res.ok) return { ok: false, error: 'humanQA item not found' };
 
   try {
     const godId = hive.registry().godId ?? 'god';
@@ -7035,6 +7034,7 @@ ipcMain.handle('tasks:chatHumanQA', async (_evt, taskId: unknown, question: unkn
     const isAssigneeLive = !!assignee && (liveWorkers.has(assignee) || (!!assigneeEntry && !assigneeEntry.archived));
     const target = isAssigneeLive ? assignee : godId;
     const title = res.title ?? taskId;
+    console.log(`[humanQA] delivering chat to inbox of ${target} (task: ${taskId})`);
     hive.send({
       to: target,
       act: 'inform',
@@ -7045,6 +7045,7 @@ ipcMain.handle('tasks:chatHumanQA', async (_evt, taskId: unknown, question: unkn
     }, 'human');
     const ptyId = ptyForAgent(target);
     if (ptyId) {
+      console.log(`[humanQA] nudging PTY ${ptyId} for ${target}`);
       nudgeWorker(ptyId, hive.inbox(target));
     }
   } catch (e) {
