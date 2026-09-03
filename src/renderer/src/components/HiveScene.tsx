@@ -97,9 +97,11 @@ const QUEEN_APPROACH: [number, number] = [208, 146];
 /* stand sits outside the station's x-span (208-252): hive-mailroom.js routes both the
  * sender approach and courier delivery legs as a straight vertical line between the mid
  * lane and stand, so a stand.x inside the box makes every leg cut through the mailbox.
- * x=186 gives ~22px of clearance left of station edge so the bee sprite doesn't clip. */
-const MAIL_STATION = { x: 208, y: 204, w: 44, h: 26, stand: [186, 248] as [number, number] };
-const MAIL_LANES = { mid: 186, front: 266 };
+ * x=186 gives ~22px of clearance left of station edge so the bee sprite doesn't clip.
+ * mid/station/stand all sit in the 171-210 gap between the row-1 and row-2 desk bands
+ * (SEAT_ROWS 145/210, desk h=26) so the queen's shortened lane doesn't cut through either row. */
+const MAIL_STATION = { x: 208, y: 178, w: 44, h: 26, stand: [186, 218] as [number, number] };
+const MAIL_LANES = { mid: 158, front: 266 };
 /** The human has no desk to walk an envelope from, so a message they dispatch
  *  flies in from off the right edge instead of running mailroom leg 1. */
 const HUMAN_ENVELOPE_FROM: [number, number] = [W + 24, MAIL_STATION.stand[1]];
