@@ -18,6 +18,7 @@ import { HivePicker } from '@/components/HivePicker';
 import { QuitWarningModal, type ClosingTimeState } from '@/components/QuitWarningModal';
 import { CompletionToast } from '@/realtime/CompletionToast';
 import { UpdateToast } from '@/components/UpdateToast';
+import { HumanQAToast } from '@/components/HumanQAToast';
 import { SettingsModal, type Section as SettingsSection } from '@/components/SettingsModal';
 import { PixelPanel } from '@/components/PixelPanel';
 import { PixelButton } from '@/components/PixelButton';
@@ -468,6 +469,10 @@ export function App() {
       {/* v0.3.4: background-update toast ("restart to update"); renders null until
           main's updater pushes a status. */}
       <UpdateToast />
+      {/* askme-notify: top-right toast for a NEW Ask Me / humanQA question, so a
+          question posted while Dylan isn't watching the tab still gets his
+          attention. Reads the same store-level openHumanQAItems the badge uses. */}
+      <HumanQAToast />
       {/* Title bar — the frameless-window drag strip. It has to exist for window
           dragging (and the macOS traffic-light inset), so it is given a real job:
           the live fleet status. No logo — it carries agent counts, sized to read
