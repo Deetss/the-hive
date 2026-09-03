@@ -65,6 +65,7 @@ interface HiveMailroomInstance {
   step: (dt: number) => void;
   drawStation: (ctx: CanvasRenderingContext2D, f: number) => void;
   drawWalkers: (ctx: CanvasRenderingContext2D, f: number, opts?: { chips?: boolean }) => void;
+  box: Array<{ from: string; to: string; label: string | null }>;
 }
 
 interface HiveMailroomApi {
@@ -95,6 +96,10 @@ const QUEEN = { x: 212, y: 112 };
 const QUEEN_APPROACH: [number, number] = [208, 146];
 const MAIL_STATION = { x: 208, y: 222, w: 44, h: 26, stand: [228, 266] as [number, number] };
 const MAIL_LANES = { mid: 186, front: 266 };
+/** The human has no desk to walk an envelope from, so a message they dispatch
+ *  flies in from off the right edge instead of running mailroom leg 1. */
+const HUMAN_ENVELOPE_FROM: [number, number] = [W + 24, MAIL_STATION.stand[1]];
+const HUMAN_ENVELOPE_DURATION = 0.5;
 const COSTUME_POOL: Costume[] = ['hardhat', 'headset', 'labcoat', 'visor', 'hivis', 'chefhat'];
 
 function mapAgentStatus(status: Agent['status']): BeeStatus {
@@ -166,6 +171,10 @@ interface SceneState {
   overmindId: string | null;
   mail: HiveMailroomInstance | null;
   mailAgents: Record<string, MailAgentCfg>;
+  /** Off-screen envelope flights queued by human dispatches; only the head
+   *  entry animates, the rest wait their turn before joining the mailroom
+   *  station box for the normal courier leg. */
+  humanMail: Array<{ t: number; to: string }>;
   motes: Mote[];
   drips: Array<{ x: number; y: number }>;
   fillStep: number;
@@ -214,6 +223,7 @@ function createScene(): SceneState {
     overmindId: null,
     mail: null,
     mailAgents: {},
+    humanMail: [],
     motes: Array.from({ length: 46 }, () => ({
       x: Math.random() * W,
       y: 110 + Math.random() * 170,
@@ -405,6 +415,14 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
     scene.lastFillTick = t;
     scene.fillStep = (scene.fillStep % 8) + 1;
   }
+  if (scene.humanMail.length) {
+    const head = scene.humanMail[0];
+    head.t += dt;
+    if (head.t >= HUMAN_ENVELOPE_DURATION) {
+      scene.humanMail.shift();
+      scene.mail?.box.push({ from: 'human', to: head.to, label: null });
+    }
+  }
   scene.mail?.step(dt);
   if (scene.queenUntil > 0) {
     scene.queenUntil -= dt;
@@ -477,6 +495,13 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
   });
 
   scene.mail?.drawStation(x, f);
+  if (scene.humanMail.length) {
+    const progress = Math.min(1, scene.humanMail[0].t / HUMAN_ENVELOPE_DURATION);
+    const ease = 1 - (1 - progress) * (1 - progress);
+    const ex = HUMAN_ENVELOPE_FROM[0] + (MAIL_STATION.stand[0] - HUMAN_ENVELOPE_FROM[0]) * ease;
+    const ey = HUMAN_ENVELOPE_FROM[1] + (MAIL_STATION.stand[1] - HUMAN_ENVELOPE_FROM[1]) * ease;
+    A.drawEnvelope(x, ex, ey, false);
+  }
   scene.mail?.drawWalkers(x, f);
 
   // Order per spec: mail station + walkers, dust motes, light shafts, vignette.
@@ -552,9 +577,16 @@ export function HiveScene(): React.JSX.Element {
     // station, the courier routes it to the recipient's seat. Both ids must
     // already be posted in scene.mailAgents (queen + live seats) or the send
     // is silently dropped — mirrors OfficeFloor's posFor() guard for a
-    // sender/recipient that isn't on the floor (e.g. "human").
+    // recipient that isn't on the floor. A "human" sender has no desk to walk
+    // from, so it skips leg 1 and flies in from off-screen instead (below),
+    // joining the mailroom's station box directly for the normal courier leg.
     const sendMail = (from?: string, to?: string): void => {
       if (!from || !to || from === to) return;
+      if (from === 'human') {
+        if (!scene.mailAgents[to] || !scene.mail) return;
+        scene.humanMail.push({ t: 0, to });
+        return;
+      }
       if (!scene.mailAgents[from] || !scene.mailAgents[to]) return;
       scene.mail?.send({ from, to });
     };
