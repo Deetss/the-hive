@@ -3338,6 +3338,11 @@ thread. This is the ONLY spawn route you can complete on your own: a hire manife
 Naming a worker after a cast member already gets you that avatar, so you only need \`character\` when
 the name and the face should differ. An unrecognised value falls back rather than failing the spawn.
 
+When you set \`name\`, use one of the ten worker bee cast names, not a generic label like "Buzz Respawn
+Fix Worker": Doc BeeGood, Buzz the Builder, Buzzy Baker, Sherlock Combs, Buzz Cassidy, Buzz Loman, Buzz
+Aldrin, Bee-casso, Muhammad Albee, Albee Einstein. Queen is reserved for god. Leave \`name\` unset and the
+harness auto-assigns the next available cast name for you.
+
 **It can be switched off.** The operator controls this under Settings → Autonomy & Budgets, and it is
 OFF by default, because every worker you start spends tokens nobody approved. While it is off your
 request is NOT failed or deleted, it waits in \`spawn-requests/\` and runs if the operator turns it on.
