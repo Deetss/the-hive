@@ -1,11 +1,44 @@
 import { useState, useEffect, type CSSProperties } from 'react';
 import type { HarnessConfig, AgentProvider, RuntimeProfile } from '@/store/config';
 import { AGENT_PROVIDER_PRESETS, isClaudeProvider } from '@/store/config';
+import { normalizeRuntimeProfile } from '@shared/runtimeProfile';
 import { PixelButton } from './PixelButton';
 import { ProviderLogo } from './ProviderLogo';
 import { OSS_BLOG_LINKS } from '@shared/ossModels';
 import { useStore } from '@/store/store';
 import { CopyButton } from './CopyButton';
+
+/** Portable subset of a RuntimeProfile — what the row's copy button puts on the
+ *  clipboard and what "Import from clipboard" expects back. Excludes `id`,
+ *  `createdAt` and `apiKeyRef` (a per-profile safeStorage pointer, meaningless
+ *  once copied elsewhere) so a copy/paste always lands as a genuinely new profile. */
+function toPortableProfile(p: RuntimeProfile) {
+  return {
+    name: p.name,
+    provider: p.provider,
+    model: p.model,
+    command: p.command,
+    extraArgs: p.extraArgs,
+    claudeConfigDir: p.claudeConfigDir,
+    baseUrl: p.baseUrl,
+    allowPrivate: p.allowPrivate
+  };
+}
+
+/** Parse clipboard text into one or more new profiles. Accepts a single
+ *  portable-profile object or an array of them; silently skips entries that
+ *  don't normalize (unknown shape, missing name/provider). */
+function parseProfilesFromClipboard(text: string): RuntimeProfile[] {
+  const parsed: unknown = JSON.parse(text);
+  const candidates = Array.isArray(parsed) ? parsed : [parsed];
+  const out: RuntimeProfile[] = [];
+  for (const c of candidates) {
+    const normalized = normalizeRuntimeProfile({ ...(c as Record<string, unknown>), id: crypto.randomUUID() });
+    if (!normalized) continue;
+    out.push({ ...normalized, createdAt: Date.now(), apiKeyRef: undefined });
+  }
+  return out;
+}
 
 /**
  * AiEnginesSettings — the v0.3.1 per-provider config surface for the BYOK CLI
@@ -94,6 +127,7 @@ export function AiEnginesSettings({
   const [draftConfigDir, setDraftConfigDir] = useState('');
   const [draftBaseUrl, setDraftBaseUrl] = useState('');
   const [baseUrlError, setBaseUrlError] = useState('');
+  const [importNote, setImportNote] = useState('');
   // Cloud-endpoint API keys are per-profile, write-only (safeStorage via
   // profile:setApiKey) — same discipline as the BACKENDS keys above.
   const [cloudHasKey, setCloudHasKey] = useState<Record<string, boolean>>({});
@@ -191,6 +225,22 @@ export function AiEnginesSettings({
   };
   const removeProfileById = async (id: string) => {
     await persistProfiles(profiles.filter((p) => p.id !== id));
+  };
+
+  const importProfilesFromClipboard = async () => {
+    let text = '';
+    try { text = await window.cth.readClipboard(); } catch { /* noop */ }
+    if (!text.trim()) { setImportNote('Clipboard is empty.'); return; }
+    let imported: RuntimeProfile[];
+    try {
+      imported = parseProfilesFromClipboard(text);
+    } catch {
+      setImportNote('Clipboard is not valid profile JSON.');
+      return;
+    }
+    if (!imported.length) { setImportNote('No valid profile found in clipboard.'); return; }
+    await persistProfiles([...profiles, ...imported]);
+    setImportNote(`Imported ${imported.length} profile${imported.length > 1 ? 's' : ''}.`);
   };
 
   const saveCloudKey = async (profileId: string) => {
@@ -313,13 +363,22 @@ export function AiEnginesSettings({
           once with <code>CLAUDE_CONFIG_DIR=&lt;dir&gt; claude</code>. The dir is a path only; no
           key is stored here, and it must live outside the synced hive repo.
         </div>
-        {onOpenProfileWalkthrough && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 6 }}>
+          {importNote && <div style={{ fontSize: 13, color: 'var(--cth-ink-500)' }}>{importNote}</div>}
+          <PixelButton
+            variant="secondary"
+            size="sm"
+            onClick={importProfilesFromClipboard}
+            title="Paste a profile copied with the 📋 button on another profile"
+          >
+            📋 Import from clipboard
+          </PixelButton>
+          {onOpenProfileWalkthrough && (
             <PixelButton variant="secondary" size="sm" onClick={onOpenProfileWalkthrough}>
               Re-run account walkthrough
             </PixelButton>
-          </div>
-        )}
+          )}
+        </div>
 
         {profiles.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -338,7 +397,7 @@ export function AiEnginesSettings({
                         {profileStr}
                       </span>
                     </div>
-                    <CopyButton value={`${p.name} · ${profileStr}`} title="Copy profile config" />
+                    <CopyButton value={JSON.stringify(toPortableProfile(p))} title="Copy profile (paste with Import from clipboard)" />
                     <PixelButton variant="secondary" size="sm" onClick={() => removeProfileById(p.id)}>Delete</PixelButton>
                   </div>
                   {p.baseUrl && (
