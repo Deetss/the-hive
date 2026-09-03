@@ -6546,7 +6546,10 @@ ipcMain.handle('hive:setAgentHold', (_evt, id: unknown, hold: unknown) => {
   return hive.setAgentHold(id, hold);
 });
 ipcMain.handle('hive:board', () => hive.board());
-ipcMain.handle('hive:tasks', () => hive.tasks());
+ipcMain.handle('hive:tasks', () => {
+  try { hive.promoteTodoWithOpenHumanQA(); } catch (e) { console.error('[hive] promoteTodoWithOpenHumanQA failed:', e); }
+  return hive.tasks();
+});
 ipcMain.handle('hive:log', (_evt, n: unknown) => hive.logTail(typeof n === 'number' ? n : 200));
 ipcMain.handle('hive:memory', (_evt, id: unknown) => (typeof id === 'string' ? hive.memory(id) : ''));
 ipcMain.handle('hive:inbox', (_evt, id: unknown) => (typeof id === 'string' ? hive.inbox(id) : []));
@@ -6619,6 +6622,7 @@ ipcMain.handle('tasks:openHumanQA', () => {
     const godId = hive.registry().godId ?? 'god';
     hive.reassignOrphanedTasks(godId);
   } catch (e) { console.error('[hive] reassignOrphanedTasks failed:', e); }
+  try { hive.promoteTodoWithOpenHumanQA(); } catch (e) { console.error('[hive] promoteTodoWithOpenHumanQA failed:', e); }
   const ledger = hive.tasks() as { tasks?: HiveTask[] };
   const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
   const openItems: Array<{

@@ -2198,6 +2198,31 @@ export class HiveManager {
     this.writeTasks(updated);
     return affected;
   }
+
+  /**
+   * Promote every `todo` card that already carries an open `humanQA` ask to
+   * `doing`. An agent pushes a `humanQA` entry by self-editing tasks.json
+   * directly (there is no IPC append path for the initial ask — see
+   * PROTOCOL.md), so a card whose FIRST action is to block on a question
+   * never passes through any handler that would flip its status. Without
+   * this, the kanban card sits on `todo` with no working indicator even
+   * though the agent is actively blocked on it. Called from `hive:tasks`
+   * and `tasks:openHumanQA` so a stale card corrects itself the next time
+   * either board loads.
+   */
+  promoteTodoWithOpenHumanQA(): string[] {
+    const ledger = this.tasks() as { tasks?: HiveTask[] };
+    const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+    const affected: string[] = [];
+    const updated = tasks.map((t) => {
+      if (!t || t.status !== 'todo' || !Array.isArray(t.humanQA) || t.humanQA.length === 0) return t;
+      affected.push(t.id);
+      return { ...t, status: 'doing' as const };
+    });
+    if (affected.length === 0) return [];
+    this.writeTasks(updated);
+    return affected;
+  }
   memory(id: string): string {
     const p = join(this.agentDir(id), 'memory.md');
     return existsSync(p) ? readFileSync(p, 'utf8') : '';
