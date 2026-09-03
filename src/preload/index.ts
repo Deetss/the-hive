@@ -22,6 +22,8 @@ import type {
 export type {
   ContextRule, ContextTriggerConfig, OrgTriggerConfig, TriggerHistoryEntry, WebhookTrigger
 } from '../shared/triggers';
+import type { DetectedPersona } from '../shared/agentPersona';
+export type { DetectedPersona } from '../shared/agentPersona';
 
 /** Renderer-visible integration record: the secretRef handle is redacted to a
  *  presence boolean. Matches main `integrations.listRecordsRedacted()` — the
@@ -79,6 +81,10 @@ export interface HiveAgentMeta {
   isOvermind?: boolean;
   /** Abathur's prep assistant — send-only; enriches prompts and forwards them. */
   isAssistant?: boolean;
+  /** GSD-core subagent persona name (e.g. gsd-codebase-mapper) */
+  gsdAgent?: string;
+  /** Generic subagent persona name */
+  persona?: string;
 }
 
 export interface HiveMessage {
@@ -726,6 +732,9 @@ const api = {
    *  resume auto-fill), or null if the id is invalid/unknown. */
   resolveSessionCwd: (sessionId: string): Promise<string | null> =>
     ipcRenderer.invoke('session:resolveCwd', sessionId),
+  /** Detect installed subagent personas (GSD skills and custom Claude Code agents) */
+  detectPersonas: (projectDir?: string): Promise<DetectedPersona[]> =>
+    ipcRenderer.invoke('agents:detectPersonas', projectDir),
   onPtyData: (id: string, cb: (data: string) => void): (() => void) => {
     const channel = `pty:data:${id}`;
     const listener = (_e: IpcRendererEvent, data: string) => cb(data);

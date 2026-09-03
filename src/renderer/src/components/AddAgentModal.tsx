@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { SpritePortrait } from './SpritePortrait';
@@ -9,6 +9,7 @@ import { OFFICE_CAST, getDefaultCharacter, type OfficeCharacterName } from '@/sc
 import { HIVE_CAST } from '@/scene/office/hiveCast';
 import { type AccentColorName } from '@/design/tokens';
 import type { HireManifest } from '@shared/hire';
+import type { DetectedPersona } from '@shared/agentPersona';
 import { hireQueueProgress } from '@shared/hireQueue';
 import { MCP_CATALOG } from '@shared/mcpCatalog';
 import {
@@ -275,6 +276,47 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   const [profileId, setProfileId] = useState<string | undefined>(undefined);
   const defaultProfileApplied = useRef(false);
 
+  const [detectedPersonas, setDetectedPersonas] = useState<DetectedPersona[]>([]);
+  const [selectedPersona, setSelectedPersona] = useState<DetectedPersona | null>(null);
+  const [personaFilter, setPersonaFilter] = useState<string>('');
+  const [personasOpen, setPersonasOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    let active = true;
+    if (window.cth.detectPersonas) {
+      window.cth.detectPersonas(cwd).then((list) => {
+        if (active) setDetectedPersonas(list || []);
+      }).catch(() => {
+        if (active) setDetectedPersonas([]);
+      });
+    }
+    return () => { active = false; };
+  }, [cwd]);
+
+  const selectPersona = (p: DetectedPersona) => {
+    setSelectedPersona(p);
+    setDescription(p.description || p.name);
+    if (!name.trim() || name === 'Jim' || name === 'Ada') {
+      setName(p.name);
+      const match = characterForName(p.name);
+      if (match) setCharacter(match);
+    }
+    if (p.isGsd && provider !== 'claude') {
+      pickProvider('claude');
+    }
+  };
+
+  const filteredPersonas = useMemo(() => {
+    const q = personaFilter.trim().toLowerCase();
+    if (!q) return detectedPersonas;
+    return detectedPersonas.filter(
+      (p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+    );
+  }, [detectedPersonas, personaFilter]);
+
+  const filteredGsdPersonas = useMemo(() => filteredPersonas.filter((p) => p.isGsd), [filteredPersonas]);
+  const filteredCustomPersonas = useMemo(() => filteredPersonas.filter((p) => !p.isGsd), [filteredPersonas]);
+
   // Picking a model rebuilds the command; the command field stays editable for
   // power users (it's the source of truth for the actual spawn).
   const pickModel = (id?: string) => {
@@ -533,7 +575,8 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
         cwd,
         role: description.trim() || undefined,
         // A hire manifest may carry validated capability tags (routing hints).
-        capabilities: hireMeta?.capabilities
+        capabilities: hireMeta?.capabilities,
+        gsdAgent: selectedPersona?.name || undefined
       }
     });
     if (!spawnRes.ok) {
@@ -1203,6 +1246,164 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
 
                 {section === 'briefing' && (
                   <>
+                    {detectedPersonas.length > 0 && (
+                      <div style={{
+                        border: '1px solid var(--cth-ink-300)',
+                        background: 'var(--cth-cream-100)',
+                        marginBottom: 6,
+                        overflow: 'hidden'
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => setPersonasOpen((v) => !v)}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '6px 8px',
+                            background: personasOpen ? 'var(--cth-cream-200)' : 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--cth-font-ui)',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: 'var(--cth-ink-900)'
+                          }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span>{personasOpen ? '▼' : '▶'}</span>
+                            <span>Installed Personas & GSD Agents ({detectedPersonas.length} installed)</span>
+                          </span>
+                          {selectedPersona ? (
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              padding: '1px 6px',
+                              background: 'var(--cth-mint-light)',
+                              boxShadow: 'inset 0 0 0 1px var(--cth-mint)',
+                              color: 'var(--cth-ink-900)'
+                            }}>
+                              Active: {selectedPersona.name}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 11, color: 'var(--cth-ink-500)', fontWeight: 400 }}>
+                              {personasOpen ? 'click to collapse' : 'click to browse'}
+                            </span>
+                          )}
+                        </button>
+
+                        {personasOpen && (
+                          <div style={{ padding: '8px 8px 10px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--cth-ink-300)' }}>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <input
+                                value={personaFilter}
+                                onChange={(e) => setPersonaFilter(e.target.value)}
+                                placeholder="Search personas (e.g. mapper, planner, reviewer, bug)..."
+                                style={{ ...inputStyle, padding: '3px 6px', fontSize: 12, flex: 1 }}
+                              />
+                              {selectedPersona && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPersona(null)}
+                                  title="Clear selected persona"
+                                  style={{
+                                    padding: '3px 8px 1px',
+                                    background: 'var(--cth-coral-light)',
+                                    boxShadow: 'inset 0 0 0 1px var(--cth-coral)',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontFamily: 'var(--cth-font-ui)',
+                                    fontSize: 12,
+                                    color: 'var(--cth-ink-900)'
+                                  }}
+                                >
+                                  clear persona ✕
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="cth-scroll-hidden" style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {filteredGsdPersonas.length > 0 && (
+                                <div>
+                                  <div style={ossGroupHead}>GSD Skills & Agents ({filteredGsdPersonas.length})</div>
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                    {filteredGsdPersonas.map((p) => {
+                                      const active = selectedPersona?.name === p.name;
+                                      return (
+                                        <button
+                                          key={p.name}
+                                          type="button"
+                                          onClick={() => selectPersona(p)}
+                                          title={p.description ? `${p.name} — ${p.description}` : p.name}
+                                          style={ossChip(active, accent)}
+                                        >
+                                          <span style={{ fontWeight: active ? 700 : 500 }}>{p.name}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {filteredCustomPersonas.length > 0 && (
+                                <div>
+                                  <div style={ossGroupHead}>Custom Agents ({filteredCustomPersonas.length})</div>
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                    {filteredCustomPersonas.map((p) => {
+                                      const active = selectedPersona?.name === p.name;
+                                      return (
+                                        <button
+                                          key={p.name}
+                                          type="button"
+                                          onClick={() => selectPersona(p)}
+                                          title={p.description ? `${p.name} — ${p.description}` : p.name}
+                                          style={ossChip(active, accent)}
+                                        >
+                                          <span style={{ fontWeight: active ? 700 : 500 }}>{p.name}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedPersona && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '4px 8px',
+                        background: 'var(--cth-mint-light)',
+                        boxShadow: 'inset 0 0 0 1px var(--cth-mint)',
+                        fontSize: 12,
+                        fontFamily: 'var(--cth-font-ui)',
+                        color: 'var(--cth-ink-900)'
+                      }}>
+                        <span>
+                          Persona: <strong>{selectedPersona.name}</strong> {selectedPersona.isGsd ? '(GSD-core skill)' : '(Custom subagent)'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPersona(null)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--cth-ink-500)',
+                            fontSize: 12
+                          }}
+                        >
+                          ✕ clear
+                        </button>
+                      </div>
+                    )}
+
                     <Row label="Templates">
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {DESCRIPTION_TEMPLATES.map((t) => (

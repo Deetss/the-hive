@@ -10,6 +10,7 @@ import {
   normalizeAgentProvider
 } from '../shared/agentProvider';
 import { tokenizeCommand } from '../shared/commandLine';
+import { resolveGsdModel } from './personas';
 
 export interface WorkerLaunch {
   /** The executable name alone — what the PTY layer resolves and spawns. */
@@ -26,11 +27,18 @@ export function buildWorkerLaunch(opts: {
   requestProvider?: unknown;
   /** Separate `model` field from the request, if any. */
   requestModel?: unknown;
+  /** Optional GSD-core subagent persona name */
+  requestGsdAgent?: unknown;
+  /** Repo cwd for resolving project-scoped GSD model defaults */
+  cwd?: string;
   defaultCommand?: string;
   /** The app's auto (skip-permissions) setting. */
   autoMode: boolean;
 }): WorkerLaunch {
-  const explicitProvider = normalizeAgentProvider(opts.requestProvider);
+  const gsdAgent = typeof opts.requestGsdAgent === 'string' && opts.requestGsdAgent.trim()
+    ? opts.requestGsdAgent.trim()
+    : undefined;
+  const explicitProvider = normalizeAgentProvider(opts.requestProvider) || (gsdAgent ? 'claude' : undefined);
   const fallbackCommand = typeof opts.defaultCommand === 'string' && opts.defaultCommand.trim()
     ? opts.defaultCommand.trim()
     : 'claude';
@@ -56,8 +64,11 @@ export function buildWorkerLaunch(opts: {
   const autoFlag = opts.autoMode ? autoModeFlagForProvider(provider) : '';
   if (autoFlag) {
     const cmdTokens = tokenizeCommand(command);
-    const missingTokens = tokenizeCommand(autoFlag).filter(t => !cmdTokens.includes(t));
-    if (missingTokens.length) command += ' ' + missingTokens.join(' ');
+    const autoTokens = tokenizeCommand(autoFlag);
+    const leadingToken = autoTokens[0];
+    if (leadingToken && !cmdTokens.includes(leadingToken)) {
+      command += ' ' + autoFlag;
+    }
   }
   // god authors `command` as a full command LINE ("claude --model … --permission-mode …"),
   // but the PTY layer takes ONE executable name (resolveCommand) plus argv — the
@@ -71,9 +82,13 @@ export function buildWorkerLaunch(opts: {
   const flags = tokens.slice(1);
   // A separate `model` field only applies when the command line didn't pick a
   // model itself (spawnAgentCore likewise skips its default-model injection
-  // when argv already carries --model).
-  const model =
+  // when argv already carries --model). If no explicit model is provided for a GSD
+  // agent, resolve-model from gsd-tools.cjs fills in the project-configured default.
+  let model =
     typeof opts.requestModel === 'string' && opts.requestModel.trim() ? opts.requestModel.trim() : '';
+  if (!model && gsdAgent && opts.cwd) {
+    model = resolveGsdModel(gsdAgent, opts.cwd) || '';
+  }
   const args = [...flags, ...(model && !flags.includes('--model') ? ['--model', model] : [])];
   return { bin, args, command };
 }

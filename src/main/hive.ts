@@ -44,6 +44,7 @@ import { preferredAgentRole } from '../shared/agentRole';
 import { mergeTaskLedger } from '../shared/taskLedger';
 import { mergePlanLedger } from '../shared/planLedger';
 import { expandTilde } from './fs';
+import { readPersonaBody } from './personas';
 
 /** The subset of HarnessConfig the hive consumes for the default-MCP merge.
  *  Kept as a local shape so hive.ts never imports the foundation-owned config
@@ -203,6 +204,10 @@ export interface AgentMeta {
    *  cap instead of falling back to the harness-wide default. Undefined =
    *  uncapped / never set. */
   tokenCap?: number;
+  /** Optional GSD-core subagent persona name (e.g. 'gsd-codebase-mapper') */
+  gsdAgent?: string;
+  /** Generic subagent persona name */
+  persona?: string;
 }
 
 export interface RegistryAgent extends AgentMeta {
@@ -1747,7 +1752,18 @@ export class HiveManager {
       `Env vars: AGENT_ID, AGENT_NAME, HIVE_ROOT, AGENT_DIR.`
     ].filter(Boolean).join('\n');
 
-    return rememberSection ? `${rememberSection}${basePrompt}` : basePrompt;
+    const fullBase = rememberSection ? `${rememberSection}${basePrompt}` : basePrompt;
+
+    let personaSection = '';
+    const personaName = meta.gsdAgent || meta.persona;
+    if (personaName) {
+      const personaBody = readPersonaBody(personaName, meta.cwd);
+      if (personaBody) {
+        personaSection = `\n\n# Subagent Persona & Instructions (${personaName})\n${personaBody}`;
+      }
+    }
+
+    return fullBase + personaSection;
   }
 
   // — messaging —
