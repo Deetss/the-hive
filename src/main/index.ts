@@ -6607,6 +6607,12 @@ function setupTasksJsonWatcher(): void {
 ipcMain.handle('tasks:openHumanQA', () => {
   setupTasksJsonWatcher();
   if (!hive.enabled()) return [];
+  // Self-heal any card whose assignee never matched a real agent (a bad
+  // guess at creation time, not a reap) before reading it back for display.
+  try {
+    const godId = hive.registry().godId ?? 'god';
+    hive.reassignOrphanedTasks(godId);
+  } catch (e) { console.error('[hive] reassignOrphanedTasks failed:', e); }
   const ledger = hive.tasks() as { tasks?: HiveTask[] };
   const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
   const openItems: Array<{
@@ -6834,6 +6840,24 @@ ipcMain.handle('hive:setArchived', (_evt, id: unknown, archived: unknown) => {
   if (typeof id !== 'string') return { ok: false, error: 'invalid id' };
   if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
   hive.setArchived(id, archived === true);
+  if (archived === true) {
+    try {
+      const godId = hive.registry().godId ?? 'god';
+      if (id !== godId) {
+        const reassigned = hive.reassignAgentTasks(id, godId);
+        if (reassigned.length > 0) {
+          hive.send({
+            to: godId,
+            act: 'inform',
+            subject: `${id} archived: ${reassigned.length} task(s) reassigned to you`,
+            body: `${id} was archived with open work. Task(s) ${reassigned.join(', ')} `
+              + `are now assigned to you so any open ASK ME items don't get lost.`
+          }, 'system');
+          broadcastHumanQAChanged();
+        }
+      }
+    } catch (e) { console.error('[hive] reassignAgentTasks on archive failed:', e); }
+  }
   return { ok: true };
 });
 ipcMain.handle('hive:patchAgentRole', (_evt, id: unknown, role: unknown) => {
