@@ -753,7 +753,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
         }}
       >
         <PixelPanel variant="dialog" title="TASK" noPadding style={{ display: 'flex', flexDirection: 'column', width: '100%', minHeight: 0 }}>
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
+          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
             {/* Title under a status-colored bar */}
             <div style={{ borderLeft: `4px solid ${col.accent}`, paddingLeft: 8 }}>
               {isEditingTitle ? (

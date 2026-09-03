@@ -10,6 +10,18 @@ const codeStyle: CSSProperties = {
   fontSize: '0.92em'
 };
 
+const preStyle: CSSProperties = {
+  fontFamily: 'var(--cth-font-mono)',
+  background: 'var(--cth-ink-100, rgba(127,127,127,0.16))',
+  padding: '6px 8px',
+  borderRadius: 3,
+  fontSize: '0.92em',
+  margin: '0 0 6px',
+  maxWidth: '100%',
+  overflowX: 'auto',
+  boxSizing: 'border-box'
+};
+
 const REMARK_PLUGINS = [remarkGfm];
 
 const markdownComponents: Components = {
@@ -24,6 +36,9 @@ const markdownComponents: Components = {
   ),
   li: ({ children, node: _node, style, ...props }) => (
     <li {...props} style={{ ...style, margin: '0 0 2px' }}>{children}</li>
+  ),
+  pre: ({ children, node: _node, style, ...props }) => (
+    <pre {...props} style={{ ...preStyle, ...style }}>{children}</pre>
   ),
   code: (props) => {
     const { children, node: _node, style, ...rest } = props;
@@ -71,7 +86,7 @@ function MarkdownInner({ text, style }: MarkdownProps): JSX.Element {
     </ReactMarkdown>
   ), [text]);
 
-  return <div style={style}>{rendered}</div>;
+  return <div style={{ overflowWrap: 'break-word', wordBreak: 'break-word', minWidth: 0, ...style }}>{rendered}</div>;
 }
 
 export const Markdown = memo(MarkdownInner, (prev, next) => prev.text === next.text && isSameStyle(prev.style, next.style));
