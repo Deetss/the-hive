@@ -615,6 +615,7 @@ export function AskMeTab() {
                     const isOpen = chatOpen[chatKey] ?? (thread.length > 0);
                     const draft = chatDrafts[chatKey] ?? '';
                     const sending = !!chatSending[chatKey];
+                    const responderName = item.assignee ? nameFor(item.assignee) : nameFor('god');
                     return (
                       <div style={{ borderTop: '1px solid var(--cth-ink-100)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <button
@@ -640,7 +641,7 @@ export function AskMeTab() {
                                     boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', padding: '5px 8px'
                                   }}>
                                     <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 10, color: 'var(--cth-ink-500)', marginBottom: 2 }}>
-                                      {m.from === 'human' ? 'you' : nameFor(item.assignee)} · {formatAgo(m.ts, now)}
+                                      {m.from === 'human' ? 'you' : responderName} · {formatAgo(m.ts, now)}
                                     </div>
                                     <Markdown text={m.text} style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-900)', maxWidth: '72ch' }} />
                                     {m.images?.[0] && (
@@ -659,7 +660,7 @@ export function AskMeTab() {
                                 alignSelf: 'flex-start', fontFamily: 'var(--cth-font-ui)', fontSize: 11,
                                 fontStyle: 'italic', color: 'var(--cth-ink-500)'
                               }}>
-                                waiting for {nameFor(item.assignee)} to reply…
+                                waiting for {responderName} to reply…
                               </div>
                             )}
                             {chatImages[chatKey] && (
@@ -690,7 +691,7 @@ export function AskMeTab() {
                                 onChange={(e) => setChatDrafts((p) => ({ ...p, [chatKey]: e.target.value }))}
                                 onKeyDown={(e) => { if (e.key === 'Enter') void handleChat(item.taskId, item.question); }}
                                 onPaste={handlePasteChatImage(chatKey)}
-                                placeholder={`ask ${nameFor(item.assignee)}…`}
+                                placeholder={`ask ${responderName}…`}
                                 disabled={sending}
                                 style={{
                                   flex: 1, padding: '4px 8px', border: 'none', outline: 'none',

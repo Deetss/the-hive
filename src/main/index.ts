@@ -7028,28 +7028,27 @@ ipcMain.handle('tasks:chatHumanQA', async (_evt, taskId: unknown, question: unkn
   });
   if (!res.ok) return { ok: false, error: 'humanQA item not found' };
 
-  if (res.assignee) {
-    try {
-      const godId = hive.registry().godId ?? 'god';
-      const assigneeEntry = hive.registry().agents[res.assignee];
-      const isAssigneeLive = liveWorkers.has(res.assignee) || (!!assigneeEntry && !assigneeEntry.archived);
-      const target = isAssigneeLive ? res.assignee : godId;
-      const title = res.title ?? taskId;
-      hive.send({
-        to: target,
-        act: 'inform',
-        subject: `Chat on your ASK ME item — ${title}`,
-        body: `The human is chatting about your ASK ME item on "${title}":\n\n${body}\n\n`
-          + `Reply by dropping a JSON file in your outbox: `
-          + `{"act":"humanQA-chat","taskId":"${taskId}","question":${JSON.stringify(question)},"text":"<your reply>"}`
-      }, 'human');
-      const ptyId = ptyForAgent(target);
-      if (ptyId) {
-        nudgeWorker(ptyId, hive.inbox(target));
-      }
-    } catch (e) {
-      console.error('[humanQA] chat notify to assignee failed:', e);
+  try {
+    const godId = hive.registry().godId ?? 'god';
+    const assignee = res.assignee ? res.assignee.trim() : '';
+    const assigneeEntry = assignee ? hive.registry().agents[assignee] : undefined;
+    const isAssigneeLive = !!assignee && (liveWorkers.has(assignee) || (!!assigneeEntry && !assigneeEntry.archived));
+    const target = isAssigneeLive ? assignee : godId;
+    const title = res.title ?? taskId;
+    hive.send({
+      to: target,
+      act: 'inform',
+      subject: `Chat on your ASK ME item — ${title}`,
+      body: `The human is chatting about your ASK ME item on "${title}":\n\n${body}\n\n`
+        + `Reply by dropping a JSON file in your outbox: `
+        + `{"act":"humanQA-chat","taskId":"${taskId}","question":${JSON.stringify(question)},"text":"<your reply>"}`
+    }, 'human');
+    const ptyId = ptyForAgent(target);
+    if (ptyId) {
+      nudgeWorker(ptyId, hive.inbox(target));
     }
+  } catch (e) {
+    console.error('[humanQA] chat notify failed:', e);
   }
 
   broadcastHumanQAChanged();
