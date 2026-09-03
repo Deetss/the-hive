@@ -573,7 +573,7 @@ const TaskCard = memo(function TaskCard({ task, accent, assigneeName, onOpen, on
           )}
         </span>
         {waitsOnHuman(task) && (
-          <span title="waiting on YOUR answer — see the FOR YOU tab" style={{
+          <span title="waiting on YOUR answer — see the ASK ME tab" style={{
             alignSelf: 'center', marginRight: 18, flexShrink: 0,
             fontFamily: 'var(--cth-font-ui)', fontSize: 13, padding: '2px 5px 1px',
             background: 'var(--cth-lilac)', color: 'var(--cth-ink-900)',
@@ -1026,7 +1026,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onPatch,
                       </div>
                     ) : (
                       <div style={{ fontSize: 13, color: 'var(--cth-coral)', fontFamily: 'var(--cth-font-ui)' }}>
-                        AWAITING YOUR ANSWER — FOR YOU TAB
+                        AWAITING YOUR ANSWER — ASK ME TAB
                       </div>
                     )}
                   </div>
