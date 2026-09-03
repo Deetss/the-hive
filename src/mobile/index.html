@@ -1159,7 +1159,7 @@
       <div class="field">
         <label>Recipient</label>
         <select id="dispatch-to">
-          <option value="god">Abathur (Overmind)</option>
+          <option value="god">Abathur decides</option>
           <option value="broadcast">Broadcast (all agents)</option>
         </select>
       </div>
@@ -1172,12 +1172,13 @@
         </select>
       </div>
       <div class="field">
-        <label>Subject</label>
-        <input type="text" id="dispatch-subject" placeholder="Brief subject line">
+        <label>Project (optional)</label>
+        <input type="text" id="dispatch-project" list="dispatch-project-list" placeholder="e.g. mobile-parity" autocapitalize="none" autocomplete="off">
+        <datalist id="dispatch-project-list"></datalist>
       </div>
       <div class="field">
         <label>Message</label>
-        <textarea id="dispatch-body" placeholder="Describe the task for the agents…"></textarea>
+        <textarea id="dispatch-body" placeholder="Describe the task for Abathur…"></textarea>
       </div>
       <div class="field">
         <label>Priority</label>
@@ -2620,16 +2621,40 @@ document.getElementById('task-tabs').addEventListener('click', e => {
 });
 
 // ── Dispatch ─────────────────────────────────────────────────────
+// Aligned to the desktop MessageQueueComposer's "unified composer" model:
+// no manual subject (derived from the message's first line), a Project tag
+// prepended to the body, and a priority directive appended to the body so
+// Abathur gets the same routing instructions regardless of which client sent
+// the message. Direct per-agent messaging (the queue side of that composer)
+// already lives on the Fleet tab's per-agent message form, not here.
+const DISPATCH_PROJECTS_KEY = 'hive_dispatch_projects';
+
+function loadDispatchProjects() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DISPATCH_PROJECTS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(p => typeof p === 'string') : [];
+  } catch { return []; }
+}
+
+function rememberDispatchProject(name) {
+  const p = (name || '').trim();
+  if (!p) return;
+  const prev = loadDispatchProjects();
+  if (prev.includes(p)) return;
+  const next = [p, ...prev].slice(0, 40);
+  try { localStorage.setItem(DISPATCH_PROJECTS_KEY, JSON.stringify(next)); } catch {}
+}
+
 function populateDispatchRecipients() {
   const sel = document.getElementById('dispatch-to');
   const current = sel.value;
   sel.innerHTML = '';
   const fixed = [
-    { value: 'god', label: 'Abathur (Overmind)' },
+    { value: 'god', label: 'Abathur decides' },
     { value: 'broadcast', label: 'Broadcast (all agents)' }
   ];
   const agents = (fleetData || {}).agents || [];
-  const opts = [...fixed, ...agents.filter(a => a.id !== 'god').map(a => ({ value: a.id, label: (a.name || a.id) + ' (' + (a.role || a.provider) + ')' }))];
+  const opts = [...fixed, ...agents.filter(a => a.id !== 'god').map(a => ({ value: a.id, label: 'Suggest: ' + (a.name || a.id) + ' (' + (a.role || a.provider) + ')' }))];
   opts.forEach(o => {
     const el = document.createElement('option');
     el.value = o.value;
@@ -2637,6 +2662,13 @@ function populateDispatchRecipients() {
     if (o.value === current) el.selected = true;
     sel.appendChild(el);
   });
+
+  const projectList = document.getElementById('dispatch-project-list');
+  const knownProjects = [...new Set([
+    ...agents.map(a => (a.project || '').trim()).filter(Boolean),
+    ...loadDispatchProjects()
+  ])].sort();
+  projectList.innerHTML = knownProjects.map(p => `<option value="${esc(p)}"></option>`).join('');
 }
 
 let dispatchPriority = 'normal';
@@ -2648,15 +2680,33 @@ document.querySelectorAll('#dispatch-priority-selector .priority-pill').forEach(
   });
 });
 
+// Same routing instructions the desktop composer appends, so priority means
+// the same thing from either client. harnessHome isn't exposed to mobile, so
+// the task-card path falls back to the repo-relative form desktop itself
+// uses when it doesn't know harnessHome either.
+function dispatchPriorityDirective(priority) {
+  const tasksPath = 'hive/tasks.json';
+  if (priority === 'urgent') {
+    return '\n\n[PRIORITY: URGENT] If the request is clear: write a task card to ' + tasksPath + ' (id, title, status:"doing", assignee) and delegate to the right worker now, spawning one if needed. If the request is AMBIGUOUS or you would be guessing at intent or scope: do NOT create a card or delegate. Ask the human ONE crisp clarifying question (ASK ME / AskUserQuestion) and wait for the answer, then card and delegate. You orchestrate; never implement.';
+  }
+  if (priority === 'backlog') {
+    return '\n\n[PRIORITY: BACKLOG] If the request is clear: write a task card to ' + tasksPath + ' (id, title, status:"todo") and stop. No delegation, no dispatch, no reply. If the request is AMBIGUOUS: do NOT create a card. Ask the human ONE crisp clarifying question (ASK ME / AskUserQuestion) and wait for the answer, then card.';
+  }
+  return '\n\n[PRIORITY: NORMAL] If the request is clear: write a task card to ' + tasksPath + ' (id, title, status:"doing", assignee) and delegate to an available worker. If the request is AMBIGUOUS or you would be guessing at intent or scope: do NOT create a card or delegate. Ask the human ONE crisp clarifying question (ASK ME / AskUserQuestion) and wait for the answer, then card and delegate. You orchestrate; never implement.';
+}
+
 document.getElementById('dispatch-send').addEventListener('click', async () => {
   const to = document.getElementById('dispatch-to').value;
   const act = document.getElementById('dispatch-act').value;
-  const subject = document.getElementById('dispatch-subject').value.trim();
-  const body = document.getElementById('dispatch-body').value.trim();
+  const project = document.getElementById('dispatch-project').value.trim();
+  const rawBody = document.getElementById('dispatch-body').value.trim();
   const priority = dispatchPriority;
   const result = document.getElementById('dispatch-result');
   result.hidden = true;
-  if (!subject || !body) { result.style.color = 'var(--cth-coral)'; result.textContent = 'Subject and message are required.'; result.hidden = false; return; }
+  if (!rawBody) { result.style.color = 'var(--cth-coral)'; result.textContent = 'Message is required.'; result.hidden = false; return; }
+  const subject = rawBody.split('\n')[0].slice(0, 60);
+  const projectedBody = project ? '[PROJECT: ' + project + ']\n\n' + rawBody : rawBody;
+  const body = projectedBody + dispatchPriorityDirective(priority);
   try {
     const res = await apiFetch('/api/messages/send', {
       method: 'POST',
@@ -2666,7 +2716,8 @@ document.getElementById('dispatch-send').addEventListener('click', async () => {
       result.style.color = 'var(--cth-mint)';
       result.textContent = '✓ Message dispatched via Abathur';
       result.hidden = false;
-      document.getElementById('dispatch-subject').value = '';
+      rememberDispatchProject(project);
+      document.getElementById('dispatch-project').value = '';
       document.getElementById('dispatch-body').value = '';
       setTimeout(() => { result.hidden = true; }, 3000);
     } else {
