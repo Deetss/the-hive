@@ -911,6 +911,20 @@ const api = {
     ipcRenderer.invoke('hive:setAgentHold', id, hold),
   hiveBoard: (): Promise<string> => ipcRenderer.invoke('hive:board'),
   hiveTasks: (): Promise<unknown> => ipcRenderer.invoke('hive:tasks'),
+  /** GSD-style plans (`hive/plans/*.json`), read-only from the renderer's
+   *  side — agents write these files directly. Mirrors hiveTasks. */
+  hivePlans: (): Promise<unknown[]> => ipcRenderer.invoke('hive:plans'),
+  hivePatchPlan: (
+    id: string,
+    patch: Record<string, unknown>
+  ): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('hive:patchPlan', id, patch),
+  onPlansChanged: (cb: () => void): (() => void) => {
+    const handler = () => cb();
+    ipcRenderer.on('hive:plansChanged', handler);
+    return () => {
+      ipcRenderer.off('hive:plansChanged', handler);
+    };
+  },
   openHumanQA: (): Promise<OpenHumanQAItem[]> => ipcRenderer.invoke('tasks:openHumanQA'),
   answerHumanQA: (
     taskId: string,

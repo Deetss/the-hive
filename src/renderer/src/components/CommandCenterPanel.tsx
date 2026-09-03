@@ -7,6 +7,7 @@ import { AgentRosterItem } from './AgentRosterItem';
 import { PtyTerminalView } from './PtyTerminalView';
 import { MessageQueueComposer } from './MessageQueueComposer';
 import { TasksKanban } from './TasksKanban';
+import { PlansTab } from './PlansTab';
 import { AskMeTab } from './AskMeTab';
 import { QuickAskPanel } from './QuickAskPanel';
 import { TriggersTab } from './triggers/TriggersTab';
@@ -54,7 +55,7 @@ import { submitToPty, INITIAL_GOD_PROMPT } from '@/hooks/useHive';
 // Both the AskMe (#human) tab and the Triggers tab live here. Triggers replaced
 // the old Schedules tab: schedules are now one of four trigger types, and the
 // whole surface lives in ./triggers (see src/shared/triggers.ts for the contract).
-type CCTab = 'terminal' | 'floor' | 'tasks' | 'ask' | 'human' | 'triggers' | 'trigger-history'
+type CCTab = 'terminal' | 'floor' | 'tasks' | 'plans' | 'ask' | 'human' | 'triggers' | 'trigger-history'
   | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations' | 'review' | 'git' | 'touched' | 'files' | 'ide';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
@@ -77,6 +78,7 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
   { key: 'terminal', label: 'terminal', icon: 'terminal' },
   { key: 'floor', label: 'monitor', icon: 'mcp' },
   { key: 'tasks', label: 'tasks', icon: 'check' },
+  { key: 'plans', label: 'plans', icon: 'ledger' },
   { key: 'ask', label: 'ask', icon: 'sparkle' },
   { key: 'human', label: 'for you', icon: 'bell' },
   { key: 'triggers', label: 'triggers', icon: 'clock' },
@@ -682,6 +684,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
           </div>
         )}
         {tab === 'tasks' && <TasksKanban mobile={mobile} />}
+        {tab === 'plans' && <PlansTab />}
         {tab === 'ask' && <QuickAskPanel />}
         {tab === 'human' && <AskMeTab />}
         {tab === 'triggers' && <TriggersTab />}

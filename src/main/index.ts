@@ -19,7 +19,7 @@ import { createServer as createHttpServer, type Server as HttpServer, type Incom
 import {
   rmSync, existsSync, readFileSync, readdirSync, statSync, cpSync, writeFileSync,
   unlinkSync, mkdirSync, renameSync, createWriteStream, createReadStream, copyFileSync, lstatSync,
-  readlinkSync, symlinkSync, watchFile, unwatchFile
+  readlinkSync, symlinkSync, watchFile, unwatchFile, watch
 } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual, randomUUID } from 'node:crypto';
 import { join, resolve, sep, basename, dirname, extname } from 'node:path';
@@ -6704,7 +6704,21 @@ ipcMain.handle('hive:setAgentHold', (_evt, id: unknown, hold: unknown) => {
 ipcMain.handle('hive:board', () => hive.board());
 ipcMain.handle('hive:tasks', () => {
   try { hive.promoteTodoWithOpenHumanQA(); } catch (e) { console.error('[hive] promoteTodoWithOpenHumanQA failed:', e); }
+  try { hive.promoteApprovedPlans(); } catch (e) { console.error('[hive] promoteApprovedPlans failed:', e); }
   return hive.tasks();
+});
+ipcMain.handle('hive:plans', () => {
+  setupPlansWatcher();
+  return hive.plans();
+});
+ipcMain.handle('hive:patchPlan', (_evt, id: unknown, patch: unknown) => {
+  if (typeof id !== 'string' || !id || !patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    return { ok: false, error: 'invalid plan patch' };
+  }
+  if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
+  const ok = hive.patchPlan(id, patch as Record<string, unknown>);
+  broadcastPlansChanged();
+  return { ok };
 });
 ipcMain.handle('hive:log', (_evt, n: unknown) => hive.logTail(typeof n === 'number' ? n : 200));
 ipcMain.handle('hive:memory', (_evt, id: unknown) => (typeof id === 'string' ? hive.memory(id) : ''));
@@ -6750,6 +6764,33 @@ function broadcastHumanQAChanged(): void {
   } catch { /* best effort */ }
 }
 
+function broadcastPlansChanged(): void {
+  try {
+    liveWebContents()?.send('hive:plansChanged');
+    broadcastBrowserEvent('hive:plansChanged', []);
+  } catch { /* best effort */ }
+}
+
+let plansWatchDir: string | null = null;
+/** Watch `hive/plans/` for any change and broadcast `hive:plansChanged`, the
+ *  same lazily-armed pattern as `setupTasksJsonWatcher`. A directory watch
+ *  (not `watchFile` on one path) because plan files are added dynamically —
+ *  `fs.watch` fires on create/rename/change of any child, which is all
+ *  `chokidar` would give here too, without the extra dependency. */
+function setupPlansWatcher(): void {
+  const root = hive.root();
+  if (!root) return;
+  const dir = join(root, 'plans');
+  if (plansWatchDir === dir) return;
+  try { mkdirSync(dir, { recursive: true }); } catch { /* best effort */ }
+  plansWatchDir = dir;
+  try {
+    watch(dir, () => broadcastPlansChanged());
+  } catch (e) {
+    console.error('[plansWatcher] error watching hive/plans:', e);
+  }
+}
+
 let tasksJsonWatchPath: string | null = null;
 function setupTasksJsonWatcher(): void {
   const root = hive.root();
@@ -6779,6 +6820,7 @@ ipcMain.handle('tasks:openHumanQA', () => {
     hive.reassignOrphanedTasks(godId);
   } catch (e) { console.error('[hive] reassignOrphanedTasks failed:', e); }
   try { hive.promoteTodoWithOpenHumanQA(); } catch (e) { console.error('[hive] promoteTodoWithOpenHumanQA failed:', e); }
+  try { hive.promoteApprovedPlans(); } catch (e) { console.error('[hive] promoteApprovedPlans failed:', e); }
   const ledger = hive.tasks() as { tasks?: HiveTask[] };
   const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
   const openItems: Array<{
