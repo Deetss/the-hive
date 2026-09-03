@@ -5781,7 +5781,11 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
       cwd: spawnCwd,
       provider: entry.provider,
       profile: entry.profileId,
-      isolate: false
+      isolate: false,
+      // Reapply the ORIGINAL spawn's cap (persisted on the registry entry at
+      // spawn time — see AgentMeta.tokenCap) so a respawn never silently falls
+      // back to the harness-wide default and reaps the worker early.
+      tokenCap: entry.tokenCap
     };
     const reqFile = join(dir, `${reqId}.json`);
     writeFileSync(reqFile, JSON.stringify(req, null, 2), 'utf8');
@@ -8384,13 +8388,19 @@ async function processSpawnRequest(filePath: string): Promise<void> {
     return;
   }
 
+  // Computed here (not just at registration below) so it can ride on `meta` and
+  // get persisted to the registry — the only way a later respawn can recover the
+  // ORIGINAL cap instead of falling back to the harness-wide default.
+  const tokenCap = typeof raw.tokenCap === 'number' && Number.isFinite(raw.tokenCap) && raw.tokenCap > 0
+    ? raw.tokenCap : undefined;
   const meta: AgentMeta = {
     id: workerId,
     name: displayName,
     provider: effectiveProvider,
     profileId: profile?.id,
     role: 'worker',
-    cwd
+    cwd,
+    tokenCap
   };
   // Phase 2: grant this worker a broker capability over the currently-enabled
   // integrations and inject the broker URL + a per-worker capability TOKEN (a handle,
@@ -8440,9 +8450,6 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   } catch { /* window torn down */ }
 
   // Register for done-scan / idle-reap / token-cap / safe teardown (pty id == workerId).
-  // tokenCap is optional plumbing (default unlimited) — only a positive finite cap is kept.
-  const tokenCap = typeof raw.tokenCap === 'number' && Number.isFinite(raw.tokenCap) && raw.tokenCap > 0
-    ? raw.tokenCap : undefined;
   // Offload provenance (§6): if this worker was spawned by the auto-offload path,
   // keep the target + a minimal spec so a reap-without-done can requeue it onto
   // another target. Reconstructed from the request the offload path wrote.

@@ -7,7 +7,7 @@ import { RealtimeAbathurToggle } from './RealtimeAbathurToggle';
 import { CostHud } from '@/realtime/CostHud';
 import { AgentNameEditor } from './AgentNameEditor';
 import { Icon } from './Icon';
-import { useHasTerminalDraft } from './terminalPool';
+import { reflowTerminal, useHasTerminalDraft } from './terminalPool';
 import { inferAgentProvider, providerPreset, type AgentProvider } from '@/store/config';
 import { AccentColorName } from '@/design/tokens';
 import { OfficeCharacterName } from '@/scene/office/cast';
@@ -325,6 +325,17 @@ export function AgentRosterItem({
     }
   };
 
+  // Re-attach the renderer to an already-live pty (terminal failed to paint on
+  // first load) without touching the process — no kill, no token reset, no
+  // spawn-request. Nudges the TUI to repaint (same-size resize) then re-fits
+  // xterm to it.
+  const doReconnect = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!ptyId) return;
+    void window.cth.redrawPty(ptyId);
+    reflowTerminal(ptyId);
+  };
+
   // ─────────────────────────────────────────────────────────────────────────────
   // VARIANT 1: CARD (Bottom bar horizontal dock / mobile stack)
   // ─────────────────────────────────────────────────────────────────────────────
@@ -509,6 +520,28 @@ export function AgentRosterItem({
                       justifyContent: 'center'
                     }}
                   >↺</button>
+                )}
+                {ptyId && (
+                  <button
+                    type="button"
+                    title={`Reconnect ${name}'s terminal (re-attach without restarting the agent)`}
+                    aria-label={`Reconnect ${name}`}
+                    onClick={doReconnect}
+                    style={{
+                      flexShrink: 0,
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: '0 2px',
+                      fontFamily: 'var(--cth-font-ui)',
+                      fontSize: 12,
+                      lineHeight: '12px',
+                      color: 'var(--cth-ink-500)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >⟲</button>
                 )}
               </div>
 
@@ -770,6 +803,26 @@ export function AgentRosterItem({
                     cursor: 'pointer'
                   }}
                 >↺</span>
+              )}
+              {ptyId && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); doReconnect(e); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); doReconnect(); }
+                  }}
+                  title={`Reconnect ${name}'s terminal (re-attach without restarting the agent)`}
+                  aria-label={`Reconnect ${name}`}
+                  style={{
+                    flexShrink: 0, width: 20, height: 20,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 13, lineHeight: 1, color: 'var(--cth-ink-500)',
+                    background: 'var(--cth-paper-100)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                    cursor: 'pointer'
+                  }}
+                >⟲</span>
               )}
               <span
                 role="button"
@@ -1038,6 +1091,19 @@ export function AgentRosterItem({
             display: 'inline-flex', alignItems: 'center'
           }}
         >↺</button>
+        {ptyId && (
+          <button
+            type="button"
+            title={`Reconnect ${name}'s terminal (re-attach without restarting the agent)`}
+            onClick={doReconnect}
+            style={{
+              border: 'none', cursor: 'pointer', padding: '1px 4px',
+              fontFamily: 'var(--cth-font-ui)', fontSize: 12,
+              color: 'var(--cth-ink-500)', background: 'transparent',
+              display: 'inline-flex', alignItems: 'center'
+            }}
+          >⟲</button>
+        )}
         <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--cth-ink-500)' }}>
           {toolCount} tool calls
         </span>

@@ -191,6 +191,11 @@ export interface AgentMeta {
   /** Abathur's prep assistant — enriches prompts and forwards them to Abathur.
    *  Send-only: excluded from broadcast fan-out so it never drains an inbox. */
   isAssistant?: boolean;
+  /** The per-worker token cap this agent was spawned with (from its
+   *  spawn-request), persisted here so a later respawn can reapply the SAME
+   *  cap instead of falling back to the harness-wide default. Undefined =
+   *  uncapped / never set. */
+  tokenCap?: number;
 }
 
 export interface RegistryAgent extends AgentMeta {
