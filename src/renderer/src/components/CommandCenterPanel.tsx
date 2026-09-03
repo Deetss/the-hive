@@ -448,7 +448,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
           order: mobile ? 2 : 0
         }}>
           <PixelButton
-            variant={floorDeliveryPaused ? 'primary' : 'secondary'}
+            variant={floorDeliveryPaused ? 'secondary' : 'primary'}
             size="sm"
             onClick={() => { void toggleFloorDelivery(); }}
           >
