@@ -78,20 +78,7 @@ export function App() {
     } catch { /* localStorage unavailable — show the picker */ }
     return false;
   });
-  // Which floor scene renders: the pixel-art Hive canvas (current default) or the
-  // original Pixi.js Office Floor. Persisted so the pick survives a restart, same
-  // pattern as `hiveOpened` above. Defaults to 'hive' — restoring OfficeFloor as an
-  // option must not change what existing users see without choosing it.
-  const [sceneMode, setSceneModeState] = useState<'hive' | 'office'>(() => {
-    try {
-      return window.localStorage.getItem('cth.sceneMode') === 'office' ? 'office' : 'hive';
-    } catch { /* localStorage unavailable — default to hive */ }
-    return 'hive';
-  });
-  const setSceneMode = useCallback((mode: 'hive' | 'office') => {
-    try { window.localStorage.setItem('cth.sceneMode', mode); } catch { /* noop */ }
-    setSceneModeState(mode);
-  }, []);
+  const officeTheme = useStore(s => s.officeTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** Which tab Settings opens on. Set by a `cth:open-settings` deep link, reset
    *  to undefined (→ General) whenever the modal is opened the normal way. */
@@ -542,29 +529,7 @@ export function App() {
           minWidth: 0,
           position: 'relative'
         }}>
-          {sceneMode === 'office' ? <OfficeFloor /> : <HiveScene />}
-          <div
-            className="cth-titlebar-nodrag"
-            data-testid="scene-mode-toggle"
-            style={{ position: 'absolute', top: 12, right: 12, zIndex: 40, display: 'flex', gap: 4 }}
-          >
-            <PixelButton
-              size="sm"
-              variant={sceneMode === 'hive' ? 'primary' : 'secondary'}
-              title="Pixel-art Hive scene"
-              onClick={() => setSceneMode('hive')}
-            >
-              Hive
-            </PixelButton>
-            <PixelButton
-              size="sm"
-              variant={sceneMode === 'office' ? 'primary' : 'secondary'}
-              title="Office Floor scene"
-              onClick={() => setSceneMode('office')}
-            >
-              Office
-            </PixelButton>
-          </div>
+          {officeTheme === 'hive' ? <HiveScene /> : <OfficeFloor />}
           <MemoryPanel />
           {agentCount === 0 && godStatus === 'booting' && <AbathurBooting />}
           {agentCount === 0 && godStatus !== 'booting' && (
