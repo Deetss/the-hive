@@ -2163,6 +2163,36 @@ export class HiveManager {
     this.writeTasks(updated);
     return affected;
   }
+
+  /**
+   * Hand off every open card whose `assignee` matches no one in the registry
+   * at all — not merely archived, but never a real agent id — to `toId`.
+   * `reassignAgentTasks` only fires when a live agent gets reaped; it can't
+   * catch a card that was hand-written with the WRONG assignee from the
+   * start (e.g. `worker-<guessed-id>` typed before the real worker spawned
+   * under a different id). That card's assignee never matches a reap event,
+   * so it sits pointed at a ghost forever and the FOR YOU tab falls back to
+   * a misleading guessed label instead of a real agent name. Self-heals by
+   * treating "assignee not in the registry" the same as "assignee reaped".
+   * Called from `tasks:openHumanQA` so a stale card corrects itself the next
+   * time anyone loads the tab.
+   */
+  reassignOrphanedTasks(toId: string): string[] {
+    if (!toId) return [];
+    const reg = this.registry();
+    const ledger = this.tasks() as { tasks?: HiveTask[] };
+    const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+    const affected: string[] = [];
+    const updated = tasks.map((t) => {
+      if (!t || !t.assignee || t.assignee === toId || t.status === 'done') return t;
+      if (reg.agents[t.assignee]) return t;
+      affected.push(t.id);
+      return { ...t, assignee: toId };
+    });
+    if (affected.length === 0) return [];
+    this.writeTasks(updated);
+    return affected;
+  }
   memory(id: string): string {
     const p = join(this.agentDir(id), 'memory.md');
     return existsSync(p) ? readFileSync(p, 'utf8') : '';
