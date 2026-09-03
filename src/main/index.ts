@@ -5691,6 +5691,17 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
     for (const [ptyId, mappedAgent] of ptyToAgent.entries()) {
       if (mappedAgent === id) { outgoingPtyId = ptyId; ptyManager.kill(ptyId); teardownPty(ptyId); break; }
     }
+    // Fallback: pty id == worker id == agent id for ephemeral workers (see
+    // teardownPty's comment above `wasWorker`), so if the ptyToAgent scan above
+    // found no match — bookkeeping can lag a still-live worker — kill/teardown
+    // the worker's own id directly. Without this the respawn below spawns its
+    // replacement while the outgoing worker's liveWorkers entry never gets
+    // removed, so the Workers tab shows both instead of one replacing the other.
+    if (!outgoingPtyId && liveWorkers.has(id)) {
+      outgoingPtyId = id;
+      ptyManager.kill(id);
+      teardownPty(id);
+    }
     hive.setArchived(id, true);
 
     // Keep the agent's RECORDED cwd from the registry — never recompute it. The
