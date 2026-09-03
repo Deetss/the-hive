@@ -2906,6 +2906,26 @@ function teardownPty(id: string): void {
     try { hive.stopProxyBridge(agentId); } catch (e) { console.error('[hive] stopProxyBridge failed:', e); }
     if (hive.enabled()) {
       try { hive.setArchived(agentId, true); } catch (e) { console.error('[hive] setArchived failed:', e); }
+      // Hand off this agent's open cards (and any open ASK ME item on them) to
+      // god so they don't sit addressed to a mailbox nothing will ever drain
+      // again: see reassignAgentTasks for why setArchived alone isn't enough.
+      try {
+        const godId = hive.registry().godId ?? 'god';
+        if (agentId !== godId) {
+          const reassigned = hive.reassignAgentTasks(agentId, godId);
+          if (reassigned.length > 0) {
+            hive.send({
+              to: godId,
+              act: 'inform',
+              subject: `${agentId} reaped: ${reassigned.length} task(s) reassigned to you`,
+              body: `${agentId} was reaped/archived with open work. Task(s) ${reassigned.join(', ')} `
+                + `are now assigned to you so any open ASK ME items and follow-up don't get lost. `
+                + `Review the FOR YOU tab and the board.`
+            }, 'system');
+            broadcastHumanQAChanged();
+          }
+        }
+      } catch (e) { console.error('[hive] reassignAgentTasks failed:', e); }
     }
   }
   // 2) Remove the isolated worktree, if any. Non-blocking; errors are logged.

@@ -1805,6 +1805,20 @@ export class HiveManager {
     // intent, so a bounced or dropped message can never read as delivered.
     const delivered: string[] = [];
     for (const t of targets) {
+      // An archived agent (closed tab, reaped worker) keeps its agent dir, and
+      // therefore its inbox, on disk so history survives, so `deliver` below
+      // would silently "succeed" into a mailbox nobody is polling anymore (e.g.
+      // a human's UAT answer addressed to a task's now-dead assignee). Treat it
+      // as undeliverable, same as an unknown id, and bounce to god.
+      if (t !== godId && reg.agents[t]?.archived) {
+        this.appendLog({ kind: 'drop', reason: 'archived', from: msg.from, to: t, id: msg.id });
+        this.deliver({
+          ...msg,
+          to: godId,
+          subject: `[undeliverable: "${t}" is archived/reaped; relay this to it] ${msg.subject}`
+        }, godId);
+        continue;
+      }
       // The send-only prep assistant must never be a delivery target: it doesn't
       // drain an inbox, so direct mail to it would rot unread (observed live: a
       // task brief plus the follow-up reprimand about the unread inbox, both
@@ -2116,6 +2130,33 @@ export class HiveManager {
     if (next.length === tasks.length) return false;
     this.writeTasks(next);
     return true;
+  }
+
+  /**
+   * Hand off every open card owned by a reaped agent to `toId` (the god agent
+   * by convention). Without this, a task's `assignee` keeps pointing at a
+   * dead id after `setArchived`: the agent's inbox dir survives archiving
+   * (history intact), so `routeMessage` still "delivers" the human's UAT
+   * answer / chat reply into a mailbox nobody will ever drain again. Called
+   * from `teardownPty` right after `setArchived`.
+   *
+   * Skips already-`done` cards (nothing left to act on) and no-ops if the
+   * agent owned nothing. Returns the reassigned task ids so the caller can
+   * decide whether to notify.
+   */
+  reassignAgentTasks(fromId: string, toId: string): string[] {
+    if (!fromId || !toId || fromId === toId) return [];
+    const ledger = this.tasks() as { tasks?: HiveTask[] };
+    const tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+    const affected: string[] = [];
+    const updated = tasks.map((t) => {
+      if (!t || t.assignee !== fromId || t.status === 'done') return t;
+      affected.push(t.id);
+      return { ...t, assignee: toId };
+    });
+    if (affected.length === 0) return [];
+    this.writeTasks(updated);
+    return affected;
   }
   memory(id: string): string {
     const p = join(this.agentDir(id), 'memory.md');
