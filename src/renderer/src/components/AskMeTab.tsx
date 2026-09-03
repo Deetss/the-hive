@@ -612,7 +612,7 @@ export function AskMeTab() {
                   {(() => {
                     const chatKey = `${item.taskId}::${item.question}`;
                     const thread = item.thread ?? [];
-                    const isOpen = !!chatOpen[chatKey] || thread.length > 0;
+                    const isOpen = chatOpen[chatKey] ?? (thread.length > 0);
                     const draft = chatDrafts[chatKey] ?? '';
                     const sending = !!chatSending[chatKey];
                     return (

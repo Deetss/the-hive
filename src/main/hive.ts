@@ -2000,6 +2000,10 @@ export class HiveManager {
     for (const id of readdirSync(agentsDir)) {
       const outbox = join(agentsDir, id, 'outbox');
       if (!existsSync(outbox)) continue;
+      const sentDir = join(outbox, '.sent');
+      if (!existsSync(sentDir)) {
+        try { mkdirSync(sentDir, { recursive: true }); } catch { /* ignore */ }
+      }
       for (const f of readdirSync(outbox)) {
         if (!f.endsWith('.json')) continue;
         const full = join(outbox, f);
@@ -2023,12 +2027,33 @@ export class HiveManager {
           // outbox; append it to the item's thread (main is the single writer)
           // and archive without delivering as mail. The tasks.json watcher then
           // refreshes the ASK ME board.
-          if ((partial.act as string) === 'humanQA-chat') {
-            const taskId = typeof partial.taskId === 'string' ? partial.taskId : '';
-            const question = typeof partial.question === 'string' ? partial.question : '';
-            const text = typeof partial.text === 'string' ? partial.text.trim() : '';
-            if (taskId && question && text) {
-              this.appendHumanQAThread(taskId, question, { from: 'agent', text, ts: new Date().toISOString() });
+          const act = String(partial.act || '').toLowerCase();
+          if (act === 'humanqa-chat' || act === 'humanqa:chat' || act === 'humanqa_chat') {
+            const taskId = typeof partial.taskId === 'string'
+              ? partial.taskId
+              : typeof partial.task_id === 'string'
+                ? partial.task_id
+                : typeof partial.id === 'string'
+                  ? partial.id
+                  : '';
+            const question = typeof partial.question === 'string'
+              ? partial.question
+              : typeof partial.q === 'string'
+                ? partial.q
+                : '';
+            const text = typeof partial.text === 'string'
+              ? partial.text.trim()
+              : typeof partial.body === 'string'
+                ? partial.body.trim()
+                : typeof partial.reply === 'string'
+                  ? partial.reply.trim()
+                  : typeof partial.content === 'string'
+                    ? partial.content.trim()
+                    : typeof partial.message === 'string'
+                      ? partial.message.trim()
+                      : '';
+            if (taskId && text) {
+              this.appendHumanQAThread(taskId, question || undefined, { from: 'agent', text, ts: new Date().toISOString() });
             }
             renameSync(full, join(outbox, '.sent', f));
             routed++;
@@ -2056,7 +2081,7 @@ export class HiveManager {
    *  spreads the entry so existing fields survive. */
   appendHumanQAThread(
     taskId: string,
-    question: string,
+    question: string | undefined,
     msg: { from: 'human' | 'agent'; text: string; ts: string; images?: string[] }
   ): { ok: boolean; assignee?: string | null; title?: string } {
     const ledger = this.tasks() as { tasks?: HiveTask[] };
@@ -2065,9 +2090,25 @@ export class HiveManager {
     if (ti < 0) return { ok: false };
     const task = { ...tasks[ti] };
     const qaList = Array.isArray(task.humanQA) ? [...task.humanQA] : [];
-    let qi = qaList.findIndex((qa) => qa.q === question && !qa.a);
-    if (qi < 0) qi = qaList.findIndex((qa) => qa.q === question);
-    if (qi < 0) return { ok: false };
+    if (qaList.length === 0) return { ok: false };
+
+    const norm = (s: string) => (s || '').replace(/\r\n/g, '\n').replace(/`n/g, '\n').replace(/\s+/g, ' ').trim().toLowerCase();
+    const qNorm = question ? norm(question) : '';
+
+    let qi = -1;
+    if (qNorm) {
+      // 1. Exact normalized match (open question first, then any)
+      qi = qaList.findIndex((qa) => norm(qa.q) === qNorm && !qa.a);
+      if (qi < 0) qi = qaList.findIndex((qa) => norm(qa.q) === qNorm);
+      // 2. Substring / inclusion match (open question first, then any)
+      if (qi < 0) qi = qaList.findIndex((qa) => !qa.a && (norm(qa.q).includes(qNorm) || qNorm.includes(norm(qa.q))));
+      if (qi < 0) qi = qaList.findIndex((qa) => norm(qa.q).includes(qNorm) || qNorm.includes(norm(qa.q)));
+    }
+    // 3. Fallback to the first unanswered question if not found or question was omitted
+    if (qi < 0) qi = qaList.findIndex((qa) => !qa.a);
+    // 4. Fallback to the latest question on the task card
+    if (qi < 0) qi = qaList.length - 1;
+
     const entry = qaList[qi];
     const thread = Array.isArray(entry.thread) ? [...entry.thread, msg] : [msg];
     qaList[qi] = { ...entry, thread };
