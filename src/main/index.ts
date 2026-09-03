@@ -5179,6 +5179,41 @@ function resolveProfileClaudeConfigDir(profileId: string | undefined, provider: 
  *  it can ALSO be invoked by the god-triggered ephemeral-worker watcher (which has
  *  no renderer `evt`). `owner` is the window that should receive this PTY's output
  *  (null → the primary window). Behavior-identical to the prior inline handler. */
+/** True when `cwd` names a location inside WSL rather than Windows: a POSIX
+ *  absolute path, a WSL UNC share (\\wsl$\Distro\... or \\wsl.localhost\Distro\...),
+ *  or a home-relative `~/...` path (wsl.exe resolves `~` inside the distro).
+ *  Windows-only — on macOS/Linux a leading "/" is just a normal absolute path
+ *  and there is no wsl.exe to route through. */
+function isWslPath(cwd: string): boolean {
+  if (process.platform !== 'win32' || typeof cwd !== 'string') return false;
+  return cwd.startsWith('/') || cwd.startsWith('~/') || /^\\\\wsl(\$|\.localhost)\\/i.test(cwd);
+}
+
+/** Normalize a WSL cwd to what wsl.exe's `--cd` expects: a UNC share
+ *  (\\wsl$\Distro\home\dylan\...) becomes the POSIX path inside that distro
+ *  (/home/dylan/...); POSIX and `~/...` paths already pass through as-is. */
+function toWslCwd(cwd: string): string {
+  const m = /^\\\\wsl(?:\$|\.localhost)\\[^\\]+\\(.*)$/i.exec(cwd);
+  return m ? '/' + m[1].replace(/\\/g, '/') : cwd;
+}
+
+/** Single-quote a shell word for bash, escaping embedded single quotes. */
+function shellQuote(word: string): string {
+  return `'${word.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Rewrite the launch command so the worker's Claude process runs INSIDE WSL —
+ *  a worker whose cwd is a WSL path needs WSL tools (git, npm, gsd-tools) and
+ *  the WSL filesystem, neither of which a Windows PowerShell/cmd spawn can reach.
+ *  Routed through `bash -lc` (a LOGIN shell) rather than exec'd directly: a
+ *  non-login shell never sources ~/.profile, so asdf/NVM never lands on PATH
+ *  and `claude` fails to resolve — the worker's PTY then exits immediately
+ *  with nothing written to it. */
+function toWslArgs(cwd: string, command: string, claudeArgs: string[]): { cmd: string; args: string[] } {
+  const shellCmd = [command, ...claudeArgs].map(shellQuote).join(' ');
+  return { cmd: 'wsl.exe', args: ['--cd', toWslCwd(cwd), '--', 'bash', '-lc', shellCmd] };
+}
+
 async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebContents | null): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; seedPrompt?: string }> {
   // ── cwd INGESTION — expand `~` exactly once, here ───────────────────────────
   // This is the single door every agent spawn comes through (`pty:spawn` IPC and
@@ -5188,8 +5223,10 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   // with `cwd does not exist`. Expanding BEFORE hive provisioning is what makes the
   // registry store an ABSOLUTE cwd (and `cwdValid: true`). The resolved value is
   // returned to the caller so the renderer records the same absolute path.
-  opts.cwd = expandTilde(opts.cwd);
-  if (opts.hive) opts.hive = { ...opts.hive, cwd: expandTilde(opts.hive.cwd) };
+  // A WSL cwd is left untouched here — expandTilde would resolve `~` against the
+  // Windows home dir, which is wrong for a path wsl.exe is meant to resolve itself.
+  if (!isWslPath(opts.cwd)) opts.cwd = expandTilde(opts.cwd);
+  if (opts.hive) opts.hive = { ...opts.hive, cwd: isWslPath(opts.hive.cwd) ? opts.hive.cwd : expandTilde(opts.hive.cwd) };
   // Profile command override (D2): if a profile pins a specific engine binary and
   // the passed command is still the global default (user didn't override it), swap
   // in the profile's command. Explicit modal/opts.command always wins.
@@ -5646,10 +5683,24 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       { needle: 'Would you like to run the following command', response: '1\r' }
     ];
   }
+  // WSL launcher decision: a WSL cwd can't be reached from a Windows shell, so
+  // route the launch through `wsl.exe --cd <path> -- <command> ...` instead.
+  // opts.cwd is then swapped for the Windows home dir purely so pty.ts's
+  // existsSync(opts.cwd) gate passes — the real working dir is set by --cd
+  // inside WSL, this one is never actually used by the spawned process. The
+  // real WSL cwd is kept in `agentCwd` so the resume nudge and the returned
+  // registry record still reflect where the agent actually lives.
+  const agentCwd = opts.cwd;
+  if (isWslPath(opts.cwd)) {
+    const wsl = toWslArgs(opts.cwd, opts.command, opts.args ?? []);
+    opts.command = wsl.cmd;
+    opts.args = wsl.args;
+    opts.cwd = homedir();
+  }
   const res = ptyManager.spawn(opts, owner);
   if (res.ok) {
     analytics.track('agent_spawned', { provider });
-    maybeScheduleResumeNudge(opts);
+    maybeScheduleResumeNudge({ ...opts, cwd: agentCwd });
   }
   syncKeepAwake(); // arm the power-save blocker while ≥1 agent PTY is alive (#18)
   // Hand the resolved worktree path back to the renderer so it can persist it on
@@ -5659,7 +5710,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   const worktreePath = worktreePaths.get(opts.id);
   // `cwd` echoes back the TILDE-EXPANDED absolute path so the renderer's agent
   // record matches what the registry and the PTY actually used.
-  return { ...res, cwd: opts.cwd, ...(worktreePath ? { worktreePath } : {}), ...(resumeNotFound ? { resumeNotFound: true } : {}), ...(didResume ? { resumed: true } : {}), ...(seedPrompt ? { seedPrompt } : {}) };
+  return { ...res, cwd: agentCwd, ...(worktreePath ? { worktreePath } : {}), ...(resumeNotFound ? { resumeNotFound: true } : {}), ...(didResume ? { resumed: true } : {}), ...(seedPrompt ? { seedPrompt } : {}) };
 }
 ipcMain.handle('pty:write', (_evt, id: string, data: string) => {
   if (typeof id !== 'string' || typeof data !== 'string') return { ok: false, error: 'invalid args' };
