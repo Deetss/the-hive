@@ -143,6 +143,22 @@ function screenForStatus(status: BeeStatus): ScreenName {
   }
 }
 
+/** Monitor content pools for the two statuses that hold long enough for a
+ *  cycle to read: working desks show productivity apps, idle desks show
+ *  downtime content. Other statuses keep the single screenForStatus() shot —
+ *  they're too transient to bother cycling. */
+const WORK_SCREENS: ScreenName[] = ['terminal', 'code', 'chart'];
+const IDLE_SCREENS: ScreenName[] = ['video', 'site', 'chat'];
+const SCREEN_CYCLE_SECONDS = 7;
+
+/** screenPhase staggers each seat's cycle start so desks don't flip in unison. */
+function screenForSeat(s: Seat, t: number): ScreenName {
+  const pool = s.status === 'working' ? WORK_SCREENS : s.status === 'idle' ? IDLE_SCREENS : null;
+  if (!pool) return screenForStatus(s.status);
+  const idx = Math.floor((t + s.screenPhase) / SCREEN_CYCLE_SECONDS) % pool.length;
+  return pool[idx];
+}
+
 interface Seat {
   deskX: number;
   deskY: number;
@@ -151,6 +167,7 @@ interface Seat {
   costume: Costume;
   status: BeeStatus;
   phase: number;
+  screenPhase: number;
   hidden?: boolean;
 }
 
@@ -386,6 +403,7 @@ function syncSeats(scene: SceneState, agents: Agent[]): void {
         costume: prior?.costume ?? COSTUME_POOL[i % COSTUME_POOL.length],
         status: prior?.status ?? 'idle',
         phase: prior?.phase ?? (i * 3) % 8,
+        screenPhase: prior?.screenPhase ?? (i * 2.7) % SCREEN_CYCLE_SECONDS,
         hidden: prior?.hidden && i === COURIER_SEAT_INDEX ? prior.hidden : undefined
       };
       scene.seatByAgent.set(id, seat);
@@ -488,7 +506,7 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
   scene.seats.forEach((s, i) => {
     x.save();
     x.translate(s.deskX, s.deskY);
-    A.PROPS.desk.draw(x, (f + i) % 4, screenForStatus(s.status));
+    A.PROPS.desk.draw(x, (f + i) % 4, screenForSeat(s, t));
     x.restore();
     const deliveredHere = scene.mail?.deliveredTo() === scene.seatOrder[i];
     if (!s.hidden) {
