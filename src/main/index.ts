@@ -2920,7 +2920,7 @@ function teardownPty(id: string): void {
               subject: `${agentId} reaped: ${reassigned.length} task(s) reassigned to you`,
               body: `${agentId} was reaped/archived with open work. Task(s) ${reassigned.join(', ')} `
                 + `are now assigned to you so any open ASK ME items and follow-up don't get lost. `
-                + `Review the ASK ME tab and the board.`
+                + `Review the FOR YOU tab and the board.`
             }, 'system');
             broadcastHumanQAChanged();
           }

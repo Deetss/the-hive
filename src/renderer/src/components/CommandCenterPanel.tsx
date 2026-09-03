@@ -78,7 +78,7 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
   { key: 'floor', label: 'monitor', icon: 'mcp' },
   { key: 'tasks', label: 'tasks', icon: 'check' },
   { key: 'ask', label: 'ask', icon: 'sparkle' },
-  { key: 'human', label: 'ask me', icon: 'bell' },
+  { key: 'human', label: 'for you', icon: 'bell' },
   { key: 'triggers', label: 'triggers', icon: 'clock' },
   { key: 'trigger-history', label: 'history', icon: 'ledger' },
   { key: 'memory', label: 'memory', icon: 'sparkle' },
@@ -643,7 +643,7 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
                 size="sm"
                 onClick={() => setTab('human')}
               >
-                Review in Ask Me →
+                Review in For You →
               </PixelButton>
             </div>
           </div>
