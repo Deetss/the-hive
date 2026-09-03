@@ -104,6 +104,8 @@ interface SceneState {
   fillStep: number;
   lastFillTick: number;
   lt: number;
+  lightShafts: Array<{ grad: CanvasGradient; sx: number; sy: number; sw: number }>;
+  vignetteGrad: CanvasGradient;
 }
 
 function createScene(): SceneState {
@@ -116,6 +118,21 @@ function createScene(): SceneState {
   const fx = fc.getContext('2d');
   if (!fx) throw new Error('2D context unavailable for hive scene');
   fx.imageSmoothingEnabled = false;
+
+  // Light shaft + vignette gradients are static (fixed geometry every frame) —
+  // built once here instead of per-frame to avoid a canvas-gradient
+  // allocation on every tick.
+  const lightShafts = ([[300, 96, 60], [370, 96, 40]] as Array<[number, number, number]>).map(
+    ([sx, sy, sw]) => {
+      const grad = fx.createLinearGradient(sx, sy, sx - 40, H);
+      grad.addColorStop(0, 'rgba(255,225,140,0.22)');
+      grad.addColorStop(1, 'rgba(255,225,140,0)');
+      return { grad, sx, sy, sw };
+    }
+  );
+  const vignetteGrad = fx.createRadialGradient(W / 2, 150, 90, W / 2, 150, 330);
+  vignetteGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  vignetteGrad.addColorStop(1, 'rgba(20,12,0,0.45)');
 
   return {
     bg,
@@ -143,7 +160,9 @@ function createScene(): SceneState {
     ],
     fillStep: 3,
     lastFillTick: 0,
-    lt: 0
+    lt: 0,
+    lightShafts,
+    vignetteGrad
   };
 }
 
@@ -225,7 +244,7 @@ function startCourier(scene: SceneState): void {
   if (seat) seat.hidden = true;
 }
 
-function stepCourier(scene: SceneState, dt: number): void {
+function stepCourier(scene: SceneState, dt: number, t: number): void {
   const c = scene.courier;
   if (!c) return;
   if (c.phase === 'hand') {
@@ -263,6 +282,11 @@ function stepCourier(scene: SceneState, dt: number): void {
       const seat = scene.seats[COURIER_SEAT_INDEX];
       if (seat) seat.hidden = false;
       scene.courier = null;
+      // Idle countdown starts when the courier actually goes idle, not when it
+      // launched — a round trip to a far seat (~13-14s) is longer than the 11s
+      // auto-run interval, so measuring from launch made the next run fire the
+      // instant this one landed (looked like the courier never stopped).
+      scene.lastAutoRun = t;
     }
     return;
   }
@@ -327,17 +351,21 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
   const x = scene.fx;
   const dt = Math.min(0.05, t - (scene.lt || t));
   scene.lt = t;
-  const f = Math.floor(t * 12);
+  // Spec frame (courier walk cycle stays crisp per Dylan: "don't slow the
+  // courier when it IS running"). Everything else — bee idle bob, props,
+  // board/tokens — runs at ~60% per his live UAT feedback ("animations are a
+  // little fast"), a deliberate deviation from the handoff's flat `t*12`.
+  const fFast = Math.floor(t * 12);
+  const f = Math.floor(fFast * 0.6);
 
   if (t - scene.lastFillTick > 6) {
     scene.lastFillTick = t;
     scene.fillStep = (scene.fillStep % 8) + 1;
   }
   if (!scene.courier && t - scene.lastAutoRun > 11) {
-    scene.lastAutoRun = t;
     startCourier(scene);
   }
-  stepCourier(scene, dt);
+  stepCourier(scene, dt, t);
   if (scene.queenUntil > 0) {
     scene.queenUntil -= dt;
     if (scene.queenUntil <= 0) scene.queenStatus = overmindStatus;
@@ -355,7 +383,7 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
     x.restore();
   });
   scene.drips.forEach((d, i) => {
-    const ph = (t * 0.4 + i * 0.37) % 1;
+    const ph = (t * 0.24 + i * 0.37) % 1;
     if (ph < 0.6) A.rect(x, d.x, d.y, 2, Math.round(2 + ph * 8), 'h');
     else {
       A.rect(x, d.x, d.y + Math.round((ph - 0.6) * 60), 2, 3, 'h');
@@ -404,35 +432,23 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
   if (scene.courier) {
     const c = scene.courier;
     const status: BeeStatus = c.phase === 'hand' ? 'handoff' : 'moving';
-    A.drawBee(x, Math.round(c.x), Math.round(c.y), { status, dir: c.dir, frame: f, costume: 'couriercap' });
+    A.drawBee(x, Math.round(c.x), Math.round(c.y), { status, dir: c.dir, frame: fFast, costume: 'couriercap' });
     if (c.phase !== 'hand') A.drawEnvelope(x, Math.round(c.x) + 3, Math.round(c.y) + 5, false);
     A.drawChip(x, Math.round(c.x) + 1, Math.round(c.y) - 15, status);
   }
 
-  x.save();
-  x.globalCompositeOperation = 'lighter';
-  ([
-    [300, 96, 60],
-    [370, 96, 40]
-  ] as Array<[number, number, number]>).forEach(([sx, sy, sw]) => {
-    const g = x.createLinearGradient(sx, sy, sx - 40, H);
-    g.addColorStop(0, 'rgba(255,225,140,0.22)');
-    g.addColorStop(1, 'rgba(255,225,140,0)');
-    x.fillStyle = g;
-    x.beginPath();
-    x.moveTo(sx, sy);
-    x.lineTo(sx + sw, sy);
-    x.lineTo(sx + sw - 70, H);
-    x.lineTo(sx - 70, H);
-    x.closePath();
-    x.fill();
-  });
-  x.restore();
-
+  // Order per spec: courier, dust motes, light shafts, vignette.
   for (const m of scene.motes) {
-    m.x += m.vx * dt;
-    m.y += m.vy * dt;
-    if (m.x > W + 2) m.x = -2;
+    m.x += m.vx * dt * 0.6;
+    m.y += m.vy * dt * 0.6;
+    if (m.x > W + 2) {
+      // Re-entering at the left edge used to keep the mote's current y, so any
+      // mote wrapping while near vat height (y 112-142, x 6-30) "popped in"
+      // right beside the vat every time — that's the unexplained floater
+      // Dylan saw. Re-roll y along with x so it doesn't always reappear there.
+      m.x = -2;
+      m.y = 110 + Math.random() * 170;
+    }
     if (m.y < 108) {
       m.y = H - 6;
       m.x = Math.random() * W;
@@ -443,10 +459,21 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
     x.globalAlpha = 1;
   }
 
-  const vg = x.createRadialGradient(W / 2, 150, 90, W / 2, 150, 330);
-  vg.addColorStop(0, 'rgba(0,0,0,0)');
-  vg.addColorStop(1, 'rgba(20,12,0,0.45)');
-  x.fillStyle = vg;
+  x.save();
+  x.globalCompositeOperation = 'lighter';
+  scene.lightShafts.forEach(({ grad, sx, sy, sw }) => {
+    x.fillStyle = grad;
+    x.beginPath();
+    x.moveTo(sx, sy);
+    x.lineTo(sx + sw, sy);
+    x.lineTo(sx + sw - 70, H);
+    x.lineTo(sx - 70, H);
+    x.closePath();
+    x.fill();
+  });
+  x.restore();
+
+  x.fillStyle = scene.vignetteGrad;
   x.fillRect(0, 0, W, H);
 }
 
