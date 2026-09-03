@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useStore, type Agent } from '@/store/store';
 import '@/assets/hive-art.js';
+import '@/assets/hive-screens.js';
 
 type BeeStatus = 'idle' | 'thinking' | 'working' | 'moving' | 'blocked' | 'done' | 'handoff';
+type ScreenName = 'terminal' | 'app' | 'video' | 'site' | 'chat' | 'code' | 'chart';
 type Dir = 'down' | 'up' | 'right' | 'left';
 type Costume = 'hardhat' | 'couriercap' | 'headset' | 'labcoat' | 'chefhat' | 'hivis' | 'crown' | 'visor';
 type TokenState = 'locked' | 'open' | 'active' | 'done';
@@ -12,7 +14,10 @@ interface HiveArtApi {
   px: (ctx: CanvasRenderingContext2D, x: number, y: number, fill: string) => void;
   drawHex: (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, fill: string, outline: string) => void;
   TILES: Record<string, (ctx: CanvasRenderingContext2D) => void>;
-  PROPS: Record<string, { draw: (ctx: CanvasRenderingContext2D, frame: number) => void; w: number; h: number; frames: number }>;
+  PROPS: Record<
+    string,
+    { draw: (ctx: CanvasRenderingContext2D, frame: number, screen?: ScreenName) => void; w: number; h: number; frames: number }
+  >;
   drawBee: (
     ctx: CanvasRenderingContext2D,
     x: number,
@@ -55,6 +60,23 @@ function mapAgentStatus(status: Agent['status']): BeeStatus {
       return 'done';
     default:
       return 'idle';
+  }
+}
+
+function screenForStatus(status: BeeStatus): ScreenName {
+  switch (status) {
+    case 'working':
+      return 'terminal';
+    case 'thinking':
+      return 'app';
+    case 'blocked':
+      return 'video';
+    case 'done':
+    case 'handoff':
+    case 'moving':
+      return 'chat';
+    default:
+      return 'site';
   }
 }
 
@@ -422,7 +444,7 @@ function renderFrame(A: HiveArtApi, scene: SceneState, t: number, overmindStatus
   scene.seats.forEach((s, i) => {
     x.save();
     x.translate(s.deskX, s.deskY);
-    A.PROPS.desk.draw(x, (f + i) % 4);
+    A.PROPS.desk.draw(x, (f + i) % 4, screenForStatus(s.status));
     x.restore();
     if (s.hidden) return;
     A.drawBee(x, s.x, s.y, { status: s.status, dir: 'down', frame: f + s.phase, costume: s.costume });
