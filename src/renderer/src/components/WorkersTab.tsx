@@ -199,6 +199,9 @@ export function WorkersTab() {
 
   const [pendingBusy, setPendingBusy] = useState<Record<string, boolean>>({});
   const [pendingError, setPendingError] = useState<string | null>(null);
+  /** Approver's bee-name override per pending filename, pre-seeded from the
+   *  auto-assigned suggestion once each request first appears in `pending`. */
+  const [pendingName, setPendingName] = useState<Record<string, string>>({});
   const [expandedObjective, setExpandedObjective] = useState<Record<string, boolean>>({});
 
   const refresh = useCallback(() => {
@@ -240,8 +243,9 @@ export function WorkersTab() {
   }, [refresh]);
 
   const approveSpawn = useCallback((filename: string) => {
-    runPendingAction(filename, (f) => window.cth.workersApproveSpawn(f), 'Approve');
-  }, [runPendingAction]);
+    const name = pendingName[filename]?.trim();
+    runPendingAction(filename, (f) => window.cth.workersApproveSpawn(f, name || undefined), 'Approve');
+  }, [runPendingAction, pendingName]);
 
   const declineSpawn = useCallback((filename: string) => {
     runPendingAction(filename, (f) => window.cth.workersDeclineSpawn(f), 'Decline');
@@ -277,7 +281,21 @@ export function WorkersTab() {
   const preserved = data?.preserved ?? [];
   const history = data?.recent ?? [];
   const pending = data?.pending ?? [];
+  const availableNames = data?.availableNames ?? [];
   const max = data?.maxWorkers ?? 4;
+
+  // Pre-select each pending card's name picker with its auto-assigned suggestion
+  // the first time it appears — never overwrites an approver's own choice.
+  useEffect(() => {
+    setPendingName((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const p of pending) {
+        if (!(p.filename in next) && p.suggestedName) { next[p.filename] = p.suggestedName; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [pending]);
   const completedHistory = history.filter((h) => h.status === 'done' || h.status === 'stopped');
   const reapedHistory = history.filter((h) => h.status === 'reaped' || h.status === 'failed');
   const shownHistory = filter === 'completed' ? completedHistory : filter === 'reaped' ? reapedHistory : [];
@@ -390,14 +408,33 @@ export function WorkersTab() {
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {pending.map((p) => (
+            {pending.map((p) => {
+              const nameOptions = Array.from(new Set(
+                [...availableNames, pendingName[p.filename] ?? p.suggestedName ?? ''].filter(Boolean)
+              ));
+              return (
               <div key={p.filename} style={card}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <span style={{
-                      fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 600, color: 'var(--cth-ink-900)',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                    }}>{p.name ?? 'unnamed worker'}</span>
+                    {p.name ? (
+                      <span style={{
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 600, color: 'var(--cth-ink-900)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                      }}>{p.name}</span>
+                    ) : (
+                      <select
+                        value={pendingName[p.filename] ?? p.suggestedName ?? ''}
+                        onChange={(e) => setPendingName((prev) => ({ ...prev, [p.filename]: e.target.value }))}
+                        title="bee name to assign on approval"
+                        style={{
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 12, padding: '2px 6px',
+                          background: 'var(--cth-paper-100)', color: 'var(--cth-ink-900)',
+                          boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', border: 'none'
+                        }}
+                      >
+                        {nameOptions.map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    )}
                     {p.hasSlack && (
                       <span title="requested from a Slack thread" style={{
                         fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-700)',
@@ -455,7 +492,8 @@ export function WorkersTab() {
                   <span title="waiting since">{relAge(Math.max(0, Date.now() - p.createdAt))}</span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -665,6 +665,8 @@ export interface PendingSpawnSnapshot {
   filename: string;
   id: string;
   name: string | null;
+  /** Bee-cast name that will be assigned if this request carries no explicit name. */
+  suggestedName: string | null;
   objective: string | null;
   cwd: string | null;
   hasSlack: boolean;
@@ -956,7 +958,7 @@ const api = {
 
   // ─── Ephemeral workers (P4 — Slack-triggered isolated workers) ───────────
   /** Live ephemeral workers + worktrees preserved awaiting integration/GC. */
-  listWorkers: (): Promise<{ live: WorkerSnapshot[]; recent: RecentWorkerSnapshot[]; preserved: PreservedWorktreeSnapshot[]; pending: PendingSpawnSnapshot[]; maxWorkers: number }> =>
+  listWorkers: (): Promise<{ live: WorkerSnapshot[]; recent: RecentWorkerSnapshot[]; preserved: PreservedWorktreeSnapshot[]; pending: PendingSpawnSnapshot[]; maxWorkers: number; availableNames: string[] }> =>
     ipcRenderer.invoke('workers:list'),
   workersList: (): Promise<{ live: WorkerSnapshot[]; recent: RecentWorkerSnapshot[]; preserved: PreservedWorktreeSnapshot[]; pending: PendingSpawnSnapshot[]; maxWorkers: number }> =>
     ipcRenderer.invoke('workers:list'),
@@ -968,9 +970,10 @@ const api = {
   workersStop: (workerId: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('workers:stop', workerId),
   /** Approve ONE pending spawn-request by filename (bypasses the global gate for
-   *  just that file; respects the concurrency cap). */
-  workersApproveSpawn: (filename: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('workers:approveSpawn', filename),
+   *  just that file; respects the concurrency cap). An optional `name` overrides
+   *  the auto-assigned display name before the worker spawns. */
+  workersApproveSpawn: (filename: string, name?: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('workers:approveSpawn', filename, name),
   /** Decline ONE pending spawn-request by filename (moves it to .declined, not deleted). */
   workersDeclineSpawn: (filename: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('workers:declineSpawn', filename),

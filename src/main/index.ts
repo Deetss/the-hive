@@ -2751,6 +2751,32 @@ interface WorkerRec {
  *  force-removed) when it holds unintegrated work — god is the sole integrator. */
 const liveWorkers = new Map<string, WorkerRec>();
 
+/** Worker bee cast display names, in cast order — mirrors HIVE_CAST in
+ *  src/renderer/src/scene/office/hiveCast.ts (Queen excluded; that seat is
+ *  reserved for god). Kept as a plain const here since that file pulls in
+ *  pixi.js and renderer-only assets that can't load in the main process. */
+const BEE_CAST_NAMES = [
+  'Doc BeeGood', 'Buzz the Builder', 'Buzzy Baker', 'Sherlock Combs',
+  'Buzz Cassidy', 'Buzz Loman', 'Buzz Aldrin', 'Bee-casso',
+  'Muhammad Albee', 'Albee Einstein'
+];
+
+/** Lowercased display names of currently-live agents, for bee-name availability checks. */
+function liveWorkerNamesLower(): Set<string> {
+  return new Set([...liveWorkers.values()].map((w) => (w.name ?? '').trim().toLowerCase()));
+}
+
+/** First cast name not in `usedLower`, in cast order. Undefined once all ten are taken. */
+function nextBeeName(usedLower: Set<string>): string | undefined {
+  return BEE_CAST_NAMES.find((n) => !usedLower.has(n.toLowerCase()));
+}
+
+/** Next bee cast name not already carried by a live worker, cycling in cast
+ *  order. Undefined once all ten are taken — caller falls back to a generic name. */
+function pickAvailableBeeName(): string | undefined {
+  return nextBeeName(liveWorkerNamesLower());
+}
+
 /** Workers already sent their 75%-of-tokenCap pre-reap warning this session.
  *  Rate-limits the warn to once — the loop re-checks every tick and the used/cap
  *  ratio only grows, so without this a worker parked at 76% gets spammed forever. */
@@ -8424,7 +8450,9 @@ async function processSpawnRequest(filePath: string): Promise<void> {
   let baseBranch = 'main';
   try { const br = await getBranch(cwd); if ('current' in br && br.current) baseBranch = br.current; } catch { /* keep default */ }
 
-  const displayName = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : `Worker ${reqId.slice(0, 12)}`;
+  const displayName = typeof raw.name === 'string' && raw.name.trim()
+    ? raw.name.trim()
+    : (pickAvailableBeeName() ?? `Worker ${reqId.slice(0, 12)}`);
   // Duplicate-name guard: block a spawn whose display name matches an already-active
   // (non-archived) agent, so we never end up with "3 Jims" on the floor. Respawns
   // archive the outgoing agent before requeuing, so this never blocks them. god gets
@@ -8804,6 +8832,10 @@ interface PendingSpawnSnapshot {
   filename: string;
   id: string;
   name: string | null;
+  /** Bee-cast name that will be used if the request carries no explicit name —
+   *  the same pick processSpawnRequest would make. Lets the approval card
+   *  pre-select the picker without duplicating the assignment logic. */
+  suggestedName: string | null;
   objective: string | null;
   cwd: string | null;
   hasSlack: boolean;
@@ -8815,12 +8847,15 @@ interface PendingSpawnSnapshot {
 
 /** Read the on-disk spawn-request queue for the approval UI. Pure listing — never
  *  consumes, and runs regardless of the auto-spawn toggle. Malformed files are
- *  skipped (logged), never allowed to break the list. */
+ *  skipped (logged), never allowed to break the list. Unnamed requests each get a
+ *  distinct suggested bee name (tracked locally so two unnamed requests in the
+ *  same batch don't both suggest the same one). */
 function readPendingSpawnRequests(): PendingSpawnSnapshot[] {
   const dir = spawnRequestsDir();
   if (!dir || !existsSync(dir)) return [];
   let files: string[] = [];
   try { files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort(); } catch { return []; }
+  const usedLower = liveWorkerNamesLower();
   const out: PendingSpawnSnapshot[] = [];
   for (const f of files) {
     const full = join(dir, f);
@@ -8828,10 +8863,14 @@ function readPendingSpawnRequests(): PendingSpawnSnapshot[] {
       const req = JSON.parse(readFileSync(full, 'utf8')) as SpawnRequest;
       let createdAt = Date.now();
       try { createdAt = statSync(full).mtimeMs; } catch { /* keep now */ }
+      const explicitName = typeof req.name === 'string' && req.name.trim() ? req.name.trim() : null;
+      const suggestedName = explicitName ?? nextBeeName(usedLower) ?? null;
+      if (!explicitName && suggestedName) usedLower.add(suggestedName.toLowerCase());
       out.push({
         filename: f,
         id: req.id ?? f.replace(/\.json$/, ''),
-        name: req.name ?? null,
+        name: explicitName,
+        suggestedName,
         objective: req.objective ?? null,
         cwd: req.cwd ?? null,
         hasSlack: !!req.slack,
@@ -8854,6 +8893,7 @@ ipcMain.handle('workers:list', (): {
   preserved: PreservedSnapshot[];
   pending: PendingSpawnSnapshot[];
   maxWorkers: number;
+  availableNames: string[];
 } => {
   const cfg = readConfig();
   const defaultCap = typeof cfg.defaultWorkerTokenCap === 'number' && cfg.defaultWorkerTokenCap > 0
@@ -8885,13 +8925,23 @@ ipcMain.handle('workers:list', (): {
   const preserved: PreservedSnapshot[] = [...preservedWorktrees.values()].map((e) => ({
     workerId: e.workerId, wtPath: e.wtPath, baseBranch: e.baseBranch, preservedAt: e.preservedAt
   }));
-  return { live, recent: recentWorkers, preserved, pending: readPendingSpawnRequests(), maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4) };
+  const usedLower = liveWorkerNamesLower();
+  const availableNames = BEE_CAST_NAMES.filter((n) => !usedLower.has(n.toLowerCase()));
+  return {
+    live, recent: recentWorkers, preserved,
+    pending: readPendingSpawnRequests(),
+    maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4),
+    availableNames
+  };
 });
 
 /** Approve ONE pending spawn-request: bypass the global gate for just this file,
  *  respecting the concurrency cap. At capacity we return a friendly error and
- *  leave the file untouched (never eat it). */
-ipcMain.handle('workers:approveSpawn', async (_evt, filename: unknown): Promise<{ ok: boolean; error?: string }> => {
+ *  leave the file untouched (never eat it). An optional `name` override (the
+ *  approval card's bee-name picker) is written into the request before it's
+ *  processed, so processSpawnRequest's own name resolution just sees it as an
+ *  authored name. */
+ipcMain.handle('workers:approveSpawn', async (_evt, filename: unknown, name?: unknown): Promise<{ ok: boolean; error?: string }> => {
   if (typeof filename !== 'string' || !filename) return { ok: false, error: 'invalid request' };
   const dir = spawnRequestsDir();
   if (!dir) return { ok: false, error: 'hive disabled' };
@@ -8900,6 +8950,15 @@ ipcMain.handle('workers:approveSpawn', async (_evt, filename: unknown): Promise<
   const maxWorkers = Math.max(1, readConfig().maxConcurrentWorkers ?? 4);
   if (liveWorkers.size >= maxWorkers) {
     return { ok: false, error: `At capacity (${liveWorkers.size}/${maxWorkers} workers). Stop one first.` };
+  }
+  if (typeof name === 'string' && name.trim()) {
+    try {
+      const req = JSON.parse(readFileSync(full, 'utf8')) as SpawnRequest;
+      req.name = name.trim();
+      writeFileSync(full, JSON.stringify(req, null, 2), 'utf8');
+    } catch (e) {
+      console.warn('[workers] failed to apply name override, approving as-is', filename, e);
+    }
   }
   try {
     await processSpawnRequest(full);
