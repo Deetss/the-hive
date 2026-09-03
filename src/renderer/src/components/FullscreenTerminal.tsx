@@ -211,6 +211,30 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
       });
     });
   }, []);
+  const [dismissedPrompts, setDismissedPrompts] = useState<Record<string, string>>({});
+
+  const blockedAgents = useMemo(() => {
+    return agents.filter((a) => {
+      if (a.archived || !a.ptyId) return false;
+      const hasNeedsInput = Boolean(needsInputById[a.id]);
+      const isBlockedOrPrompt = a.status === 'prompt' || (a.status === 'blocked' && !a.isOvermind) || Boolean(a.blockReason);
+      return hasNeedsInput || isBlockedOrPrompt;
+    });
+  }, [agents, needsInputById]);
+
+  const otherBlockedWorkers = useMemo(() => {
+    return blockedAgents.filter((w) => {
+      if (w.id === agent?.id) return false;
+      const promptKey = needsInputById[w.id] || w.blockReason?.detail || w.blockReason?.summary || 'prompt';
+      if (dismissedPrompts[w.id] === promptKey) return false;
+      return true;
+    });
+  }, [blockedAgents, agent?.id, needsInputById, dismissedPrompts]);
+
+  const dismissWorkerPrompt = (id: string) => {
+    const promptKey = needsInputById[id] || agents.find(a => a.id === id)?.blockReason?.detail || agents.find(a => a.id === id)?.blockReason?.summary || 'prompt';
+    setDismissedPrompts(prev => ({ ...prev, [id]: promptKey }));
+  };
   const profileNameById = useMemo(() => {
     const m: Record<string, string> = {};
     for (const p of config?.runtimeProfiles ?? []) {
@@ -358,6 +382,41 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
         }}>
           The Hive — Focus Mode · <strong style={{ color: 'var(--cth-ink-900)' }}>{agent.name}</strong>
         </span>
+        {blockedAgents.length > 0 && (
+          <button
+            type="button"
+            className="cth-titlebar-nodrag"
+            onClick={() => {
+              const target = otherBlockedWorkers[0] || blockedAgents[0];
+              if (target) {
+                select(target.id);
+                setFullscreen(target.id);
+              }
+            }}
+            title={`Click to switch to ${blockedAgents.map((a) => a.name).join(', ')}`}
+            style={{
+              background: 'var(--cth-coral)',
+              color: 'var(--cth-paper-100)',
+              border: 'none',
+              borderRadius: 2,
+              padding: '2px 8px',
+              fontFamily: 'var(--cth-font-ui)',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5
+            }}
+          >
+            <Icon name="bell" />
+            <span>
+              {blockedAgents.length === 1
+                ? `${blockedAgents[0].name.toUpperCase()} NEEDS APPROVAL`
+                : `${blockedAgents.length} WORKERS NEED APPROVAL`}
+            </span>
+          </button>
+        )}
         <div className="cth-titlebar-nodrag" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             onClick={toggleRoster}
@@ -367,17 +426,109 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               width: 22, height: 20, padding: 0,
-              background: rosterCollapsed ? 'var(--cth-lemon)' : 'var(--cth-paper-100)',
+              position: 'relative',
+              background: rosterCollapsed ? (blockedAgents.length > 0 ? 'var(--cth-coral)' : 'var(--cth-lemon)') : 'var(--cth-paper-100)',
               boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
               border: 'none', borderRadius: 2, cursor: 'pointer',
-              color: 'var(--cth-ink-900)', lineHeight: 1
+              color: rosterCollapsed && blockedAgents.length > 0 ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)', lineHeight: 1
             }}
           >
             <Icon name="sidebar" size={1} style={{ width: 14, height: 14 }} />
+            {rosterCollapsed && blockedAgents.length > 0 && (
+              <span
+                style={{
+                  position: 'absolute', top: -3, right: -3,
+                  width: 7, height: 7, borderRadius: '50%',
+                  background: 'var(--cth-coral)',
+                  boxShadow: '0 0 0 1px var(--cth-cream-100)'
+                }}
+              />
+            )}
           </button>
           <AppChromeControls />
         </div>
       </div>
+
+      {/* Top banner in focus mode for worker permission prompts */}
+      {otherBlockedWorkers.length > 0 && (
+        <div style={{
+          background: 'var(--cth-coral-light)',
+          borderBottom: '1.5px solid var(--cth-coral)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          padding: '6px 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          flexShrink: 0,
+          zIndex: 10
+        }}>
+          {otherBlockedWorkers.map((w) => {
+            const pText = needsInputById[w.id] || w.blockReason?.detail || w.blockReason?.summary || 'Tool permission or confirmation needed';
+            return (
+              <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 20, height: 20, background: 'var(--cth-coral)', color: 'var(--cth-paper-100)',
+                  borderRadius: 2, fontSize: 11, fontWeight: 700, flexShrink: 0
+                }}>
+                  <Icon name="bell" />
+                </span>
+                <div style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <strong style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-900)', whiteSpace: 'nowrap' }}>
+                    {w.name}
+                  </strong>
+                  <span style={{
+                    fontSize: 12, color: 'var(--cth-ink-700)', fontFamily: 'var(--cth-font-mono)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                  }}>
+                    {pText}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <PixelButton
+                    variant="primary"
+                    size="sm"
+                    onClick={() => { select(w.id); setFullscreen(w.id); }}
+                    title={`Switch focus mode to ${w.name}'s terminal`}
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="terminal" /> Switch to Agent
+                    </span>
+                  </PixelButton>
+                  <PixelButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => { if (w.ptyId) void window.cth.writePty(w.ptyId, 'y\r'); }}
+                    title="Send 'y' (Approve) to worker terminal"
+                  >
+                    Approve (y)
+                  </PixelButton>
+                  <PixelButton
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => { if (w.ptyId) void window.cth.writePty(w.ptyId, 'n\r'); }}
+                    title="Send 'n' (Deny) to worker terminal"
+                  >
+                    Deny (n)
+                  </PixelButton>
+                  <button
+                    type="button"
+                    onClick={() => dismissWorkerPrompt(w.id)}
+                    title="Dismiss notification"
+                    aria-label="Dismiss notification"
+                    style={{
+                      border: 'none', background: 'transparent', cursor: 'pointer',
+                      color: 'var(--cth-ink-500)', fontSize: 13, padding: '0 4px', lineHeight: 1
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Body — roster on the left, the focused agent's terminal on the right.
           A vertical list scales past the handful of agents a horizontal tab bar
@@ -611,6 +762,53 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                         fullscreen
                       />
                     </div>
+                    {Boolean(needsInputById[agent.id] || agent.blockReason) && (
+                      <div style={{
+                        background: 'var(--cth-coral-light)',
+                        borderTop: '1px solid var(--cth-coral)',
+                        borderBottom: '1px solid var(--cth-coral)',
+                        padding: '6px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        flexShrink: 0
+                      }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--cth-coral)' }}>
+                          <Icon name="bell" />
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 11, fontWeight: 700, color: 'var(--cth-ink-900)' }}>
+                            {agent.name.toUpperCase()} WAITING FOR APPROVAL
+                          </div>
+                          <div style={{
+                            fontFamily: 'var(--cth-font-mono)', fontSize: 12, color: 'var(--cth-ink-700)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                          }}>
+                            {needsInputById[agent.id] || agent.blockReason?.detail || agent.blockReason?.summary || 'Interactive prompt waiting in terminal'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <PixelButton
+                            variant="primary"
+                            size="sm"
+                            onClick={() => {
+                              if (agent.ptyId) void window.cth.writePty(agent.ptyId, 'y\r');
+                            }}
+                          >
+                            Approve (y)
+                          </PixelButton>
+                          <PixelButton
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              if (agent.ptyId) void window.cth.writePty(agent.ptyId, 'n\r');
+                            }}
+                          >
+                            Deny (n)
+                          </PixelButton>
+                        </div>
+                      </div>
+                    )}
                     <MessageQueueComposer agent={agent} />
                   </>
                 )}
