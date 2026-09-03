@@ -8733,6 +8733,9 @@ interface PendingSpawnSnapshot {
   cwd: string | null;
   hasSlack: boolean;
   createdAt: number;
+  provider: string | null;
+  tokenCap: number | null;
+  isolate: boolean;
 }
 
 /** Read the on-disk spawn-request queue for the approval UI. Pure listing — never
@@ -8757,7 +8760,10 @@ function readPendingSpawnRequests(): PendingSpawnSnapshot[] {
         objective: req.objective ?? null,
         cwd: req.cwd ?? null,
         hasSlack: !!req.slack,
-        createdAt
+        createdAt,
+        provider: req.provider ?? null,
+        tokenCap: (typeof req.tokenCap === 'number' && req.tokenCap > 0) ? req.tokenCap : null,
+        isolate: req.isolate !== false
       });
     } catch (e) {
       console.warn('[workers] skipping malformed spawn-request', f, e);

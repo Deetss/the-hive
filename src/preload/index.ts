@@ -669,6 +669,9 @@ export interface PendingSpawnSnapshot {
   cwd: string | null;
   hasSlack: boolean;
   createdAt: number;
+  provider: string | null;
+  tokenCap: number | null;
+  isolate: boolean;
 }
 
 /** One delegation decision logged by the LDA pre-tool hook. */

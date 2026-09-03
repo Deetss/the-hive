@@ -69,6 +69,10 @@ const metaRow: React.CSSProperties = {
   display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontFamily: 'var(--cth-font-ui)',
   fontSize: 13, color: 'var(--cth-ink-700)'
 };
+const pill: React.CSSProperties = {
+  fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-700)',
+  boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', padding: '1px 6px', whiteSpace: 'nowrap'
+};
 const sectionHead: React.CSSProperties = {
   fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase',
   letterSpacing: 0.5, color: 'var(--cth-ink-900)', margin: '2px 0'
@@ -409,6 +413,15 @@ export function WorkersTab() {
                       decline
                     </PixelButton>
                   </div>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <span style={pill} title="provider">{p.provider ?? 'claude'}</span>
+                  <span style={pill} title="per-worker token cap">
+                    {p.tokenCap !== null ? `${fmtTokens(p.tokenCap)} tokens` : 'uncapped'}
+                  </span>
+                  <span style={pill} title="runs in a fresh isolated worktree">
+                    {p.isolate ? 'isolated' : 'not isolated'}
+                  </span>
                 </div>
                 {p.objective && (
                   <div>
