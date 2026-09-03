@@ -5783,12 +5783,13 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
     const dir = spawnRequestsDir();
     if (!dir) return { ok: false, error: 'spawn-requests dir unavailable' };
     mkdirSync(dir, { recursive: true });
-    // `id` may already be a PRIOR respawn's workerId (worker-respawn-<base>-<ts>,
-    // built below from this very reqId): strip it first so repeated respawns
-    // cap at one 'worker-respawn-' level instead of compounding into
-    // worker-respawn-worker-respawn-....
-    const baseId = id.replace(/^(?:worker-respawn-)+/, '');
-    const reqId = `respawn-${baseId}-${Date.now().toString(36)}`;
+    // Reuse the ORIGINAL worker's id for the replacement, so the Workers tab
+    // sees a replacement, not a brand-new unrelated worker. processSpawnRequest
+    // builds the live worker id as `worker-${req.id}`, and `id` here is already
+    // that full worker id (worker-<base>), so the request's id is `id` with
+    // the `worker-` prefix stripped, reconstructing the exact same worker id.
+    const baseId = id.replace(/^worker-/, '');
+    const reqId = baseId;
     const objective = `You are a respawn of ${entry.name || id}. First read your prior session's memory at ${memPath}, then resume that work where the previous session left off.${entry.role ? ` Role: ${entry.role}.` : ''}`;
     const req: SpawnRequest = {
       id: reqId,
@@ -5803,7 +5804,9 @@ async function respawnAgentById(id: string, senderWc?: Electron.WebContents): Pr
       // back to the harness-wide default and reaps the worker early.
       tokenCap: entry.tokenCap
     };
-    const reqFile = join(dir, `${reqId}.json`);
+    // The request FILENAME just needs to be unique on disk; the worker id that
+    // actually matters comes from req.id above, not this name.
+    const reqFile = join(dir, `respawn-${baseId}-${Date.now().toString(36)}.json`);
     writeFileSync(reqFile, JSON.stringify(req, null, 2), 'utf8');
     console.log(`[respawn] worker ${id} -> worker-${reqId}: tokenCap=${entry.tokenCap ?? '(none - uncapped)'}`);
     void processSpawnRequest(reqFile).catch((e) => console.error('[respawn] processSpawnRequest failed:', e));
