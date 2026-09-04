@@ -23,7 +23,7 @@ visualized as avatars at work on a shared honeycomb office floor.
 
 <p>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-F4D35E.svg?style=flat-square&labelColor=6E1423"></a>
-  <a href="./CHANGELOG.md"><img alt="Version: 0.6.59" src="https://img.shields.io/badge/version-0.6.59-F4D35E.svg?style=flat-square&labelColor=6E1423"></a>
+  <a href="./CHANGELOG.md"><img alt="Version: 0.6.65" src="https://img.shields.io/badge/version-0.6.65-F4D35E.svg?style=flat-square&labelColor=6E1423"></a>
   <img alt="Status: prototype" src="https://img.shields.io/badge/status-working%20prototype-F4F1EA.svg?style=flat-square&labelColor=6E1423">
   <img alt="Platform: macOS | Windows | Linux" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-F4F1EA.svg?style=flat-square&labelColor=6E1423">
   <a href="./CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-F4D35E.svg?style=flat-square&labelColor=6E1423"></a>
@@ -148,8 +148,8 @@ terminal/event plane, and [`DESIGN.md`](./DESIGN.md) for the visual system.
 - **Prerequisites** — one Settings page showing which supporting tools (uv, git, Node, MemPalace, each agent CLI) you have, what each is for, and a button that asks the Overmind to install what is missing.
 
 > [!NOTE]
-> **Status: v0.6.59**
-> Multi-agent autonomous coding hive with Linux .deb packaging, fleet respawn, UAT checklists and humanQA tracking, 3-tier dispatch prioritization, and honeycomb office floor simulation.
+> **Status: v0.6.65**
+> Multi-agent autonomous coding hive with GSD Plans tab in Command Center, custom model endpoint UI (base URL + cloud API key), mobile bridge WebSocket auth, focus-mode permission prompts, review gate enforcement, and humanQA chat delivery to agent inboxes.
 > macOS (universal), Windows, and Linux builds are on the
 > [releases page](https://github.com/Deetss/the-hive/releases/latest).
 
@@ -257,7 +257,7 @@ src/
     App.tsx                  top-level layout + wiring
     design/                  tokens.css / tokens.ts / global.css (design source of truth)
     components/              PixelPanel, AgentDetailPanel, CommandBar, ApprovalsPanel, MemoryPanel, …
-    CommandCenterPanel,      Overmind's control surface (Terminal/Floor/Memory/Activity/Tasks/Triggers/Handbook tabs)
+    CommandCenterPanel,      Overmind's control surface (Terminal/Floor/Plans/Memory/Activity/Tasks/Triggers/Handbook tabs)
     ToolWaterfall,           per-agent tool-span waterfall for the observability view
     TasksKanban,             dependency-aware kanban board (Tasks tab)
     ThreadsPanel,            hive message conversation viewer (Messages tab)
@@ -282,7 +282,7 @@ brand layers honey gold and dark slate on top for logo and chrome.
 
 ## Roadmap
 
-Shipped through **v0.6.59** — multi-agent autonomous coding hive with Linux .deb packaging, fleet respawn, UAT checklists and humanQA tracking, 3-tier dispatch prioritization, and honeycomb office floor simulation.
+Shipped through **v0.6.65** — GSD Plans tab, custom model endpoint UI, mobile bridge WebSocket auth, focus-mode permission prompts, review gate enforcement, humanQA chat delivery, Outline MCP endpoint fix, and more. Full history in [`CHANGELOG.md`](./CHANGELOG.md).
 Full history in [`CHANGELOG.md`](./CHANGELOG.md).
 
 Next up:

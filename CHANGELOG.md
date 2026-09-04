@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.65] — 2026-09-03
+
+### Added
+
+- **GSD Plans tab** — dedicated Plans panel in Command Center showing plan phases with status and acceptance criteria; task kanban cards show a "Plan · Phase" breadcrumb when they belong to a GSD plan.
+- **GSD Skill & Subagent Discovery** — collapsible GSD agent picker in the spawn system; detected agent roles get an automatic PERSONA system-prompt injection.
+- **Custom Model Endpoint UI** — base URL and cloud API key fields in AI Engine Settings for custom runtime profiles, so you can point any worker at a private or self-hosted model without touching a config file.
+- **Focus Mode Permission Prompts** — CLI permission prompts and approval banners are now surfaced directly in focus mode instead of being silently swallowed.
+- **Mobile Bridge WebSocket Authentication** — the `/bridge` WebSocket is now token-gated with constant-time secret verification, matching the `/api/*` REST security model. Four delivery methods: query param, Bearer header, `x-hive-secret`, or subprotocol.
+
+### Changed
+
+- **Review Gate Enforcement** — worker completion messages now transition tasks to `review` instead of directly closing to `done`, so every completion gets a human or Overmind UAT pass before the card closes.
+
+### Fixed
+
+- **HumanQA Chat Delivery** — end-to-end chat message delivery to agent inboxes: missing inbox directories are now created automatically, unassigned tasks route to the Overmind, and "waiting for unassigned" banners resolve correctly once a reply lands.
+- **Outline Knowledge Base MCP** — Outline Streamable HTTP MCP endpoints are now normalized to `/mcp` on the way in, resolving the connection errors workers saw when querying Outline knowledge base sources.
+
 ## [0.6.59] — 2026-09-01
 
 ### Added
