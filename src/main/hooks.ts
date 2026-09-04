@@ -37,6 +37,10 @@ interface HookPayload {
   cwd?: string;
   tool_name?: string;
   tool_input?: unknown;
+  /** Present on PreToolUse/PostToolUse in current Claude Code builds; absent on
+   *  older ones and on the agy/grok/gemini shims. Used only to pair a subagent's
+   *  start with its stop — see subagentQueue below. */
+  tool_use_id?: string;
   stop_hook_active?: boolean;
   prompt?: string;
   source?: string;
@@ -97,6 +101,10 @@ export class HookServer {
   private touchedLedgerById = new Map<string, TouchedLedgerEntry[]>();
   /** agentIds whose touched-ledger file has been loaded into memory */
   private touchedLoaded = new Set<string>();
+  /** agentId → ids of its currently in-flight Agent-tool (subagent) calls,
+   *  oldest first. Used to pair a PostToolUse stop with its PreToolUse start
+   *  when the payload carries no `tool_use_id` (FIFO best-effort). */
+  private openSubagentsByAgent = new Map<string, string[]>();
 
   constructor(
     private hive: HiveManager,
@@ -183,6 +191,36 @@ export class HookServer {
     this.onEvent?.(agentId, event, p.message);
     if (agentId && typeof p.transcript_path === 'string' && p.transcript_path) {
       this.transcriptPaths.set(agentId, p.transcript_path);
+    }
+
+    // Subagents spawned via the Agent tool run inside the parent's own session
+    // (no separate PTY/registry entry), so the roster's only signal that one
+    // exists at all is this PreToolUse/PostToolUse pair. Tracked ahead of every
+    // early-return branch below so a denied or steered turn never loses the
+    // matching stop.
+    if (agentId && p.tool_name === 'Agent') {
+      if (event === 'PreToolUse') {
+        const input = (p.tool_input && typeof p.tool_input === 'object' ? p.tool_input as Record<string, unknown> : {});
+        const label = (typeof input.description === 'string' && input.description.trim())
+          || (typeof input.subagent_type === 'string' && input.subagent_type.trim())
+          || 'subagent';
+        const id = typeof p.tool_use_id === 'string' && p.tool_use_id ? p.tool_use_id : `${agentId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+        const queue = this.openSubagentsByAgent.get(agentId) ?? [];
+        queue.push(id);
+        this.openSubagentsByAgent.set(agentId, queue);
+        this.getWebContents()?.send('hive:subagentStart', { parentId: agentId, id, label });
+      } else if (event === 'PostToolUse') {
+        const queue = this.openSubagentsByAgent.get(agentId) ?? [];
+        const id = (typeof p.tool_use_id === 'string' && p.tool_use_id && queue.includes(p.tool_use_id))
+          ? p.tool_use_id
+          : queue.shift();
+        if (id !== undefined) {
+          const idx = queue.indexOf(id);
+          if (idx !== -1) queue.splice(idx, 1);
+          this.openSubagentsByAgent.set(agentId, queue);
+          this.getWebContents()?.send('hive:subagentStop', { parentId: agentId, id });
+        }
+      }
     }
 
     // Status-line payloads carry the session's EXACT context accounting —

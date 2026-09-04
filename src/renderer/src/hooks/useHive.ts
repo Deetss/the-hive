@@ -571,6 +571,19 @@ export function useHive(config: HarnessConfig | null): void {
     });
   }, []);
 
+  // 2a) Nest subagents spawned via the Agent tool under their parent in the
+  // roster while they run — see hooks.ts's PreToolUse/PostToolUse('Agent')
+  // pairing for where these originate.
+  useEffect(() => {
+    const offStart = window.cth.onHiveSubagentStart((e) => {
+      useStore.getState().addSubagent(e.parentId, { id: e.id, label: e.label, startedAt: Date.now() });
+    });
+    const offStop = window.cth.onHiveSubagentStop((e) => {
+      useStore.getState().removeSubagent(e.parentId, e.id);
+    });
+    return () => { offStart(); offStop(); };
+  }, []);
+
   // 2b) Consume circuit-breaker state (#7C.4/#5C). Lane A's breaker policy (#6)
   //     pushes BreakerState on `control:breakerState`; this gives it PRECEDENCE
   //     over hook-derived status: a constrained/stopped agent is pinned to

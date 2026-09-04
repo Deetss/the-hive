@@ -1146,6 +1146,24 @@ const api = {
     ipcRenderer.on('hive:touchedUpdate', listener);
     return () => ipcRenderer.removeListener('hive:touchedUpdate', listener);
   },
+  /** Fires when an agent spawns a subagent via the Agent tool (PreToolUse,
+   *  tool_name 'Agent') — the roster nests a transient child row under the
+   *  parent until the matching onHiveSubagentStop arrives. Same pattern as
+   *  onHiveHookEvent. */
+  onHiveSubagentStart: (
+    cb: (e: { parentId: string; id: string; label: string }) => void
+  ): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: { parentId: string; id: string; label: string }) => cb(payload);
+    ipcRenderer.on('hive:subagentStart', listener);
+    return () => ipcRenderer.removeListener('hive:subagentStart', listener);
+  },
+  onHiveSubagentStop: (
+    cb: (e: { parentId: string; id: string }) => void
+  ): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: { parentId: string; id: string }) => cb(payload);
+    ipcRenderer.on('hive:subagentStop', listener);
+    return () => ipcRenderer.removeListener('hive:subagentStop', listener);
+  },
   /** Push-based model id from the status line: reflects a live /model change in
    *  the terminal onto the roster card. Same pattern as onHiveContextUpdate. */
   onHiveModelUpdate: (
