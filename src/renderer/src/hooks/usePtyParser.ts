@@ -84,12 +84,17 @@ export function usePtyParser(agentId: string) {
       window.clearTimeout(idleTimerRef.current);
     }
     idleTimerRef.current = window.setTimeout(() => {
-      // No new tool calls for ~4 s → assume the model went idle
+      // No new tool calls for ~4 s → assume the model went idle. Also clear
+      // blockReason here: it's set when a prompt/permission hint is spotted
+      // but nothing ever resets it once the agent moves past that prompt, so
+      // the WAITING FOR APPROVAL banner (driven off blockReason) would stay
+      // up forever even after the agent is confirmed idle.
       updateAgent(agentId, {
         status: 'idle',
         action: 'awaiting',
         carrying: undefined,
-        currentStation: 'desk'
+        currentStation: 'desk',
+        blockReason: undefined
       });
     }, 4000) as unknown as number;
   }, [agentId, updateAgent]);
