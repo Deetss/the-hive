@@ -5738,6 +5738,27 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       { needle: 'Would you like to run the following command', response: '1\r' }
     ];
   }
+  // Claude Code shows the same class of first-run gate: a folder-trust prompt
+  // ("Do you trust the files in this folder?" per ensureClaudePermissionsAccepted's
+  // own doc comment; usePtyParser.ts's detector additionally hedges on "...of
+  // this directory" and "trust (this|the) (workspace|folder|directory)", meaning
+  // even the exact wording isn't fully pinned down — hence matching on more than
+  // one literal fragment below rather than a single needle).
+  // Primary fix: ensureClaudePermissionsAccepted (called just above, claudeProvider
+  // branch) seeds ~/.claude.json's projects[cwd].hasTrustDialogAccepted so the
+  // prompt shouldn't fire at all. Belt-and-suspenders: that seed is an unlocked
+  // read-modify-write against one shared file, so two spawns racing close together
+  // can lose one's write — this answers the prompt in the PTY if it still shows up.
+  // needle match is a case-sensitive substring (pty.ts), so multiple candidate
+  // phrasings are listed independently rather than relying on one exact guess.
+  if (provider === 'claude') {
+    opts.autoWriteOnPattern = [
+      { needle: 'trust the files in this folder', response: '1\r' },
+      { needle: 'trust the contents of this directory', response: '1\r' },
+      { needle: 'Trust the files in this folder', response: '1\r' },
+      { needle: 'Trust the contents of this directory', response: '1\r' }
+    ];
+  }
   // WSL launcher decision: a WSL cwd can't be reached from a Windows shell, so
   // route the launch through `wsl.exe --cd <path> -- <command> ...` instead.
   // opts.cwd is then swapped for the Windows home dir purely so pty.ts's
