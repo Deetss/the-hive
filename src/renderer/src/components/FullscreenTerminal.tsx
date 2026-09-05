@@ -156,6 +156,7 @@ export interface FullscreenTerminalProps {
 
 export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
   const agents = useStore(s => s.agents);
+  const subagentsByParent = useStore(s => s.subagentsByParent);
   const restorableAgents = useStore(s => s.restorableAgents);
   const fullscreenAgentId = useStore(s => s.fullscreenAgentId);
   const setFullscreen = useStore(s => s.setFullscreen);
@@ -596,6 +597,9 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                   needsInput={needsInputById[a.id]}
                   profileLabel={a.profileId ? profileNameById[a.profileId] : undefined}
                 />
+                {(subagentsByParent[a.id] ?? []).map(sub => (
+                  <SubagentRow key={sub.id} label={sub.label} scale={scale} />
+                ))}
               </div>
             ))}
             {groups.map(([repoKey, { label, members }]) => (
@@ -624,18 +628,22 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                   }}>{label.toUpperCase()}</span>
                 </div>
                 {members.map(a => (
-                  <SidebarRow
-                    key={a.id}
-                    agent={a}
-                    active={a.id === agent.id}
-                    onClick={() => { select(a.id); setFullscreen(a.id); }}
-                    onNoteChange={(note) => setAgentNote(a.id, note)}
-                    drag={drag}
-                    scale={scale}
-                    quotaLimited={quotaById[a.id]}
-                    needsInput={needsInputById[a.id]}
-                    profileLabel={a.profileId ? profileNameById[a.profileId] : undefined}
-                  />
+                  <div key={a.id}>
+                    <SidebarRow
+                      agent={a}
+                      active={a.id === agent.id}
+                      onClick={() => { select(a.id); setFullscreen(a.id); }}
+                      onNoteChange={(note) => setAgentNote(a.id, note)}
+                      drag={drag}
+                      scale={scale}
+                      quotaLimited={quotaById[a.id]}
+                      needsInput={needsInputById[a.id]}
+                      profileLabel={a.profileId ? profileNameById[a.profileId] : undefined}
+                    />
+                    {(subagentsByParent[a.id] ?? []).map(sub => (
+                      <SubagentRow key={sub.id} label={sub.label} scale={scale} />
+                    ))}
+                  </div>
                 ))}
               </div>
             ))}
@@ -901,6 +909,34 @@ function SidebarRow({
       profileLabel={profileLabel}
       needsInput={needsInput}
     />
+  );
+}
+
+/** A subagent spawned via the Agent tool, nested under its parent row while it
+ *  runs. Deliberately lighter than a full AgentRosterItem — it has no PTY, no
+ *  terminal, nothing to click — just a label and a tree connector so the
+ *  grouping reads as natural rather than as a second class of agent. */
+function SubagentRow({ label, scale }: { label: string; scale: ReturnType<typeof rosterScale> }) {
+  return (
+    <div
+      title={label}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: `2px 8px 2px ${Math.round(scale.portrait * 0.6) + 14}px`,
+        fontFamily: 'var(--cth-font-ui)', fontSize: Math.max(11, scale.name - 2),
+        color: 'var(--cth-ink-500)'
+      }}
+    >
+      <span style={{ flexShrink: 0, opacity: 0.6 }}>└</span>
+      <span style={{
+        flexShrink: 0, width: 5, height: 5, borderRadius: '50%',
+        background: 'var(--cth-sky)'
+      }} />
+      <span style={{
+        minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        fontStyle: 'italic'
+      }}>{label}</span>
+    </div>
   );
 }
 

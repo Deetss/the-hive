@@ -237,6 +237,18 @@ export interface Agent {
   seedPrompt?: string;
 }
 
+/** A subagent spawned by an agent via the Agent tool. Runs inside the parent's
+ *  own session (no PTY, no registry entry) — this is a transient roster hint,
+ *  not a durable agent record, so it lives only in `subagentsByParent` and is
+ *  never persisted. Cleared on the matching hive:subagentStop. */
+export interface SubagentInfo {
+  /** Correlates a hive:subagentStart with its hive:subagentStop. */
+  id: string;
+  /** description or subagent_type from the Agent tool call, for display. */
+  label: string;
+  startedAt: number;
+}
+
 export interface FeedEntry {
   agentId: string;
   text: string;
@@ -354,6 +366,12 @@ interface State {
    *  shown in the command center (interactive sessions don't expose billed $). */
   toolCounts: Record<string, number>;
   bumpToolCount: (id: string) => void;
+  /** Live Agent-tool subagents, keyed by the spawning parent's agent id — the
+   *  roster nests these under their parent while they run. Renderer-memory
+   *  only; never persisted (see SubagentInfo). */
+  subagentsByParent: Record<string, SubagentInfo[]>;
+  addSubagent: (parentId: string, subagent: SubagentInfo) => void;
+  removeSubagent: (parentId: string, id: string) => void;
   setGodStatus: (status: GodStatus) => void;
   select: (id: string) => void;
   updateAgent: (id: string, patch: Partial<Agent>) => void;
@@ -863,6 +881,21 @@ export const useStore = create<State>((set, get) => ({
   toolCounts: {},
   bumpToolCount: (id) =>
     set((s) => ({ toolCounts: { ...s.toolCounts, [id]: (s.toolCounts[id] ?? 0) + 1 } })),
+  subagentsByParent: {},
+  addSubagent: (parentId, subagent) =>
+    set((s) => ({
+      subagentsByParent: {
+        ...s.subagentsByParent,
+        [parentId]: [...(s.subagentsByParent[parentId] ?? []), subagent]
+      }
+    })),
+  removeSubagent: (parentId, id) =>
+    set((s) => {
+      const existing = s.subagentsByParent[parentId];
+      if (!existing) return {};
+      const next = existing.filter((sub) => sub.id !== id);
+      return { subagentsByParent: { ...s.subagentsByParent, [parentId]: next } };
+    }),
   setGodStatus: (status) => set({ godStatus: status }),
   select: (id) => set((s) => { persistAgents(s.agents, id); return { selectedId: id, ccTabRequest: null }; }),
   updateAgent: (id, patch) =>
