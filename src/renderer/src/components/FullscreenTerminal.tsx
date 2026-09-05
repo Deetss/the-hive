@@ -235,6 +235,13 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
     const promptKey = needsInputById[id] || agents.find(a => a.id === id)?.blockReason?.detail || agents.find(a => a.id === id)?.blockReason?.summary || 'prompt';
     setDismissedPrompts(prev => ({ ...prev, [id]: promptKey }));
   };
+  // Mirrors otherBlockedWorkers' dismissal check for the focused agent's own inline
+  // banner below, which previously had no way to clear a stale prompt at all.
+  const focusedAgentPromptDismissed = useMemo(() => {
+    if (!agent) return false;
+    const promptKey = needsInputById[agent.id] || agent.blockReason?.detail || agent.blockReason?.summary || 'prompt';
+    return dismissedPrompts[agent.id] === promptKey;
+  }, [agent, needsInputById, dismissedPrompts]);
   const profileNameById = useMemo(() => {
     const m: Record<string, string> = {};
     for (const p of config?.runtimeProfiles ?? []) {
@@ -762,7 +769,7 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                         fullscreen
                       />
                     </div>
-                    {Boolean(needsInputById[agent.id] || agent.blockReason) && (
+                    {Boolean((needsInputById[agent.id] || agent.blockReason) && !focusedAgentPromptDismissed) && (
                       <div style={{
                         background: 'var(--cth-coral-light)',
                         borderTop: '1px solid var(--cth-coral)',
@@ -806,6 +813,18 @@ export function FullscreenTerminal({ config }: FullscreenTerminalProps) {
                           >
                             Deny (n)
                           </PixelButton>
+                          <button
+                            type="button"
+                            onClick={() => dismissWorkerPrompt(agent.id)}
+                            title="Dismiss notification"
+                            aria-label="Dismiss notification"
+                            style={{
+                              border: 'none', background: 'transparent', cursor: 'pointer',
+                              color: 'var(--cth-ink-500)', fontSize: 13, padding: '0 4px', lineHeight: 1
+                            }}
+                          >
+                            ✕
+                          </button>
                         </div>
                       </div>
                     )}
