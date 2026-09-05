@@ -513,6 +513,11 @@ export function useHive(config: HarnessConfig | null): void {
       if (e.event === 'PreCompact') {
         // #5C — agent entered /compact; show it's boxing up context, not frozen.
         if (!breakerArmed) updateAgent(e.agentId, { status: 'compacting', action: 'compacting context', carrying: undefined });
+        // Update the context-trigger latch so a Claude Code-initiated compact (at
+        // usage cap) is treated the same as a Hive-queued one. Without this the
+        // latch has no entry for the agent and the next trigger tick queues a
+        // second /compact behind the one already running.
+        lastCompactUsed.current[e.agentId] = self.contextTokens ?? 0;
       } else if (e.event === 'PostCompact') {
         if (!breakerArmed) updateAgent(e.agentId, { status: 'working', action: 'resumed', carrying: undefined });
       } else if (e.event === 'PreToolUse' && e.tool) {
@@ -1161,6 +1166,7 @@ export function useHive(config: HarnessConfig | null): void {
         // No trustworthy command for this CLI (Crush's palette-only TUI, Copilot's
         // print mode, an unknown custom binary) — leave its terminal alone.
         if (!command) continue;
+        if (action === 'compact' && !force && a.status === 'compacting') continue;
         if (!force && !passesContextPressure(a, rule)) continue;
         const verb = command.trimStart().split(/\s+/)[0];
         const queued = messageQueues[a.id] ?? [];
