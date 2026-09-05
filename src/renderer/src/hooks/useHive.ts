@@ -545,7 +545,12 @@ export function useHive(config: HarnessConfig | null): void {
         } else {
           // A genuine stop clears any breaker override — the run is over.
           breakerLevel.current[e.agentId] = 'healthy';
-          updateAgent(e.agentId, { status: 'idle', action: 'idle', carrying: undefined });
+          // v2 of 2a615c2a: that fix only cleared blockReason from the PTY
+          // silence-timer idle path. A Stop/SubagentStop with no pending tool
+          // call (e.g. an approval prompt that timed out or was skipped) also
+          // means the run is genuinely over, so clear it here too — otherwise
+          // the WAITING FOR APPROVAL banner outlives the agent that raised it.
+          updateAgent(e.agentId, { status: 'idle', action: 'idle', carrying: undefined, blockReason: undefined });
         }
       } else if (e.event === 'Notification' && !breakerArmed) {
         // Claude Code fires Notification for two very different situations:
