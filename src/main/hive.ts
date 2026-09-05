@@ -3415,14 +3415,14 @@ Messages and dispatches support three priority tiers:
 ## Rules of the road
 - Only \`request\`, \`query\`, and \`propose\` expect a reply. \`inform\` and \`done\` are terminal —
   don't reply to them, or two agents will loop forever.
-- For anything ambiguous, cross-cutting, or needing sign-off, message Abathur (\`"to": "god"\`) — the
+- For anything ambiguous, cross-cutting, or needing sign-off, message the orchestrator (\`"to": "god"\`) — the
   Overmind clarifies answers for you so you rarely need the human directly.
 - There is NO separate human-approval queue. Human-in-the-loop is native to Claude
   Code: a tool you run that needs permission prompts in your own session (the human
   can approve it remotely from their phone via \`/remote-control\`). If you genuinely
-  need a human decision, raise it with Abathur (a message \`"to": "human"\` is routed to
+  need a human decision, raise it with the orchestrator (a message \`"to": "human"\` is routed to
   the Overmind, the human's proxy on the floor).
-- \`board.md\` is the shared plan. Don't edit it directly — \`propose\` changes to Abathur (\`"to": "god"\`),
+- \`board.md\` is the shared plan. Don't edit it directly — \`propose\` changes to the orchestrator (\`"to": "god"\`),
   who is its sole scribe.
 - Re-reading a message you already moved to \`.done/\` is a no-op. Don't reprocess.
 
@@ -3440,10 +3440,10 @@ Do NOT go silent the moment the work is done — that forces the Overmind to not
 re-dispatch by hand. Every time you finish a task, run this close-out **in order**:
 1. **Verify your own work first.** Before you mark the task done, run the checks that apply: typecheck (\`npm run typecheck:web\`, \`npm run typecheck:node\`), tests (\`node --test\` on the suites you touched), and/or manually exercise the feature to confirm it behaves as intended. If any check fails, FIX IT before going further — never report done with broken checks. Report only what you actually ran: if you skipped a check, say "not verified" rather than assert it passed — a confident but false claim is worse than an honest gap.
 2. Set the task's \`status\` to \`done\` in \`tasks.json\` (keep its \`assignee\` and \`progressLog\` — a done card still says who did the work).
-3. Send a \`done\` report to Abathur (\`"to":"god"\`) with the concrete result: commit hash, files changed, what changed, and **what you verified** (e.g. "typecheck clean, 5 tests pass, manually confirmed the button copies"). Never a bare "done".
+3. Send a \`done\` report to the orchestrator (\`"to":"god"\`) with the concrete result: commit hash, files changed, what changed, and **what you verified** (e.g. "typecheck clean, 5 tests pass, manually confirmed the button copies"). Never a bare "done".
 4. **Re-drain your \`inbox/\`.** New dispatches and \`urgent\` messages routinely arrive while you were heads-down. Process \`urgent\` first, then FIFO, and move each to \`.done/\`.
 5. If nothing is waiting, scan \`tasks.json\` for an unassigned \`todo\` whose dependencies are met and that fits your skills. Claim it (set \`assignee\` to your id + \`status\` to \`doing\`) and start — you do not need to wait for a hand-off.
-6. Only if there is genuinely nothing to pick up, send Abathur a one-line \`inform\`: \`"inbox empty, idle and available"\`. Then stop. Do NOT sit polling your own session — the harness will wake you when mail arrives.
+6. Only if there is genuinely nothing to pick up, send the orchestrator a one-line \`inform\`: \`"inbox empty, idle and available"\`. Then stop. Do NOT sit polling your own session — the harness will wake you when mail arrives.
 
 ## External actions — get Overmind approval before touching outside systems
 Anything that reaches beyond this machine or is hard to reverse needs a green light
@@ -3453,7 +3453,7 @@ first. Covered: \`git push\` (a branch OR a tag), \`gh\` API / PR / release call
 
 Before you run one of these:
 1. If your CURRENT dispatch names that exact command as the task, it is already approved — run it. For a release / deploy / tag push, still confirm the board is clear and the timing holds: a dispatch written earlier is not a live green light once instructions have moved on.
-2. Otherwise, push a \`humanQA\` decision card to your task card — \`{"q":"<exactly what you will run + which external system it affects + why>","kind":"decision","askedAt":"<iso>"}\` — set the task \`status\` to \`blocked\`, message Abathur (\`"to":"god"\`), and WAIT for the answer before proceeding.
+2. Otherwise, push a \`humanQA\` decision card to your task card — \`{"q":"<exactly what you will run + which external system it affects + why>","kind":"decision","askedAt":"<iso>"}\` — set the task \`status\` to \`blocked\`, message the orchestrator (\`"to":"god"\`), and WAIT for the answer before proceeding.
 
 Local-only work needs no gate: builds, typecheck, tests, reading files, and
 \`git add\` / \`git commit\` / \`git tag\` **without** a push.
@@ -3470,7 +3470,7 @@ knowledge base, resolve it yourself instead of asking; note what you found rathe
 something you could have checked. Instead:
 1. Append the ask to your task card's \`humanQA\` array in \`tasks.json\`: push \`{"q":"<the question + the concrete options>","askedAt":"<iso>"}\`, keeping every past entry.
 2. If you are truly stuck until it is answered, also set that task's \`status\` to \`blocked\`. A quick, non-blocking question can stay \`doing\` so you keep working other parts of the task, but the \`humanQA\` entry still goes on the card so it shows on ASK ME.
-3. Message Abathur (\`"to":"god"\`) so the floor knows you are waiting.
+3. Message the orchestrator (\`"to":"god"\`) so the floor knows you are waiting.
 
 The harness surfaces open \`humanQA\` on the office floor's ASK ME board with a badge, labelled
 with your task title so the human has context. The answer lands back in the same entry (\`a\`) and
