@@ -57,6 +57,23 @@ export function AskMeTab() {
 
   const nameFor = (id: string | null | undefined) => getAgentDisplayName(id, agents, restorableAgents);
 
+  // PROMPT-type messages are a live Claude Code permission/confirmation prompt
+  // sitting in the agent's terminal — Approve/Deny write the keystroke straight
+  // into that pty (same channel FullscreenTerminal uses) instead of routing
+  // through a hive message, so the prompt resolves without the human ever
+  // opening the terminal.
+  const handlePromptDecision = async (msgId: string, agentId: string, key: 'y' | 'n') => {
+    if (sendingMsg === msgId) return;
+    setSendingMsg(msgId);
+    try {
+      const ptyId = agents.find((a) => a.id === agentId)?.ptyId;
+      if (ptyId) await window.cth.writePty(ptyId, `${key}\r`);
+      resolveHumanMessage(msgId);
+    } finally {
+      setSendingMsg(null);
+    }
+  };
+
   const loadQA = useCallback(async () => {
     try {
       if (window.cth?.openHumanQA) {
@@ -309,50 +326,72 @@ export function AskMeTab() {
               </div>
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <Markdown text={msg.body} style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-900)', maxWidth: '72ch' }} />
-                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
-                  <textarea
-                    value={msg.replyDraft}
-                    onChange={(e) => updateHumanMessageDraft(msg.id, e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                        void (async () => {
+                {msg.act === 'prompt' ? (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <PixelButton variant="primary" size="sm"
+                      disabled={sendingMsg === msg.id}
+                      onClick={() => void handlePromptDecision(msg.id, msg.from, 'y')}>
+                      Approve (y)
+                    </PixelButton>
+                    <PixelButton variant="destructive" size="sm"
+                      disabled={sendingMsg === msg.id}
+                      onClick={() => void handlePromptDecision(msg.id, msg.from, 'n')}>
+                      Deny (n)
+                    </PixelButton>
+                    <PixelButton variant="secondary" size="sm"
+                      disabled={sendingMsg === msg.id}
+                      onClick={() => resolveHumanMessage(msg.id)}>
+                      dismiss
+                    </PixelButton>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                      <textarea
+                        value={msg.replyDraft}
+                        onChange={(e) => updateHumanMessageDraft(msg.id, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                            void (async () => {
+                              const text = msg.replyDraft.trim();
+                              if (!text || sendingMsg === msg.id) return;
+                              setSendingMsg(msg.id);
+                              await window.cth.hiveSend({ to: msg.from, act: 'inform', subject: `Re: ${msg.subject}`, body: text }, 'human');
+                              resolveHumanMessage(msg.id);
+                              setSendingMsg(null);
+                            })();
+                          }
+                        }}
+                        rows={2}
+                        placeholder="Reply… (Ctrl+Enter to send)"
+                        style={{
+                          flex: 1, boxSizing: 'border-box', padding: '6px 8px', resize: 'vertical',
+                          background: 'var(--cth-paper-100)', border: 'none',
+                          boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
+                          fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none'
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <PixelButton variant="primary" size="sm"
+                        disabled={!msg.replyDraft.trim() || sendingMsg === msg.id}
+                        onClick={() => void (async () => {
                           const text = msg.replyDraft.trim();
                           if (!text || sendingMsg === msg.id) return;
                           setSendingMsg(msg.id);
                           await window.cth.hiveSend({ to: msg.from, act: 'inform', subject: `Re: ${msg.subject}`, body: text }, 'human');
                           resolveHumanMessage(msg.id);
                           setSendingMsg(null);
-                        })();
-                      }
-                    }}
-                    rows={2}
-                    placeholder="Reply… (Ctrl+Enter to send)"
-                    style={{
-                      flex: 1, boxSizing: 'border-box', padding: '6px 8px', resize: 'vertical',
-                      background: 'var(--cth-paper-100)', border: 'none',
-                      boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
-                      fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', outline: 'none'
-                    }}
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <PixelButton variant="primary" size="sm"
-                    disabled={!msg.replyDraft.trim() || sendingMsg === msg.id}
-                    onClick={() => void (async () => {
-                      const text = msg.replyDraft.trim();
-                      if (!text || sendingMsg === msg.id) return;
-                      setSendingMsg(msg.id);
-                      await window.cth.hiveSend({ to: msg.from, act: 'inform', subject: `Re: ${msg.subject}`, body: text }, 'human');
-                      resolveHumanMessage(msg.id);
-                      setSendingMsg(null);
-                    })()}>
-                    {sendingMsg === msg.id ? 'sending…' : 'reply & resolve'}
-                  </PixelButton>
-                  <PixelButton variant="secondary" size="sm"
-                    onClick={() => resolveHumanMessage(msg.id)}>
-                    dismiss
-                  </PixelButton>
-                </div>
+                        })()}>
+                        {sendingMsg === msg.id ? 'sending…' : 'reply & resolve'}
+                      </PixelButton>
+                      <PixelButton variant="secondary" size="sm"
+                        onClick={() => resolveHumanMessage(msg.id)}>
+                        dismiss
+                      </PixelButton>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ))}
