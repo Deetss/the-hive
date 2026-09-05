@@ -104,6 +104,12 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   // name from TO flips this into a structured dispatch routed through the
   // Overmind instead; "send later" queues for this agent regardless of TO.
   const [target, setTarget] = useState(agent.id);
+  // `target` is local, not stored per-agent like `text` is — so without this,
+  // switching panels leaves TO pointed at whoever the previous panel's picker
+  // last selected, which no longer matches this agent's composer at all.
+  useEffect(() => {
+    setTarget(agent.id);
+  }, [agent.id]);
   const [sendLater, setSendLater] = useState(false);
   const [dispAct, setDispAct] = useState<'request' | 'query' | 'inform'>('request');
   const [dispProject, setDispProject] = useState('');
