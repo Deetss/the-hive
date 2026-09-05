@@ -24,7 +24,6 @@ import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool'
 import { terminalInstanceKey } from './terminalRecovery';
 import { Icon } from './Icon';
 import QRCode from '@/lib/qrcodejs';
-import { MemoryGraphPanel } from './MemoryGraphPanel';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
 import { getAgentDisplayName } from '@/lib/agentNames';
 import { COMMAND_GROUPS } from '@shared/claudeCommands';
@@ -56,7 +55,7 @@ import { submitToPty, INITIAL_GOD_PROMPT } from '@/hooks/useHive';
 // the old Schedules tab: schedules are now one of four trigger types, and the
 // whole surface lives in ./triggers (see src/shared/triggers.ts for the contract).
 type CCTab = 'terminal' | 'floor' | 'tasks' | 'plans' | 'ask' | 'human' | 'triggers' | 'trigger-history'
-  | 'memory' | 'graph' | 'activity' | 'skills' | 'workers' | 'delegations' | 'review' | 'git' | 'touched' | 'files' | 'ide';
+  | 'memory' | 'activity' | 'skills' | 'workers' | 'delegations' | 'review' | 'git' | 'touched' | 'files' | 'ide';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
  *  is configured — so the bar reads as a budget estimate (filled + remaining)
@@ -84,7 +83,6 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
   { key: 'triggers', label: 'triggers', icon: 'clock' },
   { key: 'trigger-history', label: 'history', icon: 'ledger' },
   { key: 'memory', label: 'memory', icon: 'sparkle' },
-  { key: 'graph', label: 'graph', icon: 'web' },
   { key: 'activity', label: 'activity', icon: 'bell' },
   { key: 'skills', label: 'skills', icon: 'sparkle' },
   { key: 'workers', label: 'workers', icon: 'gear' },
@@ -304,7 +302,6 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
   // Deferred until the first visit, so it costs nothing on initial app load.
   const [floorMounted, setFloorMounted] = useState(false);
   useEffect(() => { if (tab === 'floor') setFloorMounted(true); }, [tab]);
-  // Lifted so the memory-graph tab can jump to a specific agent's memory file.
   const [selectedMemoryAgent, setSelectedMemoryAgent] = useState<string | null>(null);
   const updateAgent = useStore((s) => s.updateAgent);
   const setFullscreen = useStore((s) => s.setFullscreen);
@@ -691,12 +688,6 @@ export function CommandCenterPanel({ agent, fullscreen = false, mobile = false }
         {tab === 'trigger-history' && <TriggerHistoryTab />}
         {tab === 'memory' && (
           <MemoryTab godId={agent.id} who={selectedMemoryAgent ?? undefined} onWho={setSelectedMemoryAgent} />
-        )}
-        {tab === 'graph' && (
-          <MemoryGraphPanel
-            godId={agent.id}
-            onJumpToMemory={(id) => { setSelectedMemoryAgent(id); setTab('memory'); }}
-          />
         )}
         {tab === 'activity' && <ActivityTab />}
         {tab === 'skills' && <SkillsTab agentCwd={agent.cwd} />}
@@ -1418,7 +1409,7 @@ const MemoryTextResultRow = memo(function MemoryTextResultRow({ source, excerpt 
 
 function MemoryTab({ godId, who: controlledWho, onWho }: { godId: string; who?: string; onWho?: (id: string) => void }) {
   const agents = useStore((s) => s.agents);
-  // Selection is controllable from the graph tab; falls back to local state.
+  // Selection is controllable by the caller; falls back to local state.
   const [internalWho, setInternalWho] = useState<string>(godId);
   const who = controlledWho ?? internalWho;
   const setWho = onWho ?? setInternalWho;
