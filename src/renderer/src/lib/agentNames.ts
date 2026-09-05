@@ -21,7 +21,18 @@ export function getAgentDisplayName(
   const found =
     agents.find((a) => a.id === trimmed || (trimmed === 'god' && a.isOvermind))?.name ??
     restorableAgents.find((a) => a.id === trimmed)?.name;
-  if (found) return found;
+  if (found) {
+    // When multiple active agents share the same display name, append the last
+    // segment of the ID so "Albee Einstein (mtnkyxvi)" is distinct from
+    // "Albee Einstein (mtnijz6i)". Restorable agents are excluded from the
+    // collision count — they're off the floor and their suffix would just add noise.
+    const collision = agents.filter((a) => (a.name || '') === found).length > 1;
+    if (collision && trimmed.includes('-')) {
+      const suffix = trimmed.split('-').pop();
+      if (suffix) return `${found} (${suffix})`;
+    }
+    return found;
+  }
 
   // If id is in format 'name-hash' (e.g. 'jim-mthuwhtq', 'pam-kdf92j'), make it readable
   if (trimmed.includes('-')) {

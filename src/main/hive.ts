@@ -877,6 +877,36 @@ export class HiveManager {
     // the roster (cwdValid) rather than silently spawning into a nonexistent dir.
     // Store the EXPANDED cwd, never the raw `~/…` the user typed — the registry is
     // read by hooks, the roster and the worker watcher, none of which run a shell.
+    // Warn when a different active agent already has the same display name. A
+    // duplicate name makes every roster view ambiguous: god can't reliably pick
+    // the right ID to put in an outbox message, and the kanban shows identical
+    // assignee strings for tasks belonging to different agents.
+    const nameCollision = Object.entries(reg.agents).find(
+      ([id, a]) => id !== meta.id && !a.archived && (a.name || '') === meta.name
+    );
+    if (nameCollision) {
+      this.appendLog({
+        kind: 'warn' as string,
+        agentId: meta.id,
+        msg: `name collision: "${meta.name}" already used by ${nameCollision[0]}`
+      } as Record<string, unknown>);
+      const godId = reg.godId ?? 'god';
+      const collisionMsg: HiveMessage = {
+        id: `collision-${meta.id}-${Date.now()}`,
+        conversation: `conv-collision-${meta.id}`,
+        in_reply_to: null,
+        from: 'system',
+        to: godId,
+        act: 'warn' as MessageAct,
+        subject: `Name collision: "${meta.name}"`,
+        body: `Agent ${meta.id} was just spawned with the name "${meta.name}", which is already used by active agent ${nameCollision[0]}. Both will appear identically in rosters and task cards. Consider renaming one with hive:renameAgent to avoid wrong-routing.`,
+        hops: 0,
+        requires_reply: false,
+        needs_human: false,
+        created_at: new Date().toISOString()
+      };
+      this.deliver(collisionMsg, godId);
+    }
     const cwd = this.cwdValidity(meta.cwd);
     reg.agents[meta.id] = {
       ...prev,
