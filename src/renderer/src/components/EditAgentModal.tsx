@@ -20,6 +20,7 @@ import {
   isClaudeProvider
 } from '@/store/config';
 import { roleForHiveSpawn } from '@shared/agentRole';
+import { BRIEFING_TEMPLATES } from '@shared/briefingTemplates';
 
 const ACCENTS: AccentColorName[] = ['coral', 'mint', 'sky', 'lemon', 'lilac', 'peach'];
 
@@ -95,6 +96,17 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
     const res = await window.cth.chooseFolder();
     if (res.ok) setCwd(res.path);
     else if (res.error !== 'cancelled') setError(res.error);
+  };
+
+  // Unlike Add Agent (blank slate), this agent may already have a real
+  // description/goal — confirm before a template clobbers either one.
+  const applyTemplate = (t: { description: string; goal: string }) => {
+    const hasExisting = description.trim().length > 0 || goal.trim().length > 0;
+    if (hasExisting && !window.confirm('Replace the current Description and Goal with this preset?')) {
+      return;
+    }
+    setDescription(t.description);
+    setGoal(t.goal);
   };
 
   const applyProfile = (id: string) => {
@@ -483,6 +495,30 @@ export function EditAgentModal({ agent, onClose }: EditAgentModalProps) {
               </div>
               <div style={{ minWidth: 0 }}>
             <Section label="Briefing" hint="description · goal">
+              <Row label="Templates">
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {BRIEFING_TEMPLATES.map((t) => (
+                    <button
+                      key={t.label}
+                      type="button"
+                      onClick={() => applyTemplate(t)}
+                      title={t.goal}
+                      disabled={saving}
+                      style={{
+                        padding: '3px 8px 1px',
+                        background: 'var(--cth-cream-100)',
+                        boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)',
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 12,
+                        color: 'var(--cth-ink-900)', cursor: saving ? 'not-allowed' : 'pointer', border: 'none',
+                        opacity: saving ? 0.7 : 1
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </Row>
+
               <Row label="Description">
                 <input
                   value={description}
