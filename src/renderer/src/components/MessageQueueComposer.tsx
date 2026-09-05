@@ -254,17 +254,18 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     resetComposer();
   };
 
-  // Structured dispatch — mirrors the old Floor form: ALL human dispatch flows
-  // through the Overmind (never straight into a worker's inbox); a picked agent
-  // rides along as a suggestion, and the priority directive tells god how to
-  // triage it.
+  // Structured dispatch — mirrors the old Floor form: picking "BeeYoncé decides"
+  // routes through the Overmind for triage. Picking a NAMED agent is a direct
+  // message — it must land straight in that agent's own inbox, never god's; god
+  // routing it herself made every direct-addressed message read as if it had
+  // come from her, and buried the human's actual ask behind her relay.
   const dispatchIt = async () => {
     if (!canSend) return;
     const raw = buildBody().trim();
     if (!raw) return;
     const body = withProject(raw);
     const subject = raw.split('\n')[0].slice(0, 60);
-    const suggested = target !== 'god' ? agents.find((a) => a.id === target) : undefined;
+    const directTarget = target !== 'god' ? agents.find((a) => a.id === target) : undefined;
     const tasksPath = harnessHome ? `${harnessHome}\\hive\\tasks.json` : 'hive/tasks.json';
     const priorityDirective =
       dispPriority === 'urgent'
@@ -272,15 +273,17 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
         : dispPriority === 'backlog'
         ? `\n\n[PRIORITY: BACKLOG] If the request is clear: write a task card to ${tasksPath} (id, title, status:"todo") and stop. No delegation, no dispatch, no reply. If the request is AMBIGUOUS: do NOT create a card — ask the human ONE crisp clarifying question (ASK ME / AskUserQuestion) and wait for the answer, THEN card.`
         : `\n\n[PRIORITY: NORMAL] If the request is clear: write a task card to ${tasksPath} (id, title, status:"doing", assignee) and delegate to an available worker. If the request is AMBIGUOUS or you would be guessing at intent/scope: do NOT create a card or delegate — ask the human ONE crisp clarifying question (ASK ME / AskUserQuestion) and wait for the answer, THEN card + delegate. You orchestrate; never implement.`;
-    const full = suggested
-      ? `${body}${priorityDirective}\n\n(The human suggests ${suggested.name} (${suggested.id}) for this — your call as orchestrator.)`
-      : `${body}${priorityDirective}`;
+    // The orchestration directive (task-card / triage instructions) only makes
+    // sense for god, who decides what to do with an ambiguous ask. A named
+    // agent already has an explicit human addressee — send the plain message.
+    const full = directTarget ? body : `${body}${priorityDirective}`;
+    const to = directTarget ? directTarget.id : 'god';
     let ok = false;
     let err: string | undefined;
     let sentId: string | undefined;
     try {
       const res = await window.cth.hiveSend(
-        { to: 'god', act: dispAct, subject, body: full, priority: dispPriority },
+        { to, act: dispAct, subject, body: full, priority: dispPriority },
         'human'
       );
       ok = res.ok;
@@ -290,13 +293,13 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       err = e instanceof Error ? e.message : String(e);
     }
     if (ok) {
-      // The message is already in BeeYoncé's inbox. Wake her NOW rather than
-      // waiting up to ~4s for the inbox poll to notice it — enqueue the same
-      // inbox-nonempty nudge that poll would; the queue drains it on its next
-      // tick, and drops it harmlessly if she reads the inbox herself first.
+      // The message is already in the recipient's inbox. Wake them NOW rather
+      // than waiting up to ~4s for the inbox poll to notice it — enqueue the
+      // same inbox-nonempty nudge that poll would; the queue drains it on its
+      // next tick, and drops it harmlessly if they read the inbox themselves first.
       if (sentId) {
         enqueueMessage(
-          'god',
+          to,
           inboxNudgeText([{ id: sentId, from: 'human', subject, body: full }]),
           { precondition: 'inbox-nonempty' }
         );
@@ -305,7 +308,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       resetComposer();
     }
     setDispMsg(ok
-      ? `sent to BeeYoncé${suggested ? ` (suggesting ${suggested.name})` : ''}`
+      ? `sent to ${directTarget ? directTarget.name : 'BeeYoncé'}`
       : `failed: ${err ?? '?'}`);
     setTimeout(() => setDispMsg(null), 4000);
   };
@@ -452,7 +455,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
           )}
           <option value="god">Dispatch · BeeYoncé decides</option>
           {agents.filter((a) => !a.isOvermind && a.id !== 'god' && a.id !== agent.id).map((a) => (
-            <option key={a.id} value={a.id}>Dispatch · suggest {a.name}</option>
+            <option key={a.id} value={a.id}>Message · {a.name} (direct)</option>
           ))}
         </select>
         {/* Type + project apply to a queued message too (routing / context), so
