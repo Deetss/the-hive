@@ -3513,6 +3513,7 @@ same for every provider because it's just files you already know how to write.
   "status": "draft",
   "createdAt": "<iso>",
   "createdBy": "<your agent id>",
+  "planPath": "<absolute path to the PLAN.md this sidecar describes, optional>",
   "decisions": ["durable calls made while planning"],
   "phases": [
     {
@@ -3539,6 +3540,12 @@ Rejection leaves the plan in \`review\` with the human's comment on the thread.
 
 The Plans tab in the UI is a read-only view over these files (same pattern as the ASK ME board over
 \`humanQA\`) — there is no IPC write path for agents, only the file convention above.
+
+If you write the plan out as a full PLAN.md doc (GSD-style, with a source_audit / tasks / verification
+structure) rather than only the JSON above, still drop the sidecar \`hive/plans/<planId>.json\` and set
+its \`planPath\` to that PLAN.md's absolute path. The Plans tab pins \`status:'review'\` plans to the top
+with a "Needs Review" badge and, when \`planPath\` is set, an "Open Plan" button that reveals the file
+for Dylan — so a hand-written PLAN.md alone is invisible to him until this sidecar exists.
 
 ## 1:1 mode (on-hold agents)
 When the human takes an agent "1:1" it is flagged \`onHold\`: the Overmind leaves it alone (no
