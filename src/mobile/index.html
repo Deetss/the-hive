@@ -352,6 +352,11 @@
   .badge-red .pixel-badge-dot { background: var(--cth-coral); }
   .badge-gray { box-shadow: inset 0 0 0 1px var(--cth-ink-500); }
   .badge-gray .pixel-badge-dot { background: var(--cth-ink-500); }
+  /* Compacting gets its own color so it reads as distinct activity, not a
+     plain "healthy" green with different text (mirrors desktop's #5C badge). */
+  .badge-purple { box-shadow: inset 0 0 0 1px var(--cth-status-compacting); }
+  .badge-purple .pixel-badge-dot { background: var(--cth-status-compacting); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
   /* ── Provider Badges ── */
   .badge {
@@ -1695,8 +1700,14 @@ function renderFleet() {
 
 function agentCard(a) {
   const isGod = a.isOvermind || a.id === 'god';
-  const badgeColorClass = a.breaker === 'healthy' ? 'badge-green' : (a.breaker === 'armed' || a.breaker === 'steering') ? 'badge-yellow' : 'badge-red';
-  const statusLabel = a.breaker === 'healthy' ? (a.status || 'idle') : (a.breaker || 'looping');
+  // Compacting takes precedence over the breaker-derived color/label: a mid-
+  // compaction agent should read as visibly busy, not blend into a plain
+  // "healthy" green pill (see badge-purple, mirrors desktop's #5C badge).
+  const isCompacting = a.status === 'compacting';
+  const badgeColorClass = isCompacting ? 'badge-purple'
+    : a.breaker === 'healthy' ? 'badge-green' : (a.breaker === 'armed' || a.breaker === 'steering') ? 'badge-yellow' : 'badge-red';
+  const statusLabel = isCompacting ? 'compacting'
+    : a.breaker === 'healthy' ? (a.status || 'idle') : (a.breaker || 'looping');
   const providerClass = { claude: 'badge-claude', codex: 'badge-codex', antigravity: 'badge-antigravity', cursor: 'badge-cursor' }[a.provider] || 'badge-default';
   const activeAgo = a.lastActiveSecAgo != null ? (a.lastActiveSecAgo < 60 ? a.lastActiveSecAgo + 's ago' : Math.floor(a.lastActiveSecAgo / 60) + 'm ago') : '—';
   const initial = (a.name || a.id || 'A').charAt(0).toUpperCase();
