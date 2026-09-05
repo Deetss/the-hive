@@ -38,6 +38,8 @@ export interface GsdPlan {
   createdBy: string;
   decisions?: string[];
   phases: GsdPhase[];
+  /** Filesystem path to the plan's PLAN.md, if the writer recorded one. */
+  planPath?: string;
 }
 
 /** One raw ledger entry as it sits on disk — an object of unknown fields. */

@@ -24,6 +24,7 @@ function parsePlans(raw: unknown): GsdPlan[] {
       createdBy: typeof p.createdBy === 'string' ? p.createdBy : '',
       decisions: Array.isArray(p.decisions)
         ? p.decisions.filter((d): d is string => typeof d === 'string') : undefined,
+      planPath: typeof p.planPath === 'string' ? p.planPath : undefined,
       phases: Array.isArray(p.phases)
         ? (p.phases as unknown[])
           .filter((ph): ph is Record<string, unknown> => !!ph && typeof ph === 'object')
@@ -110,6 +111,15 @@ export function PlansTab() {
 
   const tasksById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
+  // Review-status plans need a human decision before execution starts, so
+  // they're worth surfacing first rather than wherever readdirSync happened
+  // to list the file — a stable partition (Array.sort is stable) keeps
+  // everything else in its existing relative order.
+  const sortedPlans = useMemo(
+    () => plans.slice().sort((a, b) => (a.status === 'review' ? 0 : 1) - (b.status === 'review' ? 0 : 1)),
+    [plans]
+  );
+
   const phaseProgress = useCallback((phase: GsdPhase): number => {
     if (phase.taskIds.length === 0) return phase.status === 'done' ? 100 : 0;
     const values = phase.taskIds.map((id) => {
@@ -137,34 +147,54 @@ export function PlansTab() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: 12 }}>
-      {plans.map((plan) => {
+      {sortedPlans.map((plan) => {
         const isOpen = !collapsed[plan.id];
         const meta = STATUS_META[plan.status] ?? STATUS_META.draft;
         return (
           <div key={plan.id} style={{ background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)' }}>
-            <button
-              onClick={() => setCollapsed((prev) => ({ ...prev, [plan.id]: isOpen }))}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
-                border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left'
-              }}
-            >
-              <span style={{
-                fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)',
-                display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.1s'
-              }}>▶</span>
-              <span style={{
-                fontFamily: 'var(--cth-font-ui)', fontSize: 7, padding: '1px 5px 0',
-                background: meta.color, color: 'var(--cth-ink-900)',
-                boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0
-              }}>{meta.label}</span>
-              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 600, color: 'var(--cth-ink-900)', flex: 1 }}>
-                {plan.title}
-              </span>
-              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)' }}>
-                {plan.phases.length} phase{plan.phases.length === 1 ? '' : 's'}
-              </span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <button
+                onClick={() => setCollapsed((prev) => ({ ...prev, [plan.id]: isOpen }))}
+                style={{
+                  flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
+                  border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left'
+                }}
+              >
+                <span style={{
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-500)',
+                  display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.1s'
+                }}>▶</span>
+                <span style={{
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 7, padding: '1px 5px 0',
+                  background: meta.color, color: 'var(--cth-ink-900)',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0
+                }}>{meta.label}</span>
+                {plan.status === 'review' && (
+                  <span style={{
+                    fontFamily: 'var(--cth-font-ui)', fontSize: 10, fontWeight: 700, padding: '2px 6px',
+                    background: 'var(--cth-coral)', color: 'var(--cth-ink-900)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', flexShrink: 0
+                  }}>NEEDS REVIEW</span>
+                )}
+                <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, fontWeight: 600, color: 'var(--cth-ink-900)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {plan.title}
+                </span>
+                <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-500)', flexShrink: 0 }}>
+                  {plan.phases.length} phase{plan.phases.length === 1 ? '' : 's'}
+                </span>
+              </button>
+              {plan.planPath && (
+                <button
+                  onClick={() => { void window.cth?.revealPath?.(plan.planPath!); }}
+                  title={plan.planPath}
+                  style={{
+                    flexShrink: 0, margin: '0 10px', padding: '4px 8px', fontFamily: 'var(--cth-font-ui)', fontSize: 11,
+                    border: 'none', cursor: 'pointer', background: 'var(--cth-cream-200)', color: 'var(--cth-ink-700)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
+                  }}
+                >Open Plan</button>
+              )}
+            </div>
             {isOpen && (
               <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {plan.goal && (
