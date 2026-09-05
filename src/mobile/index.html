@@ -1155,7 +1155,7 @@
 
     <!-- Dispatch Screen -->
     <section id="screen-dispatch" class="screen">
-      <div class="section-title">Dispatch via Abathur</div>
+      <div class="section-title" id="dispatch-title">Dispatch via Abathur</div>
       <div class="field">
         <label>Recipient</label>
         <select id="dispatch-to">
@@ -2645,12 +2645,27 @@ function rememberDispatchProject(name) {
   try { localStorage.setItem(DISPATCH_PROJECTS_KEY, JSON.stringify(next)); } catch {}
 }
 
+// Mirrors the desktop SettingsModal's orchestratorName resolution: read the
+// live queen name off the roster (the agent flagged isOvermind) rather than
+// hardcoding it, so a renamed orchestrator shows up here too. Falls back to
+// 'Abathur' before the roster has loaded or if no overmind is flagged yet.
+function getQueenName() {
+  const agents = (fleetData || {}).agents || [];
+  const overmind = agents.find(a => a.isOvermind);
+  return (overmind && overmind.name) || 'Abathur';
+}
+
 function populateDispatchRecipients() {
   const sel = document.getElementById('dispatch-to');
   const current = sel.value;
   sel.innerHTML = '';
+  const queenName = getQueenName();
+  const title = document.getElementById('dispatch-title');
+  if (title) title.textContent = 'Dispatch via ' + queenName;
+  const body = document.getElementById('dispatch-body');
+  if (body) body.placeholder = 'Describe the task for ' + queenName + '…';
   const fixed = [
-    { value: 'god', label: 'Abathur decides' },
+    { value: 'god', label: queenName + ' decides' },
     { value: 'broadcast', label: 'Broadcast (all agents)' }
   ];
   const agents = (fleetData || {}).agents || [];
@@ -2714,7 +2729,7 @@ document.getElementById('dispatch-send').addEventListener('click', async () => {
     });
     if (res.ok) {
       result.style.color = 'var(--cth-mint)';
-      result.textContent = '✓ Message dispatched via Abathur';
+      result.textContent = '✓ Message dispatched via ' + getQueenName();
       result.hidden = false;
       rememberDispatchProject(project);
       document.getElementById('dispatch-project').value = '';
